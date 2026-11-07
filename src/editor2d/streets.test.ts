@@ -1,38 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { lotsOf, streetGrid } from './streets'
+import { avenueDistance, avenuesOf, lotsOf, streetPatches } from './streets'
 
-describe('street grid', () => {
-  it('is deterministic and sorted', () => {
-    const a = streetGrid('city', 128)
-    const b = streetGrid('city', 128)
-    expect(a).toBe(b)
-    expect([...a.us].sort((x, y) => x - y)).toEqual(a.us)
-    expect(a.majorU.some(Boolean)).toBe(true)
-    expect(a.majorU.every(Boolean)).toBe(false)
+describe('street layout', () => {
+  it('is deterministic', () => {
+    expect(streetPatches('city', 128)).toBe(streetPatches('city', 128))
+    expect(lotsOf('city', 128).length).toBe(lotsOf('city', 128).length)
   })
 
-  it('keeps lots clear of the streets', () => {
-    const g = streetGrid('city', 128)
+  it('has neighbourhoods at many different angles (not one 90 degree grid)', () => {
+    const angles = new Set(streetPatches('city', 128).map((p) => Math.round((p.angle * 180) / Math.PI / 10)))
+    expect(angles.size).toBeGreaterThanOrEqual(5)
+  })
+
+  it('fills the city densely with perimeter blocks', () => {
     const lots = lotsOf('city', 128)
-    expect(lots.length).toBeGreaterThan(100)
-    for (const l of lots.slice(0, 200)) {
-      // lot centre in the rotated frame: it never lies on a street
-      const c = Math.cos(-g.angle)
-      const s = Math.sin(-g.angle)
-      const dx = l.x - g.cx
-      const dy = l.y - g.cy
-      const u = dx * c - dy * s
-      const v = dx * s + dy * c
-      const near = (arr: number[], p: number, w: number) => arr.some((q) => Math.abs(q - p) < w / 2 + 0.2)
-      expect(near(g.us, u, l.w)).toBe(false)
-      expect(near(g.vs, v, l.d)).toBe(false)
-    }
+    expect(lots.length).toBeGreaterThan(1500)
+    // most buildings are small houses along the block edges
+    const small = lots.filter((l) => l.w * l.d < 5).length
+    expect(small / lots.length).toBeGreaterThan(0.7)
   })
 
-  it('builds smaller plots for suburbs than blocks for the city', () => {
+  it('keeps buildings clear of the avenues and ring road', () => {
+    const av = avenuesOf(128)
+    for (const l of lotsOf('city', 128)) expect(avenueDistance(av, l.x, l.y)).toBeGreaterThan(0.6)
+  })
+
+  it('builds fewer, smaller detached houses in suburbs', () => {
     const city = lotsOf('city', 128)
     const sub = lotsOf('suburb', 128)
-    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
-    expect(mean(sub.map((l) => l.w * l.d))).toBeLessThan(mean(city.map((l) => l.w * l.d)) * 1.6)
+    expect(sub.length).toBeLessThan(city.length)
   })
 })

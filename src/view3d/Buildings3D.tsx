@@ -89,13 +89,16 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
     for (const lot of lotsOf(kind, size)) {
       if (cellKind(lot.x, lot.y) !== kind) continue
       // the whole lot must lie inside the area, on land and clear of the tracks
-      const r = Math.min(lot.w, lot.d) / 2
+      const ca = Math.cos(lot.angle)
+      const sa = Math.sin(lot.angle)
+      const hw = lot.w * 0.45
+      const hd = lot.d * 0.45
       const probe: [number, number][] = [
         [lot.x, lot.y],
-        [lot.x + r, lot.y],
-        [lot.x - r, lot.y],
-        [lot.x, lot.y + r],
-        [lot.x, lot.y - r],
+        [lot.x + ca * hw, lot.y + sa * hw],
+        [lot.x - ca * hw, lot.y - sa * hw],
+        [lot.x - sa * hd, lot.y + ca * hd],
+        [lot.x + sa * hd, lot.y - ca * hd],
       ]
       let ok = true
       for (const [px, py] of probe) {
@@ -110,10 +113,11 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
       const dens = kind === 'city' ? density(lot.x, lot.y) : 0.3
       let h: number
       if (kind === 'city') {
-        h = 0.55 + lot.rand * 0.9 + dens * 1.2
-        if (dens > 0.75 && lot.rand > 0.86) h += 1.5 + lot.rand * 1.6
+        // one cornice height per block, a little variation per house, taller towards the centre
+        h = 1.0 + lot.blockRand * 0.5 + dens * 0.8 + (lot.rand - 0.5) * 0.3
+        if (dens > 0.8 && lot.blockRand > 0.94 && lot.rand > 0.5) h += 1.4 + lot.rand * 1.2
       } else {
-        h = 0.3 + lot.rand * 0.28
+        h = 0.34 + lot.rand * 0.2
       }
       out.push({
         x: lot.x - half,

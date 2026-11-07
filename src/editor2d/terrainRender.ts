@@ -165,19 +165,33 @@ export interface ViewTransform {
 function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number) {
   const p = streetPaths(kind, size)
   ctx.lineCap = 'butt'
-  ctx.strokeStyle = 'rgba(255,255,255,0.95)'
-  ctx.lineWidth = Math.max(0.5, 2.4 / s)
-  ctx.stroke(p.major)
-  if (s >= 2.2) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)'
-    ctx.lineWidth = Math.max(0.22, 1.3 / s)
-    ctx.stroke(p.minor)
+  for (const patch of p.patches) {
+    ctx.save()
+    ctx.clip(patch.clip)
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+    ctx.lineWidth = Math.max(0.5, 2.4 / s)
+    ctx.stroke(patch.major)
+    if (s >= 2.2) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'
+      ctx.lineWidth = Math.max(0.22, 1.3 / s)
+      ctx.stroke(patch.minor)
+    }
+    if (s >= 7) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+      ctx.lineWidth = Math.max(0.1, 0.9 / s)
+      ctx.stroke(patch.fine)
+    }
+    ctx.restore()
+    // the border between two neighbourhoods is a street of its own
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+    ctx.lineWidth = Math.max(0.3, 1.6 / s)
+    ctx.stroke(patch.outline)
   }
-  if (s >= 7) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
-    ctx.lineWidth = Math.max(0.1, 0.9 / s)
-    ctx.stroke(p.fine)
-  }
+  // long avenues and the ring road
+  ctx.strokeStyle = 'rgba(255,255,255,1)'
+  ctx.lineWidth = Math.max(0.7, 3.2 / s)
+  ctx.lineCap = 'round'
+  ctx.stroke(p.avenues)
 }
 
 /** Runways, taxiway and apron of an airport, laid along the long side of its area. */

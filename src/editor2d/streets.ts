@@ -1,26 +1,39 @@
 /**
- * Street pattern of towns: a slightly irregular grid of avenues and streets. The same grid draws the streets
- * on the 2D map and decides where the 3D buildings stand, so both always agree.
+ * Street pattern of towns, shaped like a grown German city: neighbourhoods ("Kieze") with their own street
+ * grid at different angles, long diagonal avenues through the centre and a ring road. The same data draws
+ * the streets on the 2D map and decides where the 3D buildings stand, so both always agree.
  */
 export type UrbanKind = 'city' | 'suburb'
 
-export interface StreetGrid {
-  /** rotation of the grid around the map centre (radians) */
-  angle: number
-  /** street positions along both axes of the rotated frame (cells, relative to the map centre), sorted */
-  us: number[]
-  vs: number[]
-  /** avenues (every few streets); a subset of the streets */
-  majorU: boolean[]
-  majorV: boolean[]
-  /** map centre */
+type Pt = [number, number]
+
+export interface Patch {
+  id: number
+  /** centre of the neighbourhood (cells) */
   cx: number
   cy: number
+  angle: number
+  /** street positions along both axes of the patch's rotated frame (relative to its centre), sorted */
+  us: number[]
+  vs: number[]
+  majorU: boolean[]
+  majorV: boolean[]
+  /** outline of the neighbourhood (voronoi cell), clockwise */
+  cell: Pt[]
 }
 
-const CONFIG: Record<UrbanKind, { angle: number; gap: number; majorEvery: number; seed: number }> = {
-  city: { angle: 0, gap: 3.8, majorEvery: 3, seed: 7 },
-  suburb: { angle: 0.32, gap: 5.6, majorEvery: 3, seed: 19 },
+export interface Avenues {
+  cx: number
+  cy: number
+  /** directions of the straight avenues through the centre (radians) */
+  angles: number[]
+  /** radius of the ring road (cells), 0 = none */
+  ring: number
+}
+
+const CONFIG: Record<UrbanKind, { spacing: number; gap: number; majorEvery: number; seed: number }> = {
+  city: { spacing: 26, gap: 4.9, majorEvery: 3, seed: 7 },
+  suburb: { spacing: 32, gap: 6.2, majorEvery: 3, seed: 19 },
 }
 
 /** Small deterministic random generator (mulberry32). */
@@ -35,46 +48,125 @@ export function rng(seed: number) {
   }
 }
 
-const gridCache = new Map<string, StreetGrid>()
+/** Clip a polygon to the half plane of points closer to `a` than to `b`. */
+function clipCloser(poly: Pt[], a: Pt, b: Pt): Pt[] {
+  const nx = b[0] - a[0]
+  const ny = b[1] - a[1]
+  const mx = (a[0] + b[0]) / 2
+  const my = (a[1] + b[1]) / 2
+  const f = (p: Pt) => (p[0] - mx) * nx + (p[1] - my) * ny // <= 0 on a's side
+  const out: Pt[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i]
+    const q = poly[(i + 1) % poly.length]
+    const fp = f(p)
+    const fq = f(q)
+    if (fp <= 0) out.push(p)
+    if ((fp < 0 && fq > 0) || (fp > 0 && fq < 0)) {
+      const t = fp / (fp - fq)
+      out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t])
+    }
+  }
+  return out
+}
 
-export function streetGrid(kind: UrbanKind, size: number): StreetGrid {
+const patchCache = new Map<string, Patch[]>()
+
+export function streetPatches(kind: UrbanKind, size: number): Patch[] {
   const key = `${kind}|${size}`
-  const hit = gridCache.get(key)
+  const hit = patchCache.get(key)
   if (hit) return hit
   const cfg = CONFIG[kind]
-  const half = size * 0.75
-  const make = (seed: number) => {
-    const r = rng(cfg.seed * 1000 + seed)
-    const pos: number[] = []
-    const major: boolean[] = []
-    let p = -half + r() * cfg.gap
-    let i = 0
-    while (p < half) {
-      pos.push(p)
-      major.push(i % cfg.majorEvery === 0)
-      p += cfg.gap * (0.78 + r() * 0.44)
-      i++
+  const r = rng(cfg.seed * 1009 + size)
+  const S = cfg.spacing
+  const seeds: Pt[] = []
+  for (let j = -1; j * S < size + S; j++) {
+    for (let i = -1; i * S < size + S; i++) {
+      // every second row is shifted, so the neighbourhoods do not form a grid themselves
+      const ox = (j & 1) * S * 0.5
+      seeds.push([(i + 0.5) * S + ox + (r() - 0.5) * S * 0.55, (j + 0.5) * S + (r() - 0.5) * S * 0.55])
     }
-    return { pos, major }
   }
-  const u = make(1)
-  const v = make(2)
-  const grid: StreetGrid = { angle: cfg.angle, us: u.pos, vs: v.pos, majorU: u.major, majorV: v.major, cx: size / 2, cy: size / 2 }
-  gridCache.set(key, grid)
-  return grid
+  const big = size * 2
+  const patches: Patch[] = seeds.map((s, id) => {
+    let cell: Pt[] = [[-big, -big], [big, -big], [big, big], [-big, big]]
+    for (const o of seeds) {
+      if (o === s || Math.hypot(o[0] - s[0], o[1] - s[1]) > S * 2.6) continue
+      cell = clipCloser(cell, s, o)
+    }
+    const angle = r() * (Math.PI / 2)
+    const gap = cfg.gap * (0.85 + r() * 0.35)
+    const R = S * 1.3
+    const make = () => {
+      const pos: number[] = []
+      const major: boolean[] = []
+      let p = -R + r() * gap
+      let i = 0
+      while (p < R) {
+        pos.push(p)
+        major.push(i % cfg.majorEvery === 0)
+        p += gap * (0.8 + r() * 0.4)
+        i++
+      }
+      return { pos, major }
+    }
+    const u = make()
+    const v = make()
+    return { id, cx: s[0], cy: s[1], angle, us: u.pos, vs: v.pos, majorU: u.major, majorV: v.major, cell }
+  })
+  patchCache.set(key, patches)
+  return patches
 }
 
-/** Rotated-frame coordinates -> map cell coordinates. */
-export function gridToCell(g: StreetGrid, u: number, v: number): { x: number; y: number } {
-  const c = Math.cos(g.angle)
-  const s = Math.sin(g.angle)
-  return { x: g.cx + u * c - v * s, y: g.cy + u * s + v * c }
+/** Index of the neighbourhood a point belongs to. */
+export function patchAt(patches: Patch[], x: number, y: number): number {
+  let best = 0
+  let bd = Infinity
+  for (let i = 0; i < patches.length; i++) {
+    const d = (patches[i].cx - x) ** 2 + (patches[i].cy - y) ** 2
+    if (d < bd) {
+      bd = d
+      best = i
+    }
+  }
+  return best
 }
 
-export interface StreetPaths {
+const patchToCell = (p: Patch, u: number, v: number): Pt => {
+  const c = Math.cos(p.angle)
+  const s = Math.sin(p.angle)
+  return [p.cx + u * c - v * s, p.cy + u * s + v * c]
+}
+
+export function avenuesOf(size: number): Avenues {
+  const r = rng(size * 31 + 5)
+  const base = r() * Math.PI
+  return {
+    cx: size / 2 + (r() - 0.5) * size * 0.06,
+    cy: size / 2 + (r() - 0.5) * size * 0.06,
+    angles: [base, base + 1.05 + r() * 0.3, base + 2.1 + r() * 0.3],
+    ring: size >= 96 ? size * 0.27 : 0,
+  }
+}
+
+/** Distance of a point to the nearest avenue or the ring road. */
+export function avenueDistance(a: Avenues, x: number, y: number): number {
+  let d = Infinity
+  for (const ang of a.angles) d = Math.min(d, Math.abs((x - a.cx) * Math.sin(ang) - (y - a.cy) * Math.cos(ang)))
+  if (a.ring > 0) d = Math.min(d, Math.abs(Math.hypot(x - a.cx, y - a.cy) - a.ring))
+  return d
+}
+
+export interface PatchPaths {
+  clip: Path2D
   major: Path2D
   minor: Path2D
   fine: Path2D
+  outline: Path2D
+}
+export interface StreetPaths {
+  patches: PatchPaths[]
+  avenues: Path2D
 }
 
 const pathCache = new Map<string, StreetPaths>()
@@ -84,49 +176,76 @@ export function streetPaths(kind: UrbanKind, size: number): StreetPaths {
   const key = `${kind}|${size}`
   const hit = pathCache.get(key)
   if (hit) return hit
-  const g = streetGrid(kind, size)
-  const r = rng(CONFIG[kind].seed * 77)
-  const major = new Path2D()
-  const minor = new Path2D()
-  const fine = new Path2D()
-  const ext = size * 0.75
-  const seg = (path: Path2D, fixed: number, along: number, along2: number, alongU: boolean) => {
-    // alongU: the street runs along the u axis at constant v = fixed
-    const a = alongU ? gridToCell(g, along, fixed) : gridToCell(g, fixed, along)
-    const b = alongU ? gridToCell(g, along2, fixed) : gridToCell(g, fixed, along2)
-    path.moveTo(a.x, a.y)
-    path.lineTo(b.x, b.y)
-  }
-  const draw = (pos: number[], isMajor: boolean[], alongU: boolean) => {
-    for (let i = 0; i < pos.length; i++) {
-      if (isMajor[i]) {
-        seg(major, pos[i], -ext, ext, alongU)
-        continue
+  const patches = streetPatches(kind, size)
+  const r = rng(CONFIG[kind].seed * 77 + size)
+  const out: PatchPaths[] = []
+  for (const p of patches) {
+    // skip neighbourhoods far outside the map
+    if (p.cx < -40 || p.cy < -40 || p.cx > size + 40 || p.cy > size + 40) continue
+    const clip = new Path2D()
+    const outline = new Path2D()
+    p.cell.forEach(([x, y], i) => {
+      if (i === 0) {
+        clip.moveTo(x, y)
+        outline.moveTo(x, y)
+      } else {
+        clip.lineTo(x, y)
+        outline.lineTo(x, y)
       }
-      // a minor street: pieces of random length, some left out
-      let t = -ext
-      while (t < ext) {
-        const len = 5 + r() * 16
-        if (r() > 0.16) seg(minor, pos[i], t, Math.min(ext, t + len), alongU)
-        t += len
-      }
-      // an alley half way to the next street
-      if (i + 1 < pos.length && pos[i + 1] - pos[i] > 3.2) {
-        const mid = (pos[i] + pos[i + 1]) / 2
-        let q = -ext
-        while (q < ext) {
-          const len = 3 + r() * 9
-          if (r() > 0.42) seg(fine, mid, q, Math.min(ext, q + len), alongU)
-          q += len
+    })
+    clip.closePath()
+    outline.closePath()
+    const major = new Path2D()
+    const minor = new Path2D()
+    const fine = new Path2D()
+    const ext = CONFIG[kind].spacing * 1.3
+    const seg = (path: Path2D, fixed: number, a: number, b: number, alongU: boolean) => {
+      const s = alongU ? patchToCell(p, a, fixed) : patchToCell(p, fixed, a)
+      const e = alongU ? patchToCell(p, b, fixed) : patchToCell(p, fixed, b)
+      path.moveTo(s[0], s[1])
+      path.lineTo(e[0], e[1])
+    }
+    const draw = (pos: number[], isMajor: boolean[], alongU: boolean) => {
+      for (let i = 0; i < pos.length; i++) {
+        if (isMajor[i]) {
+          seg(major, pos[i], -ext, ext, alongU)
+          continue
+        }
+        let t = -ext
+        while (t < ext) {
+          const len = 5 + r() * 16
+          if (r() > 0.14) seg(minor, pos[i], t, Math.min(ext, t + len), alongU)
+          t += len
+        }
+        if (i + 1 < pos.length && pos[i + 1] - pos[i] > 3.2) {
+          const mid = (pos[i] + pos[i + 1]) / 2
+          let q = -ext
+          while (q < ext) {
+            const len = 3 + r() * 9
+            if (r() > 0.42) seg(fine, mid, q, Math.min(ext, q + len), alongU)
+            q += len
+          }
         }
       }
     }
+    draw(p.vs, p.majorV, true)
+    draw(p.us, p.majorU, false)
+    out.push({ clip, major, minor, fine, outline })
   }
-  draw(g.vs, g.majorV, true)
-  draw(g.us, g.majorU, false)
-  const out = { major, minor, fine }
-  pathCache.set(key, out)
-  return out
+  const av = avenuesOf(size)
+  const avenues = new Path2D()
+  const L = size * 1.6
+  for (const a of av.angles) {
+    avenues.moveTo(av.cx - Math.cos(a) * L, av.cy - Math.sin(a) * L)
+    avenues.lineTo(av.cx + Math.cos(a) * L, av.cy + Math.sin(a) * L)
+  }
+  if (av.ring > 0) {
+    avenues.moveTo(av.cx + av.ring, av.cy)
+    avenues.arc(av.cx, av.cy, av.ring, 0, Math.PI * 2)
+  }
+  const res = { patches: out, avenues }
+  pathCache.set(key, res)
+  return res
 }
 
 export interface Lot {
@@ -138,50 +257,79 @@ export interface Lot {
   d: number
   /** grid rotation */
   angle: number
+  /** per building and per block random numbers (0..1) */
   rand: number
+  blockRand: number
 }
 
-/** Building lots between the streets of a grid (before checking the zone map). */
+/**
+ * Buildings between the streets (before checking the zone map). The city gets perimeter blocks: houses
+ * around the edge of every block with a courtyard inside; suburbs get detached houses.
+ */
 export function lotsOf(kind: UrbanKind, size: number): Lot[] {
-  const g = streetGrid(kind, size)
-  const r = rng(CONFIG[kind].seed * 131)
+  const patches = streetPatches(kind, size)
+  const av = avenuesOf(size)
+  const r = rng(CONFIG[kind].seed * 131 + size)
   const out: Lot[] = []
-  for (let i = 0; i < g.us.length - 1; i++) {
-    for (let j = 0; j < g.vs.length - 1; j++) {
-      const u0 = g.us[i]
-      const u1 = g.us[i + 1]
-      const v0 = g.vs[j]
-      const v1 = g.vs[j + 1]
-      const mu0 = g.majorU[i] ? 0.85 : 0.5
-      const mu1 = g.majorU[i + 1] ? 0.85 : 0.5
-      const mv0 = g.majorV[j] ? 0.85 : 0.5
-      const mv1 = g.majorV[j + 1] ? 0.85 : 0.5
-      const a0 = u0 + mu0
-      const a1 = u1 - mu1
-      const b0 = v0 + mv0
-      const b1 = v1 - mv1
-      if (a1 - a0 < 1 || b1 - b0 < 1) continue
-      const cells = [{ a0, a1, b0, b1 }]
-      // big blocks hold two buildings
-      if (kind === 'city' && (a1 - a0 > 2.4 || b1 - b0 > 2.4) && r() > 0.3) {
-        cells.length = 0
-        if (a1 - a0 >= b1 - b0) {
-          const m = (a0 + a1) / 2
-          cells.push({ a0, a1: m - 0.12, b0, b1 }, { a0: m + 0.12, a1, b0, b1 })
-        } else {
-          const m = (b0 + b1) / 2
-          cells.push({ a0, a1, b0, b1: m - 0.12 }, { a0, a1, b0: m + 0.12, b1 })
+  for (const p of patches) {
+    if (p.cx < -40 || p.cy < -40 || p.cx > size + 40 || p.cy > size + 40) continue
+    for (let i = 0; i < p.us.length - 1; i++) {
+      for (let j = 0; j < p.vs.length - 1; j++) {
+        const mu0 = p.majorU[i] ? 0.6 : 0.35
+        const mu1 = p.majorU[i + 1] ? 0.6 : 0.35
+        const mv0 = p.majorV[j] ? 0.6 : 0.35
+        const mv1 = p.majorV[j + 1] ? 0.6 : 0.35
+        const a0 = p.us[i] + mu0
+        const a1 = p.us[i + 1] - mu1
+        const b0 = p.vs[j] + mv0
+        const b1 = p.vs[j + 1] - mv1
+        if (a1 - a0 < 1 || b1 - b0 < 1) continue
+        const blockRand = r()
+        const push = (u0: number, u1: number, v0: number, v1: number, fill = 0.95) => {
+          if (u1 - u0 < 0.5 || v1 - v0 < 0.5) return
+          const c = patchToCell(p, (u0 + u1) / 2, (v0 + v1) / 2)
+          if (c[0] < -2 || c[1] < -2 || c[0] > size + 2 || c[1] > size + 2) return
+          // every building has to stand inside its own neighbourhood and clear of the avenues
+          const ca = Math.cos(p.angle)
+          const sa = Math.sin(p.angle)
+          const hw = ((u1 - u0) * fill) / 2 + 0.15
+          const hd = ((v1 - v0) * fill) / 2 + 0.15
+          const probes: Pt[] = [c, [c[0] + ca * hw, c[1] + sa * hw], [c[0] - ca * hw, c[1] - sa * hw], [c[0] - sa * hd, c[1] + ca * hd], [c[0] + sa * hd, c[1] - ca * hd]]
+          for (const q of probes) if (patchAt(patches, q[0], q[1]) !== p.id || avenueDistance(av, q[0], q[1]) < 0.7) return
+          out.push({ x: c[0], y: c[1], w: (u1 - u0) * fill, d: (v1 - v0) * fill, angle: p.angle, rand: r(), blockRand })
         }
-      } else if (kind === 'suburb') {
-        // detached houses: smaller, in the middle of the plot
-        const sx = (a1 - a0) * 0.28
-        const sy = (b1 - b0) * 0.28
-        cells[0] = { a0: a0 + sx, a1: a1 - sx, b0: b0 + sy, b1: b1 - sy }
-      }
-      for (const c of cells) {
-        const p = gridToCell(g, (c.a0 + c.a1) / 2, (c.b0 + c.b1) / 2)
-        const fill = 0.78 + r() * 0.18
-        out.push({ x: p.x, y: p.y, w: (c.a1 - c.a0) * fill, d: (c.b1 - c.b0) * fill, angle: g.angle, rand: r() })
+        const w = a1 - a0
+        const d = b1 - b0
+        if (kind === 'suburb') {
+          const sx = w * 0.28
+          const sy = d * 0.28
+          push(a0 + sx, a1 - sx, b0 + sy, b1 - sy, 1)
+          continue
+        }
+        if (Math.min(w, d) < 2.6) {
+          // small block: one or two houses
+          if (w >= d && w > 2.2) {
+            const m = (a0 + a1) / 2
+            push(a0, m - 0.06, b0, b1)
+            push(m + 0.06, a1, b0, b1)
+          } else if (d > 2.2) {
+            const m = (b0 + b1) / 2
+            push(a0, a1, b0, m - 0.06)
+            push(a0, a1, m + 0.06, b1)
+          } else push(a0, a1, b0, b1)
+          continue
+        }
+        // perimeter block: strips of houses along the four sides, courtyard in the middle
+        const t = Math.min(1.2, Math.min(w, d) * 0.36)
+        const split = (from: number, to: number, fn: (x0: number, x1: number) => void) => {
+          const len = to - from
+          const n = Math.max(1, Math.round(len / (1.7 + r() * 0.9)))
+          for (let k = 0; k < n; k++) fn(from + (len * k) / n, from + (len * (k + 1)) / n)
+        }
+        split(a0, a1, (x0, x1) => push(x0, x1, b0, b0 + t))
+        split(a0, a1, (x0, x1) => push(x0, x1, b1 - t, b1))
+        split(b0 + t, b1 - t, (y0, y1) => push(a0, a0 + t, y0, y1))
+        split(b0 + t, b1 - t, (y0, y1) => push(a1 - t, a1, y0, y1))
       }
     }
   }
