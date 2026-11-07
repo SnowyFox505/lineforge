@@ -11,22 +11,27 @@ import { smooth01 } from './curves'
 
 export const PF_TOP = RAIL_Y + 0.1
 
-let uTexture: THREE.CanvasTexture | null = null
-function uSignTexture() {
-  if (uTexture) return uTexture
+export type EntranceSign = 'U' | 'S' | 'Bf'
+const SIGN_COLOR: Record<EntranceSign, string> = { U: '#0b4fa8', S: '#1a8a3d', Bf: '#a31a21' }
+const signTextures = new Map<EntranceSign, THREE.CanvasTexture>()
+/** Sign above the entrance of a station: U for the metro, S for the S-Bahn, Bf for other trains. */
+function signTexture(sign: EntranceSign) {
+  const hit = signTextures.get(sign)
+  if (hit) return hit
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const g = c.getContext('2d')!
-  g.fillStyle = '#0b4fa8'
+  g.fillStyle = SIGN_COLOR[sign]
   g.fillRect(0, 0, 128, 128)
   g.fillStyle = '#fff'
-  g.font = "700 96px 'Space Grotesk Variable', system-ui, sans-serif"
+  g.font = `700 ${sign === 'Bf' ? 72 : 96}px 'Space Grotesk Variable', system-ui, sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.fillText('U', 64, 70)
-  uTexture = new THREE.CanvasTexture(c)
-  uTexture.colorSpace = THREE.SRGBColorSpace
-  return uTexture
+  g.fillText(sign, 64, 70)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  signTextures.set(sign, t)
+  return t
 }
 
 /** Tangents of a sampled curve. */
@@ -270,12 +275,12 @@ function UndergroundShell({ layout, lift }: { layout: StationLayout; lift: numbe
     <group>
       <mesh position={[0, y0 + 1.2, 0]}>
         <boxGeometry args={[L, 0.12, W]} />
-        <meshStandardMaterial color="#7d8591" roughness={0.9} transparent opacity={0.6} />
+        <meshStandardMaterial color="#7d8591" roughness={0.9} transparent opacity={0.22} depthWrite={false} />
       </mesh>
       {[-1, 1].map((sz) => (
         <mesh key={sz} position={[0, y0 + 0.55, (sz * W) / 2]}>
           <boxGeometry args={[L, 1.4, 0.12]} />
-          <meshStandardMaterial color="#8a93a0" roughness={0.9} transparent opacity={0.6} />
+          <meshStandardMaterial color="#8a93a0" roughness={0.9} transparent opacity={0.4} depthWrite={false} />
         </mesh>
       ))}
       <mesh position={[0, y0 - 0.12, 0]}>
@@ -346,6 +351,7 @@ export default function StationBuilding({
   groundY = LAND_Y,
   pillarFree,
   showUbahn,
+  sign = 'U',
   entrance = null,
   shell = null,
 }: {
@@ -362,6 +368,8 @@ export default function StationBuilding({
   /** true where a pillar may stand (no track of a lower level underneath), in the station's local frame */
   pillarFree?: (x: number, z: number) => boolean
   showUbahn?: boolean
+  /** sign above the surface entrance */
+  sign?: EntranceSign
   /** station building beside the main platforms */
   entrance?: 'small' | 'big' | null
   /** draw the closed, roofed station seen from outside instead of the open platforms' roof */
@@ -393,7 +401,7 @@ export default function StationBuilding({
           </mesh>
           <mesh position={[-0.9, LAND_Y + 1.35, 0]} rotation={[0, Math.PI / 2, 0]}>
             <boxGeometry args={[0.55, 0.55, 0.05]} />
-            <meshStandardMaterial map={uSignTexture()} emissive="#0b4fa8" emissiveIntensity={0.45} />
+            <meshStandardMaterial map={signTexture(sign)} emissive={SIGN_COLOR[sign]} emissiveIntensity={0.45} />
           </mesh>
         </group>
       

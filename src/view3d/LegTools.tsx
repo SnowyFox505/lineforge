@@ -84,7 +84,7 @@ export function LegPanel({ net }: { net: Network3D }) {
   if (!line || !ln) return null
   const a = doc.stations[line.stations[sel.leg]]
   const b = doc.stations[line.stations[sel.leg + 1]]
-  const profile = legProfile(line, sel.leg)
+  const profile = legProfile(line, sel.leg, doc)
   const bridge = legBridge(line, sel.leg)
   const hasBridge = ln.bridges.some((br) => br.leg === sel.leg)
   const eras: { key: 'historic' | 'modern'; label: string }[] = [

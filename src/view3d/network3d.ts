@@ -428,7 +428,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         ax = Math.cos(a)
         az = -Math.sin(a)
       }
-      const lift = levelCount === 1 && isUndergroundStation(doc, st) && list.every((e) => e.line.operator === 'ubahn') ? UG_LIFT : levelHeight(levelCount, k)
+      const lift = levelCount === 1 && isUndergroundStation(doc, st) ? UG_LIFT : levelHeight(levelCount, k)
       const g: StationGroup = {
         index: groups.length,
         kind: 'main',
@@ -656,7 +656,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     for (let k = 0; k < info.length - 1; k++) {
       const A = info[k]
       const B = info[k + 1]
-      const profile = legProfile(line, k)
+      const profile = legProfile(line, k, doc)
       legRanges.push({ k, profile, d0: cum0[A.i], d1: cum0[B.i] })
       const dA = cum0[A.i] + A.half + 1.2
       const dB = cum0[B.i] - B.half - 1.2

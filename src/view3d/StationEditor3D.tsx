@@ -178,7 +178,7 @@ function Panel({ id, level, setLevel }: { id: string; level: number; setLevel: (
 
       <Section title="Lage">
         <Toggle on={isUndergroundStation(doc, st)} onChange={(v) => update(id, { underground: v })} label="Unterirdischer Bahnhof (im Tunnel)" />
-        <p className="mt-2 text-xs text-white/45">Reine U-Bahn-Stationen liegen standardmäßig unter der Erde. Den Streckenverlauf stellst du in der 3D-Karte ein: Abschnitt antippen.</p>
+        <p className="mt-2 text-xs text-white/45">Das geht für jeden Bahnhof, auch für S-Bahn und Fernverkehr (zum Beispiel am Flughafen). Reine U-Bahn-Stationen und Flughäfen liegen standardmäßig unter der Erde. Bei mehreren Ebenen ist das nicht möglich. Den Streckenverlauf stellst du in der 3D-Karte ein: Abschnitt antippen.</p>
       </Section>
 
       <Section title="Anzahl der Gleise">

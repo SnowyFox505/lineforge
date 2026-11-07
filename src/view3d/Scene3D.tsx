@@ -13,6 +13,7 @@ import Buildings3D from './Buildings3D'
 import Label3D from './Label3D'
 import { LegPanel, LegPicker } from './LegTools'
 import StationBuilding from './StationBuilding'
+import type { EntranceSign } from './StationBuilding'
 import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
 import { buildNetwork3D } from './network3d'
 import type { Network3D, StationGroup, StationNet } from './network3d'
@@ -141,10 +142,10 @@ function Terrain({ doc, net, see }: { doc: CityDoc; net: Network3D; see: boolean
   return (
     <group>
       <mesh geometry={geo}>
-        <meshStandardMaterial map={tex} color={see ? '#2b3038' : '#ffffff'} roughness={0.95} metalness={0} transparent={see} opacity={see ? 0.4 : 1} depthWrite={!see} />
+        <meshStandardMaterial key={see ? 'see' : 'solid'} map={tex} color={see ? '#46505e' : '#ffffff'} roughness={0.95} metalness={0} transparent={see} opacity={see ? 0.3 : 1} depthWrite={!see} />
       </mesh>
       <mesh geometry={skirt}>
-        <meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} transparent={see} opacity={see ? 0.3 : 1} />
+        <meshStandardMaterial key={see ? 'see' : 'solid'} vertexColors roughness={1} side={THREE.DoubleSide} transparent={see} opacity={see ? 0.3 : 1} />
       </mesh>
       {/* water surface */}
       <mesh geometry={water}>
@@ -165,6 +166,12 @@ function groundUnder(net: Network3D, g: StationGroup): number {
     }
   }
   return low
+}
+
+/** Entrance sign of a station group: U if the metro calls there, S for the S-Bahn, else Bf. */
+function signFor(net: Network3D, lineIds: string[]): EntranceSign {
+  const ops = lineIds.map((id) => net.lines.find((l) => l.line.id === id)?.line.operator)
+  return ops.includes('ubahn') ? 'U' : ops.includes('sbahn') ? 'S' : 'Bf'
 }
 
 function Stations({ net }: { net: Network3D }) {
@@ -198,7 +205,7 @@ function Stations({ net }: { net: Network3D }) {
             )}
             {sn.groups.map((g) => (
               <group key={g.index} position={[g.ox, 0, g.oz]} rotation={[0, g.angle, 0]}>
-                <StationBuilding design={g.design} layout={g.layout} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null} />
+                <StationBuilding design={g.design} layout={g.layout} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} sign={signFor(net, g.lineIds)} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null} />
                 {g.index === main?.index && st.type === 'landmark' && (
                   <group position={[0, 0, g.layout.halfWidth + 1.8]}>
                     <mesh position={[0, LAND_Y + 0.7, 0]}>

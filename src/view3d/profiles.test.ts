@@ -57,6 +57,30 @@ describe('track profiles', () => {
     for (const s of ln.cs) expect(Math.abs(s)).toBeLessThan(0.45)
   })
 
+  it('lets any kind of train stop in an underground station, and tunnels the legs next to it', () => {
+    const base = city('sbahn')
+    const d = { ...base, stations: { ...base.stations, b: { ...base.stations.b, underground: true } } }
+    expect(isUndergroundStation(d, d.stations.b)).toBe(true)
+    expect(legProfile(d.lines.L, 0, d)).toBe('tunnel')
+    expect(legProfile(d.lines.L, 1, d)).toBe('tunnel')
+    expect(legProfile(base.lines.L, 0, base)).toBe('ground')
+    const net = buildNetwork3D(d)
+    expect(net.stations.b.groups[0].lift).toBeLessThanOrEqual(UG_COVER)
+    // the S-Bahn really dives under the ground there
+    const ln = net.lines[0]
+    const atStation = ln.cy[ln.cum.findIndex((x) => x >= ln.stops[1].d)]
+    expect(atStation).toBeLessThanOrEqual(UG_COVER)
+  })
+
+  it('puts airports underground by default', () => {
+    const base = city('sbahn')
+    const d: CityDoc = { ...base, stations: { ...base.stations, c: { ...base.stations.c, type: 'airport' } } }
+    expect(isUndergroundStation(d, d.stations.c)).toBe(true)
+    expect(isUndergroundStation(d, d.stations.a)).toBe(false)
+    const off = { ...d, stations: { ...d.stations, c: { ...d.stations.c, underground: false } } }
+    expect(isUndergroundStation(off, off.stations.c)).toBe(false)
+  })
+
   it('gives every station a look: its own choice or one that fits its type', () => {
     const base = { id: 's', name: 's', x: 0, y: 0 }
     expect(lookOf({ ...base, type: 'hauptbahnhof' })).toBe('halle')
