@@ -267,7 +267,10 @@ export default function PlanView() {
 
   const { mapW, mapH, legendH, vx, vy } = plan
   const totalH = mapH + legendH
-  const fit = box.w > 0 ? Math.min((box.w - 24) / mapW, 1.6) : 1
+  // fit to the width; on landscape screens (desktop) the whole plan also has to fit in the height
+  const widthFit = box.w > 0 ? Math.min((box.w - 24) / mapW, 1.6) : 1
+  const heightFit = box.w > box.h && box.h > 300 ? (box.h - 214) / totalH : Infinity
+  const fit = Math.max(0.2, Math.min(widthFit, heightFit))
   const scale = fit * zoom
   const lineList = Object.values(doc.lines)
 

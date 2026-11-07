@@ -26,3 +26,5 @@ dist-ssr
 # Local tooling and private reference material
 .claude/
 Bilder von mir für dich/
+
+.vercel
