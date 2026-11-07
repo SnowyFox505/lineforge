@@ -323,10 +323,10 @@ export default function PlanView() {
               return (
                 <g key={line.id} strokeLinecap="round" strokeLinejoin="round" fill="none">
                   {T.glow && (
-                    <motion.path d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.35} filter="url(#soft)" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.3, delay: dl, ease: [0.22, 1, 0.36, 1] }} />
+                    <path className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.35} filter="url(#soft)" pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
                   )}
-                  <motion.path d={d} stroke={T.casing} strokeWidth={w + 4} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.3, delay: dl, ease: [0.22, 1, 0.36, 1] }} />
-                  <motion.path d={d} stroke={line.color} strokeWidth={w} initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.3, delay: dl, ease: [0.22, 1, 0.36, 1] }} />
+                  <path className="draw-line" d={d} stroke={T.casing} strokeWidth={w + 4} pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
+                  <path className="draw-line" d={d} stroke={line.color} strokeWidth={w} pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
                 </g>
               )
             })}
@@ -335,26 +335,20 @@ export default function PlanView() {
             {plan.stations.map((st, idx) => {
               const delay = 0.1 + (idx + 1) * 0.035
               return (
-                <motion.g
-                  key={st.id}
-                  style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 18, delay: 0.7 + delay }}
-                >
+                <g key={st.id} className="pop-dot" style={{ animationDelay: `${0.7 + delay}s` }}>
                   <Symbol type={plan.types[st.id]} x={plan.px(st.x)} y={plan.py(st.y)} ink={T.ink} fill={T.fill} />
-                </motion.g>
+                </g>
               )
             })}
 
             {/* Line badges at the termini */}
             {plan.badges.map((b, i) => (
-              <motion.g key={b.key} initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} style={{ transformBox: 'fill-box', transformOrigin: 'center' }} transition={{ delay: 1.1 + i * 0.05, type: 'spring', stiffness: 300, damping: 20 }}>
+              <g key={b.key} className="pop-dot" style={{ animationDelay: `${1.1 + i * 0.05}s` }}>
                 <rect x={b.x - b.w / 2} y={b.y - 11} width={b.w} height={22} rx={b.r} fill={b.color} stroke={T.casing} strokeWidth={2} />
                 <text x={b.x} y={b.y + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#fff" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
                   {b.name}
                 </text>
-              </motion.g>
+              </g>
             ))}
 
             {/* Station names */}

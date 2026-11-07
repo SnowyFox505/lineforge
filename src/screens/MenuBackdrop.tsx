@@ -73,7 +73,9 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
         </defs>
         {LINES.map((l, i) => (
           <g key={l.d}>
-            <motion.path
+            {/* the lines draw themselves (plain CSS: the dash offset runs from "hidden" to "drawn") */}
+            <path
+              className="draw-line"
               d={l.d}
               fill="none"
               stroke={l.color}
@@ -82,49 +84,46 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
               strokeLinejoin="round"
               filter="url(#glow)"
               opacity={0.55}
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 1.9, delay: 0.3 + i * 0.28, ease: [0.22, 1, 0.36, 1] }}
+              pathLength={1}
+              strokeDasharray="1 1"
+              style={{ animationDelay: `${0.3 + i * 0.28}s` }}
             />
-            <motion.path
+            <path
+              className="draw-line"
               d={l.d}
               fill="none"
               stroke={l.color}
               strokeWidth={5}
               strokeLinecap="round"
               strokeLinejoin="round"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 1.9, delay: 0.3 + i * 0.28, ease: [0.22, 1, 0.36, 1] }}
+              pathLength={1}
+              strokeDasharray="1 1"
+              style={{ animationDelay: `${0.3 + i * 0.28}s` }}
             />
             {l.stations.map(([x, y], k) => (
-              <motion.circle
+              <circle
                 key={`${x}-${y}`}
+                className="pop-dot"
                 cx={x}
                 cy={y}
                 r={6.5}
                 fill="#fff"
                 stroke="#0a0e14"
                 strokeWidth={3}
-                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 16, delay: 1.1 + i * 0.28 + k * 0.12 }}
+                style={{ animationDelay: `${1.1 + i * 0.28 + k * 0.12}s` }}
               />
             ))}
             {l.big?.map(([x, y]) => (
-              <motion.circle
+              <circle
                 key={`b${x}-${y}`}
+                className="pop-dot"
                 cx={x}
                 cy={y}
                 r={10}
                 fill="#fff"
                 stroke="#0a0e14"
                 strokeWidth={4.5}
-                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 16, delay: 1.9 }}
+                style={{ animationDelay: '1.9s' }}
               />
             ))}
             <circle r={4.5} fill="#fff" opacity={0}>

@@ -181,3 +181,30 @@ input[type='color'].swatch-input::-moz-color-swatch {
   border: none;
   border-radius: 50%;
 }
+
+/* Menu backdrop: network lines that draw themselves */
+@keyframes draw-line {
+  from { stroke-dashoffset: 1.002; }
+  to { stroke-dashoffset: 0; }
+}
+.draw-line {
+  stroke-dashoffset: 1.002;
+  animation: draw-line 1.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .draw-line { animation: none; stroke-dashoffset: 0; }
+}
+
+/* Menu backdrop: stations pop in once their line has reached them */
+@keyframes pop-dot {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+.pop-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop-dot 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop-dot { animation: none; }
+}
