@@ -71,7 +71,7 @@ describe('3D network geometry', () => {
     d = station(d, 'c', 20, 100)
     d = station(d, 'e', 100, 100)
     d = line(d, 'L1', 'sbahn', ['a', 'x', 'e'])
-    d = line(d, 'L2', 'ubahn', ['b', 'x', 'c'])
+    d = line(d, 'L2', 'regional', ['b', 'x', 'c'])
     const net = buildNetwork3D(d)
     const sn = net.stations.x
     for (const ln of net.lines) {
@@ -93,7 +93,7 @@ describe('3D network geometry', () => {
       d = station(d, 'c', 20, 100)
       d = station(d, 'e', 100, 100)
       d = line(d, 'L1', 'sbahn', ['a', 'x', 'e'])
-      d = line(d, 'L2', 'ubahn', ['b', 'x', 'c'])
+      d = line(d, 'L2', 'regional', ['b', 'x', 'c'])
       return buildNetwork3D(d)
     }
     // one level: everything shares one platform complex at ground height
@@ -133,7 +133,7 @@ describe('3D network geometry', () => {
     d = station(d, 'e', 100, 66)
     d = station(d, 'f', 100, 54)
     d = line(d, 'M1', 'sbahn', ['a', 'x', 'e'])
-    d = line(d, 'M2', 'ubahn', ['a', 'x', 'f'])
+    d = line(d, 'M2', 'regional', ['a', 'x', 'f'])
     expect(buildNetwork3D(d).stations.x.groups).toHaveLength(1)
   })
 
@@ -186,7 +186,7 @@ describe('3D network geometry', () => {
     d = station(d, 'c', 60, 20)
     d = station(d, 'e', 60, 100)
     d = line(d, 'H', 'sbahn', ['a', 'b'])
-    d = line(d, 'V', 'ubahn', ['c', 'e'])
+    d = line(d, 'V', 'regional', ['c', 'e'])
     const net = buildNetwork3D(d)
     const [h, v] = net.lines
     const maxH = Math.max(...h.cy)

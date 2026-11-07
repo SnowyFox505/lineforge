@@ -3,6 +3,8 @@ import { layoutStation, resolveDesign, stationOperators, trackFor, TRACK_OFFSET 
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import type { CityDoc, Line, OperatorId, Station } from '../model/types'
 import { clusterByDirection, levelHeight, lineDirectionAtStation, meanDirection, LEVEL_STEP } from '../model/stationGroups'
+import { EMB_H, isUndergroundStation, legBridge, legProfile, UG_COVER, UG_LIFT } from '../model/profiles'
+import type { BridgeStyle, TrackProfile } from '../model/types'
 import { trainLength, VEHICLES } from '../model/vehicles'
 import { layoutLines } from '../plan/layout'
 import { cleanPolyline, extendEnds, resample, roundPolyline, smooth01 } from './curves'
@@ -51,6 +53,17 @@ export interface Stop {
 export interface Bridge {
   d0: number
   d1: number
+  /** leg of the line (stations[leg] -> stations[leg+1]) the bridge belongs to, and its look */
+  leg: number
+  style: BridgeStyle
+}
+
+/** Arc length range of one leg (between two stations) with the way the track runs there. */
+export interface LegRange {
+  k: number
+  profile: TrackProfile
+  d0: number
+  d1: number
 }
 
 /** Extra track of a station that leaves the line's own track and rejoins it behind the platform. */
@@ -87,6 +100,7 @@ export interface LineNet {
   total: number
   stops: Stop[]
   bridges: Bridge[]
+  legs: LegRange[]
   sidings: Siding[]
 }
 
@@ -414,7 +428,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         ax = Math.cos(a)
         az = -Math.sin(a)
       }
-      const lift = levelHeight(levelCount, k)
+      const lift = levelCount === 1 && isUndergroundStation(doc, st) && list.every((e) => e.line.operator === 'ubahn') ? UG_LIFT : levelHeight(levelCount, k)
       const g: StationGroup = {
         index: groups.length,
         kind: 'main',
@@ -637,6 +651,36 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const ft = tangents(fx, fz)
     const bt = tangents(bx, bz)
 
+    // the user's choice per leg: embankment with arches, tunnel or on the ground
+    const legRanges: LegRange[] = []
+    for (let k = 0; k < info.length - 1; k++) {
+      const A = info[k]
+      const B = info[k + 1]
+      const profile = legProfile(line, k)
+      legRanges.push({ k, profile, d0: cum0[A.i], d1: cum0[B.i] })
+      const dA = cum0[A.i] + A.half + 1.2
+      const dB = cum0[B.i] - B.half - 1.2
+      if (profile === 'ground' || dB - dA < 5) continue
+      const target = profile === 'embankment' ? EMB_H : UG_LIFT
+      const hA = A.g.lift
+      const hB = B.g.lift
+      const R = (dh: number) => (Math.abs(dh) < 0.05 ? 0 : 6 * Math.abs(dh) + 2.5)
+      let sc = 1
+      while (sc > 0.3 && R(target * sc - hA) + R(target * sc - hB) > dB - dA) sc -= 0.05
+      if (sc <= 0.3) continue
+      const peak = target * sc
+      const rIn = R(peak - hA)
+      const rOut = R(peak - hB)
+      for (let j = 0; j < m; j++) {
+        const d = cum0[j]
+        if (d < dA || d > dB) continue
+        let v = peak
+        if (rIn > 0 && d < dA + rIn) v = hA + (peak - hA) * smooth01((d - dA) / rIn)
+        else if (rOut > 0 && d > dB - rOut) v = hB + (peak - hB) * smooth01((dB - d) / rOut)
+        cy[j] = target < 0 ? Math.min(cy[j], v) : Math.max(cy[j], v)
+      }
+    }
+
     if (line.operator === 'tram') for (let j = 0; j < m; j++) cy[j] -= TRAM_DIP
 
     // slope of the track
@@ -679,10 +723,10 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     })
 
     // bridges where the axis runs over water
-    const runs: Bridge[] = []
+    const runs: { d0: number; d1: number }[] = []
     let start = -1
     for (let j = 0; j < m; j++) {
-      const wet = cy[j] < 0.3 && sample(cx[j] + half, cz[j] + half) >= BRIDGE_THRESHOLD
+      const wet = cy[j] < 0.3 && cy[j] > UG_COVER + 0.1 && sample(cx[j] + half, cz[j] + half) >= BRIDGE_THRESHOLD
       if (wet && start < 0) start = j
       if ((!wet || j === m - 1) && start >= 0) {
         const end = wet ? j : j - 1
@@ -690,12 +734,17 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         start = -1
       }
     }
-    const bridges: Bridge[] = []
+    const merged: { d0: number; d1: number }[] = []
     for (const r of runs) {
-      const last = bridges[bridges.length - 1]
+      const last = merged[merged.length - 1]
       if (last && r.d0 - last.d1 < 1.5) last.d1 = r.d1
-      else bridges.push({ ...r })
+      else merged.push({ ...r })
     }
+    const bridges: Bridge[] = merged.map((r) => {
+      const mid = (r.d0 + r.d1) / 2
+      const leg = Math.max(0, legRanges.findIndex((lg) => mid >= lg.d0 && mid <= lg.d1))
+      return { ...r, leg, style: legBridge(line, leg) }
+    })
 
     const stops: Stop[] = info.map((s) => ({ stationId: s.id, group: s.g.index, d: cum[s.i], zF: s.zF, zB: s.zB, half: s.half, taper: s.taper, lift: s.g.lift }))
 
@@ -720,6 +769,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       total: cum[m - 1],
       stops,
       bridges: bridges.filter((b) => b.d1 - b.d0 >= 1.2),
+      legs: legRanges,
       sidings,
     })
   }
@@ -749,11 +799,11 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
 
   // ---- lowered tracks and platforms are cut into the terrain -------------------------------
   const trench: { x: number; z: number; y: number }[] = []
-  for (const ln of lines) for (let j = 0; j < ln.n; j++) if (ln.cy[j] < -0.15) trench.push({ x: ln.cx[j], z: ln.cz[j], y: ln.cy[j] })
+  for (const ln of lines) for (let j = 0; j < ln.n; j++) if (ln.cy[j] < -0.15 && ln.cy[j] > UG_COVER) trench.push({ x: ln.cx[j], z: ln.cz[j], y: ln.cy[j] })
   const pits: { ox: number; oz: number; ax: number; az: number; halfL: number; halfW: number; y: number }[] = []
   for (const sn of Object.values(stations)) {
     for (const g of sn.groups) {
-      if (g.lift < -0.15) pits.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 1.6, halfW: g.layout.halfWidth + 1.3, y: g.lift })
+      if (g.lift < -0.15 && g.lift > UG_COVER) pits.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 1.6, halfW: g.layout.halfWidth + 1.3, y: g.lift })
     }
   }
   const cell = 3

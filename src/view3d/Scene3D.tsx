@@ -10,6 +10,7 @@ import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
 import Buildings3D from './Buildings3D'
 import Label3D from './Label3D'
+import { LegPanel, LegPicker } from './LegTools'
 import StationBuilding from './StationBuilding'
 import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
 import { buildNetwork3D } from './network3d'
@@ -132,17 +133,17 @@ function buildTexture(doc: CityDoc) {
   return tex
 }
 
-function Terrain({ doc, net }: { doc: CityDoc; net: Network3D }) {
+function Terrain({ doc, net, see }: { doc: CityDoc; net: Network3D; see: boolean }) {
   const { geo, skirt } = useMemo(() => buildTerrain(doc, net.field, net.carve), [doc.size, net.field, net.carve]) // eslint-disable-line react-hooks/exhaustive-deps
   const tex = useMemo(() => buildTexture(doc), [doc.terrain, doc.zoneGrid, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
   const water = useMemo(() => buildWater(doc.size, net.field), [doc.size, net.field])
   return (
     <group>
       <mesh geometry={geo}>
-        <meshStandardMaterial map={tex} roughness={0.95} metalness={0} />
+        <meshStandardMaterial map={tex} color={see ? '#2b3038' : '#ffffff'} roughness={0.95} metalness={0} transparent={see} opacity={see ? 0.4 : 1} depthWrite={!see} />
       </mesh>
       <mesh geometry={skirt}>
-        <meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} />
+        <meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} transparent={see} opacity={see ? 0.3 : 1} />
       </mesh>
       {/* water surface */}
       <mesh geometry={water}>
@@ -261,7 +262,9 @@ export default function Scene3D() {
   const editId = useEditor((s) => s.editStationId)
   const cam = useInitialCamera(doc)
   const net = useMemo(() => buildNetwork3D(doc), [doc])
+  if (import.meta.env.DEV) (window as unknown as { __net: unknown }).__net = net
   const [auto, setAuto] = useState(false)
+  const [see, setSee] = useState(false)
   const [running, setRunning] = useState(true)
   const [speedIdx, setSpeedIdx] = useState(0)
   const speedRef = useRef(1)
@@ -273,8 +276,9 @@ export default function Scene3D() {
         <hemisphereLight args={['#cfe2ff', '#1d3a30', 1.7]} />
         <directionalLight position={[doc.size * 0.6, doc.size * 0.9, doc.size * 0.35]} intensity={2.3} color="#fff0d9" />
         <directionalLight position={[-doc.size * 0.5, doc.size * 0.4, -doc.size * 0.6]} intensity={0.35} color="#7aa8ff" />
-        <Terrain doc={doc} net={net} />
-        <Buildings3D doc={doc} net={net} />
+        <Terrain doc={doc} net={net} see={see} />
+        {!see && <Buildings3D doc={doc} net={net} />}
+        <LegPicker net={net} see={see} />
         <Tracks3D net={net} />
         <Stations net={net} />
         <Trains3D net={net} speedRef={speedRef} />
@@ -293,9 +297,13 @@ export default function Scene3D() {
         />
       </Canvas>
 
+      <LegPanel net={net} />
       <div className="pointer-events-none absolute bottom-[98px] right-3 z-10 flex flex-col gap-2">
         <button onClick={() => setAuto((a) => !a)} aria-label="Automatisch drehen" className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${auto ? 'text-accent' : ''}`}>
           <Icon name="undo2" size={19} />
+        </button>
+        <button onClick={() => setSee((v) => !v)} aria-label="Untergrund anzeigen" className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${see ? 'text-accent' : ''}`}>
+          <Icon name="layers" size={19} />
         </button>
         <button onClick={() => setRunning((r) => !r)} aria-label={running ? 'Verkehr anhalten' : 'Verkehr starten'} className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${running ? 'text-accent' : ''}`}>
           <Icon name={running ? 'pause' : 'play'} size={19} />

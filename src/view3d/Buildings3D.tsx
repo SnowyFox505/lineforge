@@ -5,6 +5,7 @@ import type { UrbanKind } from '../editor2d/streets'
 import type { CityDoc } from '../model/types'
 import { WATER } from '../model/types'
 import { Boxes } from './Tracks3D'
+import { UG_COVER } from '../model/profiles'
 import type { Network3D } from './network3d'
 
 const m4 = new THREE.Matrix4()
@@ -43,17 +44,18 @@ function blockedCells(doc: CityDoc, net: Network3D): Uint8Array {
     }
   }
   for (const ln of net.lines) {
-    for (let i = 0; i < ln.n; i += 2) mark(ln.cx[i], ln.cz[i], ln.line.operator === 'tram' ? 1.4 : 2)
+    for (let i = 0; i < ln.n; i += 2) if (ln.cy[i] > UG_COVER + 0.1) mark(ln.cx[i], ln.cz[i], ln.line.operator === 'tram' ? 1.4 : 2)
   }
   for (const sn of Object.values(net.stations)) {
     for (const g of sn.groups) {
+      if (g.lift <= UG_COVER) continue
       const l = g.layout.length / 2 + 2
       const w = g.layout.halfWidth + 2
       for (let u = -l; u <= l; u += 1) {
         for (let v = -w; v <= w; v += 1) mark(g.ox + g.ax * u - g.az * v, g.oz + g.az * u + g.ax * v, 1)
       }
     }
-    mark(sn.x, sn.z, 4)
+    if (sn.groups.some((g) => g.lift > UG_COVER) || !sn.groups.length) mark(sn.x, sn.z, 4)
   }
   return blocked
 }

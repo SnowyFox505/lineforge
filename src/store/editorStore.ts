@@ -4,7 +4,7 @@ import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
 import { LAND, WATER } from '../model/types'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, resetRoute, withRoutes } from '../model/routing'
-import type { CityDoc, GameMode, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
+import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
 
 // Terrain is a typed array; keep immer from trying to freeze document internals.
 setAutoFreeze(false)
@@ -60,6 +60,8 @@ interface EditorState {
   selectedPoiId: string | null
   /** Station currently open in the 3D station editor */
   editStationId: string | null
+  /** selected leg of a line in the 3D view (stretch between two stations) */
+  selectedLeg: { lineId: string; leg: number } | null
 
   requestFit: () => void
   setScreen: (screen: Screen) => void
@@ -73,6 +75,8 @@ interface EditorState {
   selectStation: (id: string | null) => void
   selectWaypoint: (w: { lineId: string; k: number; j: number } | null) => void
   setEditStation: (id: string | null) => void
+  selectLeg: (leg: { lineId: string; leg: number } | null) => void
+  updateLeg: (lineId: string, leg: number, patch: LegSettings) => void
 
   loadDoc: (doc: CityDoc) => void
   newCity: (name: string, mode: GameMode, size?: number) => void
@@ -146,11 +150,12 @@ export const useEditor = create<EditorState>((set, get) => {
     poiKind: 'stadium',
     selectedPoiId: null,
     editStationId: null,
+    selectedLeg: null,
 
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -159,6 +164,13 @@ export const useEditor = create<EditorState>((set, get) => {
     selectStation: (selectedStationId) => set({ selectedStationId }),
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
     setEditStation: (editStationId) => set({ editStationId }),
+    selectLeg: (selectedLeg) => set({ selectedLeg }),
+    updateLeg: (lineId, leg, patch) =>
+      mutate((d) => {
+        const l = d.lines[lineId]
+        if (!l) return
+        l.legs = { ...(l.legs ?? {}), [leg]: { ...(l.legs?.[leg] ?? {}), ...patch } }
+      }),
 
     loadDoc: (doc) =>
       set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),

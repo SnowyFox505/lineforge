@@ -31,6 +31,18 @@ export interface StationDesign {
   trackOps?: OperatorId[][]
 }
 
+/** How a stretch of track between two stations runs: on the ground, on an arched embankment or underground. */
+export type TrackProfile = 'ground' | 'embankment' | 'tunnel'
+
+/** Looks of a bridge over water; 'standard' is the plain girder bridge. */
+export type BridgeStyle = 'standard' | 'stone' | 'truss' | 'brick' | 'cable' | 'arch' | 'slim'
+
+/** User settings of one leg of a line (the stretch between two stations). */
+export interface LegSettings {
+  profile?: TrackProfile
+  bridge?: BridgeStyle
+}
+
 export interface Station {
   id: string
   name: string
@@ -46,6 +58,8 @@ export interface Station {
   levels?: number
   /** Designs of the higher levels, index = level (1, 2); level 0 uses `design` */
   levelDesigns?: Record<number, StationDesign>
+  /** Underground station (platforms below the ground). Default: true for stations that only the metro serves. */
+  underground?: boolean
 }
 
 export interface Line {
@@ -65,6 +79,8 @@ export interface Line {
   segs?: Pt[][]
   /** Radius of the curves in the 3D view (the 2D plan keeps its sharp bends). Default 3. */
   curve?: number
+  /** Settings per leg: legs[i] is the stretch from stations[i] to stations[i+1] */
+  legs?: Record<number, LegSettings>
 }
 
 /** Kinds of areas that can be painted on the map to show where the city, its suburbs and the airport are. */

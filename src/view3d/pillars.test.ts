@@ -19,7 +19,7 @@ describe('pillars', () => {
     let d = createCity('T', 'creative', 160)
     for (const [id, x, y] of [['a', 20, 80], ['b', 140, 80], ['c', 80, 20], ['e', 80, 140]] as [string, number, number][]) d = station(d, id, x, y)
     d = line(d, 'H', 'sbahn', ['a', 'b'])
-    d = line(d, 'V', 'ubahn', ['c', 'e'])
+    d = line(d, 'V', 'regional', ['c', 'e'])
     const net = buildNetwork3D(d)
     let piers = 0
     for (const ln of net.lines) {
@@ -46,7 +46,7 @@ describe('pillars', () => {
     let d = createCity('T', 'creative', 160)
     for (const [id, x, y] of [['a', 20, 80], ['x', 80, 80], ['b', 140, 80], ['c', 80, 20], ['e', 80, 140]] as [string, number, number][]) d = station(d, id, x, y, id === 'x' ? 2 : undefined)
     d = line(d, 'H', 'sbahn', ['a', 'x', 'b'])
-    d = line(d, 'V', 'ubahn', ['c', 'x', 'e'])
+    d = line(d, 'V', 'regional', ['c', 'x', 'e'])
     const net = buildNetwork3D(d)
     const g = net.stations.x.groups.find((gr) => gr.lift > 0.5)!
     expect(g).toBeTruthy()

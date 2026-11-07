@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import { LAND_Y, RAIL_Y } from './heights'
 import { addTrack, Boxes, boxAlong, emptyBufs } from './Tracks3D'
+import { UG_COVER } from '../model/profiles'
 import { TAPER } from './network3d'
 import { smooth01 } from './curves'
 
@@ -258,6 +259,31 @@ function Canopies({ layout }: { layout: StationLayout }) {
   )
 }
 
+/** Concrete box around the platforms of an underground station (seen in the underground view). */
+function UndergroundShell({ layout, lift }: { layout: StationLayout; lift: number }) {
+  const L = layout.length + 3
+  const W = layout.halfWidth * 2 + 1.6
+  const y0 = LAND_Y + lift
+  return (
+    <group>
+      <mesh position={[0, y0 + 1.2, 0]}>
+        <boxGeometry args={[L, 0.12, W]} />
+        <meshStandardMaterial color="#7d8591" roughness={0.9} transparent opacity={0.6} />
+      </mesh>
+      {[-1, 1].map((sz) => (
+        <mesh key={sz} position={[0, y0 + 0.55, (sz * W) / 2]}>
+          <boxGeometry args={[L, 1.4, 0.12]} />
+          <meshStandardMaterial color="#8a93a0" roughness={0.9} transparent opacity={0.6} />
+        </mesh>
+      ))}
+      <mesh position={[0, y0 - 0.12, 0]}>
+        <boxGeometry args={[L, 0.1, W]} />
+        <meshStandardMaterial color="#5f6772" roughness={0.9} />
+      </mesh>
+    </group>
+  )
+}
+
 /** Retaining walls along the long sides of a platform complex that is sunk into the ground. */
 function PitWalls({ layout, lift }: { layout: StationLayout; lift: number }) {
   const floor = LAND_Y + lift - 0.12
@@ -338,33 +364,14 @@ export default function StationBuilding({
 }) {
   const tracks = useMemo(() => stationTracks(layout, usedZ, noTracks), [layout, usedZ, noTracks])
   const pf = useMemo(() => platformBoxes(layout), [layout])
-  const furn = useMemo(() => platformFurniture(layout, design.roof), [layout, design.roof])
+  const furn = useMemo(() => platformFurniture(layout, lift <= UG_COVER ? 'open' : design.roof), [layout, design.roof, lift])
   const halfW = layout.halfWidth + 0.25
   const L = layout.length
   const ubahn = showUbahn ?? design.ubahn
+  const roof = lift <= UG_COVER ? 'open' : design.roof
 
-  return (
-    <group>
-      {lift > 0.15 && <Supports layout={layout} lift={lift} groundY={groundY} free={pillarFree} />}
-      {lift < -0.15 && <PitWalls layout={layout} lift={lift} />}
-      <group position={[0, lift, 0]}>
-      <Boxes items={tracks.ballast} color="#4a4d54" roughness={1} />
-      <Boxes items={tracks.rails} color="#d6dde8" roughness={0.3} metalness={0.8} />
-      <Boxes items={tracks.buffers} color="#c0392b" roughness={0.7} />
-      <Boxes items={pf.body} color="#b7bfc9" roughness={0.9} />
-      <Boxes items={pf.edge} color="#f2c230" roughness={0.6} emissive={0.25} />
-      <Boxes items={furn.posts} color="#cdd4de" roughness={0.5} metalness={0.4} />
-      <Boxes items={furn.heads} color="#ffe9a8" roughness={0.5} emissive={0.8} />
-      <Boxes items={furn.wood} color="#7a5a3c" roughness={0.9} />
-      <Boxes items={furn.backs} color="#6a4d33" roughness={0.9} />
-      <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
-      {entrance && <Entrance layout={layout} big={entrance === 'big'} />}
+  const uEntrance = ubahn || lift <= UG_COVER ? (
 
-      {design.roof === 'canopy' && <Canopies layout={layout} />}
-      {design.roof === 'glass' && <Vault halfW={halfW} length={L + 1.2} kind="glass" />}
-      {design.roof === 'hall' && <Vault halfW={halfW} length={L + 1.2} kind="hall" />}
-
-      {ubahn && (
         <group position={[L * 0.18, LAND_Y * 0.55, layout.halfWidth + 1.0]} scale={0.45}>
           {/* stair entrance */}
           <mesh position={[0, LAND_Y + 0.28, 0]}>
@@ -384,7 +391,33 @@ export default function StationBuilding({
             <meshStandardMaterial map={uSignTexture()} emissive="#0b4fa8" emissiveIntensity={0.45} />
           </mesh>
         </group>
-      )}
+      
+  ) : null
+
+  return (
+    <group>
+      {lift > 0.15 && <Supports layout={layout} lift={lift} groundY={groundY} free={pillarFree} />}
+      {lift < -0.15 && lift > UG_COVER && <PitWalls layout={layout} lift={lift} />}
+      {lift <= UG_COVER && <UndergroundShell layout={layout} lift={lift} />}
+      {lift <= UG_COVER && uEntrance}
+      <group position={[0, lift, 0]}>
+      <Boxes items={tracks.ballast} color="#4a4d54" roughness={1} />
+      <Boxes items={tracks.rails} color="#d6dde8" roughness={0.3} metalness={0.8} />
+      <Boxes items={tracks.buffers} color="#c0392b" roughness={0.7} />
+      <Boxes items={pf.body} color="#b7bfc9" roughness={0.9} />
+      <Boxes items={pf.edge} color="#f2c230" roughness={0.6} emissive={0.25} />
+      <Boxes items={furn.posts} color="#cdd4de" roughness={0.5} metalness={0.4} />
+      <Boxes items={furn.heads} color="#ffe9a8" roughness={0.5} emissive={0.8} />
+      <Boxes items={furn.wood} color="#7a5a3c" roughness={0.9} />
+      <Boxes items={furn.backs} color="#6a4d33" roughness={0.9} />
+      <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
+      {entrance && <Entrance layout={layout} big={entrance === 'big'} />}
+
+      {roof === 'canopy' && <Canopies layout={layout} />}
+      {roof === 'glass' && <Vault halfW={halfW} length={L + 1.2} kind="glass" />}
+      {roof === 'hall' && <Vault halfW={halfW} length={L + 1.2} kind="hall" />}
+
+      {lift > UG_COVER && uEntrance}
 
       {ubahn && underground && (
         <group position={[0, 0, 0]}>
