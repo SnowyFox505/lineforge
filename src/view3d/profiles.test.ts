@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
-import { isUndergroundStation, legProfile, UG_COVER, UG_LIFT } from '../model/profiles'
+import { isUndergroundStation, legProfile, lookOf, STATION_LOOKS, UG_COVER, UG_LIFT } from '../model/profiles'
 import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
 import { buildNetwork3D } from './network3d'
@@ -55,5 +55,13 @@ describe('track profiles', () => {
     const ln = net.lines[0]
     expect(Math.min(...ln.cy)).toBeLessThan(-1.2)
     for (const s of ln.cs) expect(Math.abs(s)).toBeLessThan(0.45)
+  })
+
+  it('gives every station a look: its own choice or one that fits its type', () => {
+    const base = { id: 's', name: 's', x: 0, y: 0 }
+    expect(lookOf({ ...base, type: 'hauptbahnhof' })).toBe('halle')
+    expect(lookOf({ ...base, type: 'standard' })).toBe('landhalt')
+    expect(lookOf({ ...base, type: 'standard', look: 'zelt' })).toBe('zelt')
+    expect(new Set(STATION_LOOKS.map((l) => l.id)).size).toBe(STATION_LOOKS.length)
   })
 })

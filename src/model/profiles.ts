@@ -1,4 +1,4 @@
-import type { BridgeStyle, CityDoc, Line, Station, TrackProfile } from './types'
+import type { BridgeStyle, CityDoc, Line, Station, StationLook, TrackProfile } from './types'
 
 /** Height of an embankment / viaduct above the ground */
 export const EMB_H = 1.25
@@ -46,3 +46,38 @@ export const BRIDGE_STYLES: BridgeInfo[] = [
   { id: 'arch', label: 'Stabbogen', era: 'modern', hint: 'Stählerner Bogen über der Fahrbahn' },
   { id: 'slim', label: 'Schlank', era: 'modern', hint: 'Dünne Spannbetonbrücke mit wenigen Pfeilern' },
 ]
+
+export interface LookInfo {
+  id: StationLook
+  label: string
+  hint: string
+}
+
+/** The looks a heavy-rail station can have from outside. */
+export const STATION_LOOKS: LookInfo[] = [
+  { id: 'halle', label: 'Bahnhofshalle', hint: 'Große stählerne Bogenhalle wie ein Kopfbahnhof' },
+  { id: 'glas', label: 'Glasdach', hint: 'Lichtdurchflutetes Glas-Tonnendach' },
+  { id: 'gruenderzeit', label: 'Gründerzeit', hint: 'Backsteingebäude mit Uhrturm und Satteldach-Halle' },
+  { id: 'modern', label: 'Modern', hint: 'Flaches Dach mit Glaswänden' },
+  { id: 'shed', label: 'Sheddach', hint: 'Sägezahndach mit Oberlichtern' },
+  { id: 'tonne', label: 'Betontonne', hint: 'Flaches Tonnengewölbe aus Beton' },
+  { id: 'zelt', label: 'Zeltdach', hint: 'Leichte Zeltdächer auf Masten' },
+  { id: 'landhalt', label: 'Haltepunkt', hint: 'Kleines Backsteinhaus mit langem Bahnsteigdach' },
+]
+
+/** Look of a station: its own choice, else a sensible one for its type. */
+export function lookOf(st: Station): StationLook {
+  if (st.look) return st.look
+  switch (st.type) {
+    case 'hauptbahnhof':
+      return 'halle'
+    case 'interchange':
+      return 'glas'
+    case 'airport':
+      return 'modern'
+    case 'landmark':
+      return 'gruenderzeit'
+    default:
+      return 'landhalt'
+  }
+}

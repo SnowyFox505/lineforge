@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
+import { isUndergroundStation, lookOf, STATION_LOOKS } from '../model/profiles'
 import { layoutStation, MAX_TRACKS, resolveDesign, ROOF_LABEL, stationOperators } from '../model/stationDesign'
 import { clusterByDirection, lineDirectionAtStation, MAX_LEVELS } from '../model/stationGroups'
 import type { CityDoc } from '../model/types'
@@ -159,6 +160,25 @@ function Panel({ id, level, setLevel }: { id: string; level: number; setLevel: (
             )}
           </div>
         )}
+      </Section>
+
+      <Section title="Bahnhofsart (Ansicht von außen)">
+        <div className="grid grid-cols-2 gap-2">
+          {STATION_LOOKS.map((l) => {
+            const on = lookOf(st) === l.id
+            return (
+              <button key={l.id} onClick={() => update(id, { look: l.id })} className={`rounded-2xl px-3 py-2.5 text-left transition-colors ${on ? 'bg-accent text-ink' : 'btn-soft'}`}>
+                <div className="text-[13px] font-bold leading-tight">{l.label}</div>
+                <div className={`mt-0.5 text-[11px] leading-snug ${on ? 'opacity-70' : 'text-white/45'}`}>{l.hint}</div>
+              </button>
+            )
+          })}
+        </div>
+      </Section>
+
+      <Section title="Lage">
+        <Toggle on={isUndergroundStation(doc, st)} onChange={(v) => update(id, { underground: v })} label="Unterirdischer Bahnhof (im Tunnel)" />
+        <p className="mt-2 text-xs text-white/45">Reine U-Bahn-Stationen liegen standardmäßig unter der Erde. Den Streckenverlauf stellst du in der 3D-Karte ein: Abschnitt antippen.</p>
       </Section>
 
       <Section title="Anzahl der Gleise">

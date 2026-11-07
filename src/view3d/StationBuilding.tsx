@@ -4,6 +4,8 @@ import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import { LAND_Y, RAIL_Y } from './heights'
 import { addTrack, Boxes, boxAlong, emptyBufs } from './Tracks3D'
 import { UG_COVER } from '../model/profiles'
+import type { StationLook } from '../model/types'
+import StationShell from './StationShell'
 import { TAPER } from './network3d'
 import { smooth01 } from './curves'
 
@@ -345,6 +347,7 @@ export default function StationBuilding({
   pillarFree,
   showUbahn,
   entrance = null,
+  shell = null,
 }: {
   design: ResolvedDesign
   layout: StationLayout
@@ -361,6 +364,8 @@ export default function StationBuilding({
   showUbahn?: boolean
   /** station building beside the main platforms */
   entrance?: 'small' | 'big' | null
+  /** draw the closed, roofed station seen from outside instead of the open platforms' roof */
+  shell?: StationLook | null
 }) {
   const tracks = useMemo(() => stationTracks(layout, usedZ, noTracks), [layout, usedZ, noTracks])
   const pf = useMemo(() => platformBoxes(layout), [layout])
@@ -368,7 +373,7 @@ export default function StationBuilding({
   const halfW = layout.halfWidth + 0.25
   const L = layout.length
   const ubahn = showUbahn ?? design.ubahn
-  const roof = lift <= UG_COVER ? 'open' : design.roof
+  const roof = lift <= UG_COVER || shell ? 'open' : design.roof
 
   const uEntrance = ubahn || lift <= UG_COVER ? (
 
@@ -413,6 +418,7 @@ export default function StationBuilding({
       <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
       {entrance && <Entrance layout={layout} big={entrance === 'big'} />}
 
+      {shell && lift > UG_COVER && <StationShell look={shell} layout={layout} />}
       {roof === 'canopy' && <Canopies layout={layout} />}
       {roof === 'glass' && <Vault halfW={halfW} length={L + 1.2} kind="glass" />}
       {roof === 'hall' && <Vault halfW={halfW} length={L + 1.2} kind="hall" />}

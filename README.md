@@ -28,7 +28,9 @@ LineForge ist eine Web-App (PWA, iPhone zuerst, läuft auch am Desktop), in der 
 
 ### In 3D erleben
 - **Gleise und Brücken:** Schlichte Gleisbetten, Brücken über Wasser, Viadukte, wo sich Linien kreuzen.
-- **Bahnhöfe nach Maß:** Gleise, Bahnsteigform, Länge und Dach sind einstellbar, auch **mehrere Ebenen** wie am Ostkreuz. Die Anzahl der Ebenen bestimmst du selbst, tiefere Ebenen werden abgesenkt, höhere aufgeständert.
+- **Gleisabschnitte einzeln einstellen:** Abschnitt antippen und wählen, ob das Gleis ebenerdig liegt, auf einem Damm mit Bögen läuft oder im Tunnel verschwindet. Die U-Bahn fährt standardmäßig unterirdisch, der Untergrund-Knopf blendet das Gelände aus.
+- **Brücken zum Austauschen:** Über Wasser hast du die Wahl zwischen der Standardbrücke, drei historischen (Steinbogen, Backsteinviadukt, Fachwerk) und drei modernen (Schrägseil, Stabbogen, schlank).
+- **Bahnhöfe nach Maß:** Gleise, Bahnsteigform, Länge und Dach sind einstellbar, auch **mehrere Ebenen** wie am Ostkreuz. Die Anzahl der Ebenen bestimmst du selbst, tiefere Ebenen werden abgesenkt, höhere aufgeständert. Von außen sehen Fernbahnhöfe wie überdachte Bahnhofsgebäude aus, mit acht Bauformen zur Auswahl (Halle, Glasdach, Gründerzeit, modern, Sheddach, Betontonne, Zeltdach, Haltepunkt).
 - **Fahrende Züge:** Sie halten an den Bahnsteigen, wenden am Kopf, und kein Gleis wird doppelt belegt.
 - **Gebäude als Quader:** Die Stadt wird hoch und dicht im Zentrum, Vororte bleiben niedrig. Gebäude weichen Gleisen und Bahnhöfen aus.
 

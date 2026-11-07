@@ -31,6 +31,9 @@ export interface StationDesign {
   trackOps?: OperatorId[][]
 }
 
+/** Outer appearance of a heavy-rail station in the 3D map (the roofed building seen from outside). */
+export type StationLook = 'halle' | 'glas' | 'gruenderzeit' | 'modern' | 'shed' | 'tonne' | 'zelt' | 'landhalt'
+
 /** How a stretch of track between two stations runs: on the ground, on an arched embankment or underground. */
 export type TrackProfile = 'ground' | 'embankment' | 'tunnel'
 
@@ -58,6 +61,8 @@ export interface Station {
   levels?: number
   /** Designs of the higher levels, index = level (1, 2); level 0 uses `design` */
   levelDesigns?: Record<number, StationDesign>
+  /** Appearance of the roofed station seen from outside; default depends on the station type */
+  look?: StationLook
   /** Underground station (platforms below the ground). Default: true for stations that only the metro serves. */
   underground?: boolean
 }
