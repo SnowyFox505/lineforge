@@ -1,0 +1,432 @@
+import { useMemo } from 'react'
+import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { carOffsets } from '../model/vehicles'
+import type { VehicleSpec } from '../model/vehicles'
+import { RAIL_Y } from './heights'
+
+/** Underside of the car bodies above the rail head */
+export const BODY_Y = RAIL_Y + 0.07
+
+type Role = 'head' | 'mid' | 'tail' | 'single'
+
+const GLASS = '#25384c'
+const DARK = '#2a2f36'
+
+/** How a vehicle type looks. Fractions are of the body height; colours may be 'line' (the line colour) or 'body'. */
+interface Style {
+  /** y-levels (fractions) at which the side wall changes colour; must contain every colour boundary used below */
+  levels: number[]
+  /** roundness of the roof edge, as a fraction of the width */
+  roofRound: number
+  /** how much the roof drops / the width narrows towards the nose tip (0..1) and how sharply */
+  drop: number
+  narrow: number
+  pow: number
+  /** doors: positions as fractions of the usable length, width, number of windows */
+  doors: number[]
+  doorW: number
+  winW: number
+  winGap: number
+  /** height of the windscreen bottom edge */
+  ws0: number
+  /** window rows (y0,y1) */
+  windows: [number, number][]
+  /** coloured side bands (y0,y1,colour) */
+  bands: [number, number, string][]
+  /** colour of the lower part of the door */
+  door: string
+  /** colour of the front below the windscreen */
+  front: string
+  roof: string
+  skirt: number
+}
+
+const STYLES: Record<string, Style> = {
+  // Berlin S-Bahn 484: yellow body, red band and front, big dark windscreen
+  sbahn: {
+    levels: [0, 0.3, 0.46, 0.76],
+    roofRound: 0.26,
+    drop: 0.1,
+    narrow: 0.12,
+    pow: 1.6,
+    doors: [0.2, 0.5, 0.8],
+    doorW: 0.2,
+    winW: 0.3,
+    winGap: 0.06,
+    ws0: 0.34,
+    windows: [[0.46, 0.76]],
+    bands: [[0, 0.3, 'line']],
+    door: '#d9a82a',
+    front: 'line',
+    roof: '#9aa2ad',
+    skirt: 0.0,
+  },
+  // Berlin U-Bahn (IK/J): yellow body, black skirt, flat front with a huge windscreen
+  ubahn: {
+    levels: [0, 0.1, 0.46, 0.8],
+    roofRound: 0.24,
+    drop: 0.04,
+    narrow: 0.05,
+    pow: 1.4,
+    doors: [0.18, 0.5, 0.82],
+    doorW: 0.19,
+    winW: 0.24,
+    winGap: 0.06,
+    ws0: 0.28,
+    windows: [[0.46, 0.8]],
+    bands: [[0, 0.1, DARK]],
+    door: '#d9a70c',
+    front: DARK,
+    roof: '#8a919b',
+    skirt: 0.1,
+  },
+  // Low-floor tram: painted in the line colour, grey stripes, dark window band
+  tram: {
+    levels: [0, 0.1, 0.38, 0.43, 0.72, 0.76],
+    roofRound: 0.3,
+    drop: 0.16,
+    narrow: 0.2,
+    pow: 1.8,
+    doors: [0.24, 0.76],
+    doorW: 0.2,
+    winW: 0.3,
+    winGap: 0.05,
+    ws0: 0.3,
+    windows: [[0.43, 0.72]],
+    bands: [
+      [0, 0.1, '#7d858f'],
+      [0.38, 0.43, '#d9dee4'],
+      [0.72, 0.76, '#d9dee4'],
+    ],
+    door: GLASS,
+    front: 'body',
+    roof: '#d8dde3',
+    skirt: 0.1,
+  },
+  // Double-deck regional EMU: red body, light lower stripe, two window rows
+  regional: {
+    levels: [0, 0.1, 0.2, 0.24, 0.42, 0.46, 0.5, 0.56, 0.76, 0.81],
+    roofRound: 0.2,
+    drop: 0.14,
+    narrow: 0.18,
+    pow: 1.7,
+    doors: [0.2, 0.8],
+    doorW: 0.22,
+    winW: 0.17,
+    winGap: 0.06,
+    ws0: 0.42,
+    windows: [
+      [0.24, 0.42],
+      [0.56, 0.76],
+    ],
+    bands: [
+      [0, 0.1, '#59616c'],
+      [0.1, 0.2, '#d0d4da'],
+      [0.46, 0.5, 'line'],
+    ],
+    door: '#a51b22',
+    front: 'body',
+    roof: '#6c737d',
+    skirt: 0.1,
+  },
+  // ICE 4: white body, long streamlined nose, continuous dark windows over a coloured stripe
+  fernverkehr: {
+    levels: [0, 0.12, 0.38, 0.46, 0.5, 0.76],
+    roofRound: 0.3,
+    drop: 0.4,
+    narrow: 0.42,
+    pow: 1.25,
+    doors: [0.18, 0.82],
+    doorW: 0.2,
+    winW: 0.62,
+    winGap: 0.07,
+    ws0: 0.5,
+    windows: [[0.5, 0.76]],
+    bands: [
+      [0, 0.12, '#68707b'],
+      [0.38, 0.46, 'line'],
+    ],
+    door: '#dde1e6',
+    front: 'body',
+    roof: '#b4bbc5',
+    skirt: 0.12,
+  },
+}
+
+function colourOf(name: string, line: string, body: string) {
+  return name === 'line' ? line : name === 'body' ? body : name
+}
+
+/** x-intervals of windows and doors along a car (car-local, centred on 0). */
+function layoutSide(st: Style, len: number, nF: number, nR: number) {
+  const a = -len / 2 + (nR > 0 ? nR + 0.04 : 0.13)
+  const b = len / 2 - (nF > 0 ? nF + 0.04 : 0.13)
+  const span = Math.max(0.2, b - a)
+  const doors: [number, number][] = st.doors
+    .map((f) => a + span * f)
+    .filter((c) => c - st.doorW / 2 > a - 0.001 && c + st.doorW / 2 < b + 0.001)
+    .map((c) => [c - st.doorW / 2, c + st.doorW / 2] as [number, number])
+  const wins: [number, number][] = []
+  const cuts = [a, ...doors.flatMap((d) => d), b]
+  for (let i = 0; i < cuts.length; i += 2) {
+    const x0 = cuts[i] + (i === 0 ? 0 : 0.035)
+    const x1 = cuts[i + 1] - (i + 1 === cuts.length - 1 ? 0 : 0.035)
+    const seg = x1 - x0
+    if (seg < 0.14) continue
+    const n = Math.max(1, Math.round((seg + st.winGap) / (st.winW + st.winGap)))
+    const w = (seg - st.winGap * (n - 1)) / n
+    for (let k = 0; k < n; k++) wins.push([x0 + k * (w + st.winGap), x0 + k * (w + st.winGap) + w])
+  }
+  return { doors, wins }
+}
+
+const inAny = (list: [number, number][], x: number) => list.some(([a, b]) => x > a && x < b)
+
+/** The body shell of a car: rounded cross-sections along its length, tapered at the nose, coloured face by face. */
+function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: string): THREE.BufferGeometry {
+  const st = STYLES[spec.kind]
+  const { height: h, width: w } = spec
+  const hl = len / 2
+  const body = spec.paintAll ? line : spec.body
+  const side = layoutSide(st, len, nF, nR)
+
+  // slice positions: ends, nose steps, window and door edges
+  const xsSet = new Set<number>([-hl, hl])
+  const NOSE_STEPS = 7
+  for (let k = 1; k < NOSE_STEPS; k++) {
+    if (nF > 0) xsSet.add(+(hl - nF + (nF * k) / NOSE_STEPS).toFixed(5))
+    if (nR > 0) xsSet.add(+(-hl + nR - (nR * k) / NOSE_STEPS).toFixed(5))
+  }
+  if (nF > 0) xsSet.add(+(hl - nF).toFixed(5))
+  if (nR > 0) xsSet.add(+(-hl + nR).toFixed(5))
+  for (const [x0, x1] of [...side.wins, ...side.doors]) {
+    xsSet.add(+x0.toFixed(5))
+    xsSet.add(+x1.toFixed(5))
+  }
+  const xs = [...xsSet].sort((p, q) => p - q)
+
+  const profile = (x: number) => {
+    let top = h
+    let wf = 1
+    if (nF > 0 && x > hl - nF) {
+      const t = (x - (hl - nF)) / nF
+      top = h * (1 - st.drop * t ** st.pow)
+      wf = 1 - st.narrow * t ** 2
+    } else if (nR > 0 && x < -hl + nR) {
+      const t = (-hl + nR - x) / nR
+      top = h * (1 - st.drop * t ** st.pow)
+      wf = 1 - st.narrow * t ** 2
+    }
+    return { top, wf }
+  }
+
+  const ARC = [Math.PI, (5 * Math.PI) / 6, (2 * Math.PI) / 3, Math.PI / 2]
+  // ring: left side (z<0) bottom to top, then mirrored; returns points as [y, z]
+  const ringAt = (x: number) => {
+    const { top, wf } = profile(x)
+    const hw = (w / 2) * wf
+    const rr = Math.min(st.roofRound * w * wf, top * 0.4)
+    const left: [number, number][] = []
+    for (const lv of st.levels) left.push([Math.min(lv * h, top - rr), -hw])
+    for (const th of ARC) left.push([top - rr + rr * Math.sin(th), -hw + rr + rr * Math.cos(th)])
+    const right = left.map(([y, z]) => [y, -z] as [number, number]).reverse()
+    return [...left, ...right]
+  }
+  const rings = xs.map(ringAt)
+  const K = rings[0].length
+  const half = K / 2
+
+  const pos: number[] = []
+  const col: number[] = []
+  const c = new THREE.Color()
+  const va = new THREE.Vector3()
+  const vb = new THREE.Vector3()
+  const vc = new THREE.Vector3()
+  const n = new THREE.Vector3()
+
+  const isNoseX = (x: number) => (nF > 0 && x > hl - nF - 1e-6) || (nR > 0 && x < -hl + nR + 1e-6)
+
+  const paintFace = (cx: number, cy: number, _cz: number, nx: number, ny: number, nz: number): string => {
+    const yF = cy / h
+    const ax = Math.abs(nx)
+    const sideFace = Math.abs(nz) > 0.55
+    const nose = isNoseX(cx)
+    // windscreen on and around the nose
+    if (nose && ax > 0.25 && yF > st.ws0) return GLASS
+    if (nose && ny < 0.8 && yF > st.ws0 && nF > 0.5) return GLASS
+    if (nose && ny > 0.3 && yF > 0.6) return st.roof
+    if (nose && ax > 0.25) {
+      for (const [y0, y1, cn] of st.bands) if (yF >= y0 && yF <= y1 && cn !== 'body') return colourOf(cn, line, body)
+      return colourOf(st.front, line, body)
+    }
+    // flat end of a car without nose: gangway
+    if (!nose && ax > 0.6) return DARK
+    if (ny > 0.55) return st.roof
+    if (!sideFace) return body
+    // side wall
+    for (const [y0, y1] of st.windows) if (yF > y0 && yF < y1 && inAny(side.wins, cx)) return GLASS
+    for (const [y0, y1] of st.windows) if (yF > y0 && yF < y1 && inAny(side.doors, cx)) return GLASS
+    if (yF > 0.08 && yF < st.windows[st.windows.length - 1][1] && inAny(side.doors, cx)) return colourOf(st.door, line, body)
+    for (const [y0, y1, cn] of st.bands) if (yF > y0 && yF < y1) return colourOf(cn, line, body)
+    return body
+  }
+
+  const tri = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3) => {
+    n.copy(q).sub(p).cross(vb.copy(r).sub(p)).normalize()
+    const cx = (p.x + q.x + r.x) / 3
+    const cy = (p.y + q.y + r.y) / 3
+    const cz = (p.z + q.z + r.z) / 3
+    c.set(paintFace(cx, cy, cz, n.x, n.y, n.z))
+    for (const v of [p, q, r]) {
+      pos.push(v.x, v.y, v.z)
+      col.push(c.r, c.g, c.b)
+    }
+  }
+  const P = (x: number, r: [number, number]) => new THREE.Vector3(x, r[0], r[1])
+
+  for (let s = 0; s < xs.length - 1; s++) {
+    const A = rings[s]
+    const B = rings[s + 1]
+    const x0 = xs[s]
+    const x1 = xs[s + 1]
+    for (let i = 0; i < K - 1; i++) {
+      const a0 = P(x0, A[i])
+      const a1 = P(x0, A[i + 1])
+      const b0 = P(x1, B[i])
+      const b1 = P(x1, B[i + 1])
+      if (a0.distanceToSquared(a1) < 1e-10 && b0.distanceToSquared(b1) < 1e-10) continue
+      tri(va.copy(a0), vc.copy(b1), b0.clone())
+      tri(a0.clone(), a1.clone(), b1.clone())
+    }
+  }
+  // end caps: horizontal strips between the mirrored left and right points
+  const cap = (ring: [number, number][], x: number, forward: boolean) => {
+    for (let i = 0; i < half - 1; i++) {
+      const l0 = P(x, ring[i])
+      const l1 = P(x, ring[i + 1])
+      const r0 = P(x, ring[K - 1 - i])
+      const r1 = P(x, ring[K - 2 - i])
+      if (forward) {
+        tri(l0.clone(), l1.clone(), r1.clone())
+        tri(l0.clone(), r1.clone(), r0.clone())
+      } else {
+        tri(l0.clone(), r1.clone(), l1.clone())
+        tri(l0.clone(), r0.clone(), r1.clone())
+      }
+    }
+  }
+  cap(rings[rings.length - 1], xs[xs.length - 1], true)
+  cap(rings[0], xs[0], false)
+
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3))
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3))
+  g.computeVertexNormals()
+  return g
+}
+
+function paint(g: THREE.BufferGeometry, hex: string) {
+  const c = new THREE.Color(hex)
+  const nPts = g.attributes.position.count
+  const arr = new Float32Array(nPts * 3)
+  for (let i = 0; i < nPts; i++) {
+    arr[i * 3] = c.r
+    arr[i * 3 + 1] = c.g
+    arr[i * 3 + 2] = c.b
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
+  return g
+}
+
+function box(w: number, h: number, d: number, x: number, y: number, z: number, hex: string, rotZ = 0) {
+  const g = new THREE.BoxGeometry(w, h, d)
+  if (rotZ) g.rotateZ(rotZ)
+  g.translate(x, y, z)
+  const ng = g.toNonIndexed()
+  g.dispose()
+  ng.deleteAttribute('uv') // the body shell has none, and merging needs identical attributes
+  return paint(ng, hex)
+}
+
+const cache = new Map<string, THREE.BufferGeometry>()
+
+export function carGeometry(spec: VehicleSpec, index: number, role: Role, line: string): THREE.BufferGeometry {
+  const key = `${spec.kind}|${index}|${role}|${line}`
+  const hit = cache.get(key)
+  if (hit) return hit
+  const len = spec.lens[index]
+  const { height: h, width: w } = spec
+  const nF = role === 'head' || role === 'single' ? spec.nose : 0
+  const nR = role === 'tail' || role === 'single' ? spec.nose : 0
+  const st = STYLES[spec.kind]
+  const parts: THREE.BufferGeometry[] = [shell(spec, len, nF, nR, line)]
+
+  // underframe and bogies
+  parts.push(box(len * 0.86, 0.06, w * 0.8, 0, -0.03, 0, '#22272e'))
+  for (const sx of [-1, 1]) {
+    parts.push(box(0.3, 0.07, w * 0.7, sx * len * 0.3, -0.045, 0, '#14181d'))
+    for (const sz of [-1, 1]) parts.push(box(0.22, 0.07, 0.03, sx * len * 0.3, -0.045, sz * w * 0.38, '#3a414b'))
+  }
+  // flexible gangway between cars
+  if (role === 'mid' || role === 'tail') parts.push(box(0.09, h * 0.86, w * 0.82, -len / 2 - 0.02, h * 0.45, 0, '#1d2127'))
+  // roof equipment
+  if (spec.kind === 'regional' || spec.kind === 'sbahn' || spec.kind === 'ubahn') {
+    for (const f of [-0.28, 0.12]) parts.push(box(len * 0.14, 0.022, w * 0.5, len * f, h + 0.002, 0, '#8d949e'))
+  }
+  // pantograph on a middle (or head) car
+  if (spec.pantograph && (role === 'mid' || (role === 'head' && spec.lens.length < 3))) {
+    const px = -len * 0.12
+    parts.push(box(0.2, 0.02, 0.17, px, h + 0.01, 0, '#2a313b'))
+    parts.push(box(0.018, 0.17, 0.018, px, h + 0.09, 0.05, '#8a93a0', 0.4))
+    parts.push(box(0.018, 0.17, 0.018, px, h + 0.09, -0.05, '#8a93a0', -0.4))
+    parts.push(box(0.03, 0.014, 0.24, px + 0.03, h + 0.17, 0, '#2a313b'))
+  }
+  // buffer beams at the head: dark bumper
+  if (nF > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, len / 2 - 0.005, 0.03, 0, '#1b2026'))
+  if (nR > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, -len / 2 + 0.005, 0.03, 0, '#1b2026'))
+
+  const merged = mergeGeometries(parts, false)!
+  parts.forEach((p) => p.dispose())
+  cache.set(key, merged)
+  return merged
+}
+
+const lampWhite = new THREE.MeshStandardMaterial({ color: '#fff7dc', emissive: '#fff0b8', emissiveIntensity: 1.6 })
+const lampRed = new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2a1a', emissiveIntensity: 1.3 })
+const lampGeo = new THREE.BoxGeometry(0.03, 0.035, 0.07)
+const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.25 })
+
+/** One railcar in its own frame: +x is the direction of travel, origin at the car centre, rail level at y = 0 of BODY_Y. */
+export function CarMesh({ spec, index, color }: { spec: VehicleSpec; index: number; color: string }) {
+  const n = spec.lens.length
+  const role: Role = n === 1 ? 'single' : index === 0 ? 'head' : index === n - 1 ? 'tail' : 'mid'
+  const geo = useMemo(() => carGeometry(spec, index, role, color), [spec, index, role, color])
+  const len = spec.lens[index]
+  const st = STYLES[spec.kind]
+  const lampY = spec.height * 0.14
+  const lampZ = spec.width * 0.5 * (1 - st.narrow) * 0.62
+  const front = role === 'head' || role === 'single'
+  const rear = role === 'tail' || role === 'single'
+  return (
+    <group position={[0, BODY_Y, 0]}>
+      <mesh geometry={geo} material={bodyMat} />
+      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampGeo} material={lampWhite} position={[len / 2 + 0.004, lampY, s * lampZ]} />)}
+      {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampGeo} material={lampRed} position={[-len / 2 - 0.004, lampY, s * lampZ]} />)}
+    </group>
+  )
+}
+
+/** A complete train standing along +x, centred on the origin (used by the station editor). */
+export function TrainStatic({ spec, color }: { spec: VehicleSpec; color: string }) {
+  const offs = carOffsets(spec)
+  return (
+    <group>
+      {offs.map((x, i) => (
+        <group key={i} position={[x, 0, 0]}>
+          <CarMesh spec={spec} index={i} color={color} />
+        </group>
+      ))}
+    </group>
+  )
+}

@@ -1,0 +1,183 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Space Grotesk Variable', system-ui, 'Segoe UI', sans-serif;
+  --color-ink: #06080c;
+  --color-night: #0a0e14;
+  --color-accent: #c4f03a;
+  --color-accent-ink: #0d1300;
+  --color-muted: #8a94a3;
+  --color-line: rgba(255, 255, 255, 0.09);
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #07090d;
+  --text: #eef2f6;
+  --accent: #c4f03a;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+canvas {
+  touch-action: none;
+}
+
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+@layer base {
+  button {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  /* Frosted floating surface */
+  .glass {
+    background: linear-gradient(180deg, rgba(40, 47, 60, 0.7), rgba(16, 20, 28, 0.78));
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow:
+      0 18px 40px -12px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  .card {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #d6fb5c, #b4e32a);
+    color: var(--color-accent-ink);
+    font-weight: 700;
+    box-shadow:
+      0 10px 30px -8px rgba(196, 240, 58, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  .btn-soft {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    font-weight: 600;
+  }
+
+  .eyebrow {
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    font-weight: 600;
+  }
+
+  .field {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.9rem;
+    padding: 0.7rem 0.9rem;
+    color: var(--text);
+    outline: none;
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+  .field:focus {
+    border-color: rgba(196, 240, 58, 0.7);
+    box-shadow: 0 0 0 4px rgba(196, 240, 58, 0.12);
+  }
+}
+
+/* Range slider with accent fill */
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  outline: none;
+}
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(to right, var(--accent) var(--p, 50%), rgba(255, 255, 255, 0.14) var(--p, 50%));
+}
+input[type='range'].slider::-moz-range-track {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+}
+input[type='range'].slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--accent);
+}
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(196, 240, 58, 0.25);
+  border: none;
+}
+input[type='range'].slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(196, 240, 58, 0.25);
+}
+
+input[type='color'].swatch-input {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  padding: 0;
+  background: none;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+input[type='color'].swatch-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color'].swatch-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+input[type='color'].swatch-input::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}

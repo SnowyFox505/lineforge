@@ -1,0 +1,130 @@
+import { latticePoints } from '../model/routing'
+import type { CityDoc, Line, Pt } from '../model/types'
+import { joinPaths, segmentPath } from './octilinear'
+
+/** The route of a line as one polyline of lattice points (without bundling offsets). */
+export function linePolyline(doc: CityDoc, line: Line): Pt[] {
+  const parts: Pt[][] = []
+  for (let i = 0; i < line.stations.length - 1; i++) {
+    const seg = line.segs?.[i]
+    if (seg && seg.length >= 2) {
+      parts.push(seg)
+      continue
+    }
+    // fallback for documents that have not been routed yet
+    const a = doc.stations[line.stations[i]]
+    const b = doc.stations[line.stations[i + 1]]
+    if (a && b) parts.push(segmentPath(a, b))
+  }
+  return joinPaths(parts)
+}
+
+const key = (a: Pt, b: Pt) =>
+  a.x < b.x || (a.x === b.x && a.y < b.y) ? `${a.x},${a.y}|${b.x},${b.y}` : `${b.x},${b.y}|${a.x},${a.y}`
+
+/**
+ * Compute the polyline of every line in cell coordinates.
+ * Lines that share a stretch of track run side by side, `gap` cells apart (bundling),
+ * with a stable lane order, mitred at bends. Coordinates are lattice points; callers add 0.5 for the cell centre.
+ */
+export function layoutLines(doc: CityDoc, gap: number): Record<string, Pt[]> {
+  const lines = Object.values(doc.lines)
+  const lattices: Record<string, Pt[]> = {}
+  // heavy rail and trams are bundled separately: a tram runs on the street beside the railway, not on its tracks
+  const lanes = new Map<string, { h: string[]; t: string[] }>()
+
+  for (const line of lines) {
+    const lp = latticePoints(linePolyline(doc, line))
+    lattices[line.id] = lp
+    const tram = line.operator === 'tram'
+    for (let i = 0; i < lp.length - 1; i++) {
+      const k = key(lp[i], lp[i + 1])
+      let e = lanes.get(k)
+      if (!e) {
+        e = { h: [], t: [] }
+        lanes.set(k, e)
+      }
+      const list = tram ? e.t : e.h
+      if (!list.includes(line.id)) list.push(line.id)
+    }
+  }
+  for (const e of lanes.values()) {
+    e.h.sort()
+    e.t.sort()
+  }
+  /** Lateral lane position of a line on an edge, in the edge's canonical direction. */
+  const laneOffset = (k: string, id: string, tram: boolean) => {
+    const e = lanes.get(k)!
+    const mine = tram ? e.t : e.h
+    const wH = Math.max(0, e.h.length - 1) * gap
+    const wT = Math.max(0, e.t.length - 1) * gap
+    const sep = e.h.length && e.t.length ? gap * 2.4 : 0
+    const total = wH + sep + wT
+    const centre = tram ? total / 2 - wT / 2 : -total / 2 + wH / 2
+    return centre + (mine.indexOf(id) - (mine.length - 1) / 2) * gap
+  }
+
+  const result: Record<string, Pt[]> = {}
+  for (const line of lines) {
+    const lp = lattices[line.id]
+    if (lp.length < 2) {
+      result[line.id] = lp
+      continue
+    }
+    const tram = line.operator === 'tram'
+    const m = lp.length - 1
+    const dir: Pt[] = []
+    const off: number[] = []
+    for (let i = 0; i < m; i++) {
+      const a = lp[i]
+      const b = lp[i + 1]
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      dir.push({ x: (b.x - a.x) / len, y: (b.y - a.y) / len })
+      const lane = laneOffset(key(a, b), line.id, tram)
+      // the lane order is defined in the canonical direction of the edge; flip it when we travel the other way
+      const canonical = a.x < b.x || (a.x === b.x && a.y < b.y)
+      off.push(canonical ? lane : -lane)
+    }
+    const nrm = (i: number): Pt => ({ x: -dir[i].y, y: dir[i].x })
+    const out: Pt[] = []
+    const push = (p: Pt) => {
+      const last = out[out.length - 1]
+      if (!last || Math.abs(last.x - p.x) > 1e-9 || Math.abs(last.y - p.y) > 1e-9) out.push(p)
+    }
+    push({ x: lp[0].x + nrm(0).x * off[0], y: lp[0].y + nrm(0).y * off[0] })
+    for (let i = 0; i < m - 1; i++) {
+      const P = lp[i + 1]
+      const d1 = dir[i]
+      const d2 = dir[i + 1]
+      const n1 = nrm(i)
+      const n2 = nrm(i + 1)
+      const same = Math.abs(d1.x - d2.x) < 1e-9 && Math.abs(d1.y - d2.y) < 1e-9
+      const A1 = { x: P.x + n1.x * off[i], y: P.y + n1.y * off[i] }
+      const A2 = { x: P.x + n2.x * off[i + 1], y: P.y + n2.y * off[i + 1] }
+      if (same) {
+        if (Math.abs(off[i] - off[i + 1]) > 1e-9) {
+          push(A1)
+          push(A2)
+        }
+        continue
+      }
+      const cross = d1.x * d2.y - d1.y * d2.x
+      if (Math.abs(cross) < 1e-6) {
+        push(A1)
+        push(A2)
+        continue
+      }
+      const t = ((A2.x - A1.x) * d2.y - (A2.y - A1.y) * d2.x) / cross
+      if (Math.abs(t) > 3) {
+        push(A1)
+        push(A2)
+      } else {
+        push({ x: A1.x + d1.x * t, y: A1.y + d1.y * t })
+      }
+    }
+    const lastN = nrm(m - 1)
+    push({ x: lp[m].x + lastN.x * off[m - 1], y: lp[m].y + lastN.y * off[m - 1] })
+    result[line.id] = out
+  }
+  return result
+}
