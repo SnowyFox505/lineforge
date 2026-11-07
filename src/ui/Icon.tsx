@@ -21,6 +21,7 @@ const PATHS: Record<string, ReactNode> = {
   undo: <path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />,
   redo: <path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" />,
   back: <path d="m15 5-7 7 7 7" />,
+  refresh: <path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" />,
   map: <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" />,
   plan: (
     <>

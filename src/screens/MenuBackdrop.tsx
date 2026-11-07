@@ -85,7 +85,7 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
               filter="url(#glow)"
               opacity={0.55}
               pathLength={1}
-              strokeDasharray="1 1"
+              strokeDasharray="1 2"
               style={{ animationDelay: `${0.3 + i * 0.28}s` }}
             />
             <path
@@ -97,7 +97,7 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
               strokeLinecap="round"
               strokeLinejoin="round"
               pathLength={1}
-              strokeDasharray="1 1"
+              strokeDasharray="1 2"
               style={{ animationDelay: `${0.3 + i * 0.28}s` }}
             />
             {l.stations.map(([x, y], k) => (

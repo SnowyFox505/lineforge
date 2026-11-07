@@ -8,6 +8,7 @@ import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
+import UpdateOverlay from '../ui/UpdateOverlay'
 import { downloadBlob, MODE_INFO } from '../ui/SettingsSheet'
 import MenuBackdrop from './MenuBackdrop'
 
@@ -60,6 +61,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 }
 
 function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number; go: (v: View) => void; onContinue: () => void }) {
+  const [updating, setUpdating] = useState(false)
   const item = {
     hidden: { opacity: 0, y: 24 },
     show: { opacity: 1, y: 0, transition: spring },
@@ -72,6 +74,19 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
       animate="show"
       exit={{ opacity: 0, y: -12, transition: { duration: 0.18 } }}
     >
+      {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
+      <motion.button
+        variants={item}
+        whileTap={{ scale: 0.94 }}
+        onClick={() => setUpdating(true)}
+        className="glass absolute right-5 top-[calc(20px+var(--safe-top))] flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold md:right-[5vw] md:top-[5vh]"
+        aria-label="App aktualisieren"
+      >
+        <Icon name="refresh" size={16} stroke={2.2} />
+        Aktualisieren
+      </motion.button>
+      {updating && <UpdateOverlay />}
+
       <div>
         <motion.div variants={item}>
           <Logo />

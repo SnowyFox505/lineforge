@@ -323,10 +323,10 @@ export default function PlanView() {
               return (
                 <g key={line.id} strokeLinecap="round" strokeLinejoin="round" fill="none">
                   {T.glow && (
-                    <path className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.35} filter="url(#soft)" pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
+                    <path className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.35} filter="url(#soft)" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
                   )}
-                  <path className="draw-line" d={d} stroke={T.casing} strokeWidth={w + 4} pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
-                  <path className="draw-line" d={d} stroke={line.color} strokeWidth={w} pathLength={1} strokeDasharray="1 1" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
+                  <path className="draw-line" d={d} stroke={T.casing} strokeWidth={w + 4} pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
+                  <path className="draw-line" d={d} stroke={line.color} strokeWidth={w} pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
                 </g>
               )
             })}

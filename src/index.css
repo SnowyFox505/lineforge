@@ -184,11 +184,11 @@ input[type='color'].swatch-input::-moz-color-swatch {
 
 /* Menu backdrop: network lines that draw themselves */
 @keyframes draw-line {
-  from { stroke-dashoffset: 1.002; }
+  from { stroke-dashoffset: 1.05; }
   to { stroke-dashoffset: 0; }
 }
 .draw-line {
-  stroke-dashoffset: 1.002;
+  stroke-dashoffset: 1.05;
   animation: draw-line 1.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -207,4 +207,17 @@ input[type='color'].swatch-input::-moz-color-swatch {
 }
 @media (prefers-reduced-motion: reduce) {
   .pop-dot { animation: none; }
+}
+
+/* Update overlay: progress ring around the station */
+@keyframes update-ring {
+  from { stroke-dashoffset: 1.05; }
+  to { stroke-dashoffset: 0; }
+}
+.update-ring {
+  stroke-dashoffset: 1;
+  animation: update-ring 3.1s linear 0.9s forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-ring { animation-duration: 0.01s; }
 }
