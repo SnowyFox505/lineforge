@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { LAND_Y, RAIL_Y } from './heights'
 import { UG_COVER } from '../model/profiles'
+import { addBridge } from './Bridges3D'
 import { posOn, TRAM_DIP } from './network3d'
 import type { LineNet, Network3D, P } from './network3d'
 
@@ -32,7 +33,7 @@ export function boxAlong(a: P, b: P, width: number, height: number, y0: number, 
   return boxAlong3(a.x, 0, a.z, b.x, 0, b.z, width, height, y0, extra)
 }
 
-function matrixAt(x: number, y: number, z: number, yaw: number, sx: number, sy: number, sz: number, pitch = 0): THREE.Matrix4 {
+export function matrixAt(x: number, y: number, z: number, yaw: number, sx: number, sy: number, sz: number, pitch = 0): THREE.Matrix4 {
   tmp.position.set(x, y, z)
   qYaw.setFromAxisAngle(AXIS_Y, yaw)
   qPitch.setFromAxisAngle(AXIS_Z, pitch)
@@ -71,11 +72,16 @@ export interface Bufs {
   walls: THREE.Matrix4[]
   roads: THREE.Matrix4[]
   curbs: THREE.Matrix4[]
-  arcs: THREE.Matrix4[]
+  /** arched walls (embankments, masonry bridges) grouped by colour and proportion */
+  arcGroups: Map<string, THREE.Matrix4[]>
+  iron: THREE.Matrix4[]
+  steel: THREE.Matrix4[]
+  cables: THREE.Matrix4[]
+  concrete: THREE.Matrix4[]
   ceilings: THREE.Matrix4[]
 }
 
-export const emptyBufs = (): Bufs => ({ ballast: [], rails: [], buffers: [], girders: [], posts: [], handrails: [], piers: [], walls: [], roads: [], curbs: [], arcs: [], ceilings: [] })
+export const emptyBufs = (): Bufs => ({ ballast: [], rails: [], buffers: [], girders: [], posts: [], handrails: [], piers: [], walls: [], roads: [], curbs: [], arcGroups: new Map(), iron: [], steel: [], cables: [], concrete: [], ceilings: [] })
 
 /** One track as a chain of short boxes that follows the (curved, possibly rising) sample points exactly. */
 export function addTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: number[], TZ: number[], buffers = true) {
@@ -99,10 +105,10 @@ export function addTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: num
   }
 }
 
-type Pose = ReturnType<typeof posOn>
+export type Pose = ReturnType<typeof posOn>
 
 /** Points along the line axis between two arc lengths. */
-function deckPoints(ln: LineNet, d0: number, d1: number): Pose[] {
+export function deckPoints(ln: LineNet, d0: number, d1: number): Pose[] {
   const step = 0.4
   const lo = Math.max(0, d0)
   const hi = Math.min(ln.total, d1)
@@ -112,7 +118,7 @@ function deckPoints(ln: LineNet, d0: number, d1: number): Pose[] {
   return pts
 }
 
-const sideOf = (p: Pose, o: number) => ({ x: p.x - p.tz * o, z: p.z + p.tx * o })
+export const sideOf = (p: Pose, o: number) => ({ x: p.x - p.tz * o, z: p.z + p.tx * o })
 
 /**
  * Where the deck of a bridge or viaduct stands on piers. A pier is never put where a track of another
@@ -165,32 +171,46 @@ function addRoad(b: Bufs, ln: LineNet) {
   }
 }
 
-let arcadeGeo: THREE.BufferGeometry | null = null
-/** One span of a masonry viaduct: a wall with a round-arched opening, 1 wide, 1 high, 1 deep (scaled per instance). */
-function arcadeGeometry() {
-  if (arcadeGeo) return arcadeGeo
+const archCache = new Map<number, THREE.BufferGeometry>()
+/**
+ * One span of a masonry arcade: a wall of width 1 and height `aspect` with a round-arched opening,
+ * 1 deep (scaled per instance). Proportions are kept, so tall arches stay round.
+ */
+function archGeometry(aspect: number) {
+  const hit = archCache.get(aspect)
+  if (hit) return hit
   const shape = new THREE.Shape()
   shape.moveTo(-0.5, 0)
   shape.lineTo(0.5, 0)
-  shape.lineTo(0.5, 1)
-  shape.lineTo(-0.5, 1)
+  shape.lineTo(0.5, aspect)
+  shape.lineTo(-0.5, aspect)
   shape.closePath()
-  const hole = new THREE.Path()
-  const r = 0.33
-  hole.moveTo(-r, 0)
-  hole.lineTo(-r, 0.5)
-  hole.absarc(0, 0.5, r, Math.PI, 0, true)
-  hole.lineTo(r, 0)
-  hole.closePath()
-  shape.holes.push(hole)
-  const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 10 })
+  const crown = aspect - (aspect > 0.5 ? 0.17 : 0.1)
+  let r = Math.min(0.36, crown * 0.9)
+  let spring = crown - r
+  if (spring < 0) {
+    r = crown
+    spring = 0
+  }
+  if (r > 0.08) {
+    const hole = new THREE.Path()
+    hole.moveTo(-r, 0)
+    hole.lineTo(-r, spring)
+    hole.absarc(0, spring, r, Math.PI, 0, true)
+    hole.lineTo(r, 0)
+    hole.closePath()
+    shape.holes.push(hole)
+  }
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 12 })
   g.translate(0, 0, -0.5)
-  arcadeGeo = g
+  archCache.set(aspect, g)
   return g
 }
 
-/** An embankment carried by an arcade: a row of arches under the deck, with parapets. */
-function addArcade(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) {
+const ARCH_COLOR: Record<string, string> = { stone: '#b9b0a3', brick: '#a65d43' }
+
+/** Deck on a row of round arches: the user's embankment, or a masonry / brick bridge over water. */
+export function addArches(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number, span: number, col: 'stone' | 'brick') {
   const pts = deckPoints(ln, d0, d1)
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
@@ -202,28 +222,35 @@ function addArcade(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number)
       b.curbs.push(boxAlong3(a.x, p.y, a.z, c.x, q.y, c.z, 0.06, 0.1, RAIL_Y - 0.02, 0.04))
     }
   }
-  // arches every 1.15 along the track
-  const span = 1.15
-  let acc = span / 2
+  // evenly spaced spans over the whole length, so the first and the last arch touch the ends
+  const total = pts.reduce((acc, p, k) => (k ? acc + Math.hypot(p.x - pts[k - 1].x, p.z - pts[k - 1].z) : 0), 0)
+  const n = Math.max(1, Math.round(total / span))
+  const w = total / n
+  let acc = w / 2
+  let walked = 0
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
     const q = pts[k + 1]
     const seg = Math.hypot(q.x - p.x, q.z - p.z)
-    while (acc < seg) {
-      const t = acc / (seg || 1)
+    while (acc - walked < seg + 1e-6 && acc < total) {
+      const t = (acc - walked) / (seg || 1)
       const x = p.x + (q.x - p.x) * t
       const z = p.z + (q.z - p.z) * t
       const y = p.y + (q.y - p.y) * t
       const g = net.groundAt(x, z)
       const top = y + RAIL_Y - 0.12
       const h = top - g
-      if (h > 0.22) {
+      if (h > 0.2) {
+        const aspect = Math.ceil((h / w) * 10) / 10
         const yaw = Math.atan2(-(q.z - p.z), q.x - p.x)
-        b.arcs.push(matrixAt(x, g - 0.02, z, yaw, span * 1.01, h + 0.02, 1.05))
+        const key = `${col}|${aspect.toFixed(1)}`
+        const list = b.arcGroups.get(key) ?? []
+        list.push(matrixAt(x, top - aspect * w, z, yaw, w * 1.01, w, 1.1))
+        b.arcGroups.set(key, list)
       }
-      acc += span
+      acc += w
     }
-    acc -= seg
+    walked += seg
   }
 }
 
@@ -240,7 +267,7 @@ function addTunnel(b: Bufs, ln: LineNet) {
 }
 
 /** A deck on piers: over water or, when the track is lifted off the ground, as a viaduct. */
-function addDeck(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) {
+export function addDeck(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) {
   const pts = deckPoints(ln, d0, d1)
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
@@ -316,12 +343,12 @@ export default function Tracks3D({ net }: { net: Network3D }) {
         addTrack(b, ln.bx, ln.bz, ln.cy, ln.btx, ln.btz)
         for (const s of ln.sidings) addTrack(b, s.x, s.z, s.y, s.tx, s.tz, false)
       }
-      for (const br of ln.bridges) addDeck(b, net, ln, br.d0, br.d1)
+      for (const br of ln.bridges) addBridge(b, net, ln, br)
       for (const run of liftedRuns(ln)) {
         // an embankment chosen by the user rests on an arcade, everything else on piers
         const mid = (run.d0 + run.d1) / 2
         const leg = ln.legs.find((lg) => mid >= lg.d0 && mid <= lg.d1)
-        if (leg?.profile === 'embankment') addArcade(b, net, ln, run.d0, run.d1)
+        if (leg?.profile === 'embankment') addArches(b, net, ln, run.d0, run.d1, 1.15, 'stone')
         else addDeck(b, net, ln, run.d0, run.d1)
       }
       addTunnel(b, ln)
@@ -342,7 +369,14 @@ export default function Tracks3D({ net }: { net: Network3D }) {
       <Boxes items={data.walls} color="#b4bcc7" roughness={0.9} />
       <Boxes items={data.roads} color="#2d3138" roughness={0.95} />
       <Boxes items={data.curbs} color="#8e969f" roughness={0.9} />
-      <Boxes items={data.arcs} color="#b9b0a3" roughness={0.95} geo={arcadeGeometry()} />
+      {[...data.arcGroups.entries()].map(([key, items]) => {
+        const [col, aspect] = key.split('|')
+        return <Boxes key={key} items={items} color={ARCH_COLOR[col]} roughness={0.95} geo={archGeometry(Number(aspect))} />
+      })}
+      <Boxes items={data.iron} color="#56707a" roughness={0.6} metalness={0.5} />
+      <Boxes items={data.steel} color="#e9eef4" roughness={0.4} metalness={0.4} />
+      <Boxes items={data.cables} color="#cfd6de" roughness={0.5} metalness={0.3} />
+      <Boxes items={data.concrete} color="#d7dce3" roughness={0.8} />
       <Boxes items={data.ceilings} color="#7d8591" roughness={0.9} />
     </group>
   )
