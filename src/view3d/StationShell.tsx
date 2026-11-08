@@ -139,7 +139,7 @@ function Hall({ L, side, len, dep, h, roof = true }: { L: number; side: number; 
 /** The roofed station as seen from outside. Local frame: x along the tracks, z across (origin = platform centre). */
 export default function StationShell({ look, layout, annex = -1 }: { look: StationLook; layout: StationLayout; annex?: 1 | -1 }) {
   const L = layout.length + 1.6
-  const W = layout.halfWidth * 2 + 0.7
+  const W = layout.halfWidth * 2 + 0.3
   const wallH = 0.78
   const side = annex * (layout.halfWidth + 1.1)
   const tooth = useMemo(() => prismGeo(1.5, 0.45, W + 0.6, 0.15), [W])
@@ -185,11 +185,11 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
       return (
         <group>
           <mesh position={[0, PF + 0.85, 0]}>
-            <boxGeometry args={[L + 0.8, 0.09, W + 0.9]} />
+            <boxGeometry args={[L + 0.4, 0.09, W + 0.5]} />
             <Mat color="#eef1f5" rough={0.4} metal={0.2} />
           </mesh>
           <mesh position={[0, PF + 0.8, 0]}>
-            <boxGeometry args={[L + 0.7, 0.02, W + 0.8]} />
+            <boxGeometry args={[L + 0.3, 0.02, W + 0.4]} />
             <Mat color="#2e6cd6" />
           </mesh>
           <Walls L={L} W={W} h={0.8} color="#9fd8ff" opacity={0.3} thick={0.03} />
@@ -256,11 +256,11 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
       return (
         <group>
           <mesh position={[0, PF + 0.9, 0]}>
-            <boxGeometry args={[L * 0.8, 0.06, W + 0.3]} />
+            <boxGeometry args={[L * 0.8, 0.06, W + 0.15]} />
             <Mat color="#e7ebf1" />
           </mesh>
           <mesh position={[0, PF + 0.87, 0]}>
-            <boxGeometry args={[L * 0.8 - 0.05, 0.02, W + 0.36]} />
+            <boxGeometry args={[L * 0.8 - 0.05, 0.02, W + 0.2]} />
             <Mat color="#2e6cd6" />
           </mesh>
           {[-0.4, 0, 0.4].flatMap((f) => [-1, 1].map((s) => (

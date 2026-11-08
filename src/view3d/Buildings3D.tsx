@@ -163,10 +163,10 @@ export default function Buildings3D({ doc, net }: { doc: CityDoc; net: Network3D
       const g = net.groundAt(b.x, b.z)
       if (b.kind === 'suburb') {
         houses.push(matrixOf(b, g, 0.02))
-        roofs.push(matrixOf({ ...b, h: 0.07, w: b.w * 1.04, d: b.d * 1.04 }, g + b.h, 0))
+        roofs.push(matrixOf({ ...b, h: 0.07, w: b.w * 1.04, d: b.d * 1.04 }, g + b.h + 0.02, 0))
       } else {
         bodies[b.shade].push(matrixOf(b, g, 0.02))
-        if (b.h > 1.5) roofs.push(matrixOf({ ...b, h: 0.05, w: b.w * 0.55, d: b.d * 0.55 }, g + b.h, 0))
+        if (b.h > 1.5) roofs.push(matrixOf({ ...b, h: 0.05, w: b.w * 0.55, d: b.d * 0.55 }, g + b.h + 0.02, 0))
       }
     }
     return { bodies, roofs, houses }

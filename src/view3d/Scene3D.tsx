@@ -236,8 +236,6 @@ function Stations({ net }: { net: Network3D }) {
   )
 }
 
-/** A phone or tablet: fewer pixels and no multisampling, the GPU is the bottleneck there */
-const TOUCH_DEVICE = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
 
 /** Initial camera: frame the network (or a patch of the map if empty), taking the screen aspect into account. */
 function useInitialCamera(doc: CityDoc) {
@@ -293,7 +291,7 @@ export default function Scene3D() {
 
   return (
     <div className={`absolute inset-0 ${editId ? 'invisible' : ''}`} style={{ background: 'radial-gradient(ellipse at 50% 38%, #1a2a3a 0%, #0a1017 55%, #06080c 100%)' }}>
-      <Canvas frameloop={editId ? 'never' : 'always'} camera={{ position: cam.position, fov: 42, near: 0.5, far: 3000 }} gl={{ alpha: true, antialias: !TOUCH_DEVICE, powerPreference: 'high-performance' }} dpr={TOUCH_DEVICE ? [1, 1.5] : [1, 2]} performance={{ min: 0.55 }}>
+      <Canvas frameloop={editId ? 'never' : 'always'} camera={{ position: cam.position, fov: 42, near: 1, far: Math.max(600, doc.size * 4) }} gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }} dpr={[1, 2]} performance={{ min: 0.55 }}>
         {/* while the camera moves the picture is drawn at a lower resolution, and sharp again once it rests */}
         <AdaptiveDpr />
         <hemisphereLight args={['#cfe2ff', '#1d3a30', 1.7]} />

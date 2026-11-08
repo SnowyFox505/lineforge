@@ -94,7 +94,7 @@ export function addTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: num
     const na = nrm(j)
     const nc = nrm(j + 1)
     for (const off of [-0.085 * RAIL, 0.085 * RAIL]) {
-      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j], Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1], Z[j + 1] + nc.z * off, 0.035 * RAIL, 0.05 * RAIL, RAIL_Y + 0.0, 0.03))
+      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j], Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1], Z[j + 1] + nc.z * off, 0.07 * RAIL, 0.06 * RAIL, RAIL_Y + 0.0, 0.03))
     }
   }
   // minimal look: a plain bed with two thin rails, no individual sleepers
@@ -155,7 +155,7 @@ function addStreetTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: numb
     const na = { x: -TZ[j], z: TX[j] }
     const nc = { x: -TZ[j + 1], z: TX[j + 1] }
     for (const off of [-0.085 * RAIL, 0.085 * RAIL]) {
-      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.035 * RAIL, 0.04 * RAIL, LAND_Y + 0.02, 0.03))
+      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.07 * RAIL, 0.05 * RAIL, LAND_Y + 0.04, 0.03))
     }
   }
 }

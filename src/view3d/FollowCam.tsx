@@ -38,6 +38,13 @@ export default function FollowCam() {
     xray.radius.value = st.followMode === 'cockpit' ? 8 : 10.5
 
     if (!controls) return
+    // inside a train the camera is close to things: a nearer clipping plane; otherwise keep it far for depth precision
+    const near = active ? 0.08 : 1
+    const cam = camera as THREE.PerspectiveCamera
+    if (cam.near !== near) {
+      cam.near = near
+      cam.updateProjectionMatrix()
+    }
     if (active) {
       if (!saved.current) {
         saved.current = { minDistance: controls.minDistance, maxPolarAngle: controls.maxPolarAngle }
