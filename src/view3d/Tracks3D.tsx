@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { LAND_Y, RAIL_Y } from './heights'
 import { UG_COVER } from '../model/profiles'
+import { xrayMaterial } from './xray'
 import { addBridge } from './Bridges3D'
 import { posOn, TRAM_DIP } from './network3d'
 import type { LineNet, Network3D, P } from './network3d'
@@ -43,7 +44,7 @@ export function matrixAt(x: number, y: number, z: number, yaw: number, sx: numbe
   return tmp.matrix.clone()
 }
 
-export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, shape = 'box', geo, opacity }: { items: THREE.Matrix4[]; color: string; roughness?: number; metalness?: number; emissive?: number; shape?: 'box' | 'cyl'; geo?: THREE.BufferGeometry; opacity?: number }) {
+export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, shape = 'box', geo, opacity, xray }: { items: THREE.Matrix4[]; color: string; roughness?: number; metalness?: number; emissive?: number; shape?: 'box' | 'cyl'; geo?: THREE.BufferGeometry; opacity?: number; xray?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   useLayoutEffect(() => {
     const m = ref.current
@@ -56,7 +57,7 @@ export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, 
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, items.length]} frustumCulled={false}>
       {geo ? <primitive object={geo} attach="geometry" /> : shape === 'box' ? <boxGeometry args={[1, 1, 1]} /> : <cylinderGeometry args={[1, 1, 1, 12]} />}
-      <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} emissive={emissive ? color : '#000'} emissiveIntensity={emissive ?? 0} transparent={opacity !== undefined} opacity={opacity ?? 1} />
+      <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} emissive={emissive ? color : '#000'} emissiveIntensity={emissive ?? 0} transparent={opacity !== undefined} opacity={opacity ?? 1} {...(xray ? xrayMaterial : {})} />
     </instancedMesh>
   )
 }
@@ -366,7 +367,7 @@ export default function Tracks3D({ net }: { net: Network3D }) {
       <Boxes items={data.handrails} color="#cfd5de" roughness={0.5} metalness={0.4} />
       <Boxes items={data.posts} color="#cfd5de" roughness={0.5} metalness={0.4} />
       <Boxes items={data.piers} color="#9aa3af" roughness={0.9} shape="cyl" />
-      <Boxes items={data.walls} color="#b4bcc7" roughness={0.9} />
+      <Boxes items={data.walls} color="#b4bcc7" roughness={0.9} xray />
       <Boxes items={data.roads} color="#2d3138" roughness={0.95} />
       <Boxes items={data.curbs} color="#8e969f" roughness={0.9} />
       {[...data.arcGroups.entries()].map(([key, items]) => {
@@ -377,7 +378,7 @@ export default function Tracks3D({ net }: { net: Network3D }) {
       <Boxes items={data.steel} color="#e9eef4" roughness={0.4} metalness={0.4} />
       <Boxes items={data.cables} color="#cfd6de" roughness={0.5} metalness={0.3} />
       <Boxes items={data.concrete} color="#d7dce3" roughness={0.8} />
-      <Boxes items={data.ceilings} color="#7d8591" roughness={0.9} />
+      <Boxes items={data.ceilings} color="#7d8591" roughness={0.9} xray />
     </group>
   )
 }

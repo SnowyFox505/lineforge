@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
 import { LAND, WATER } from '../model/types'
+import type { FollowMode } from '../view3d/follow'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, resetRoute, withRoutes } from '../model/routing'
 import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
 
@@ -62,6 +63,9 @@ interface EditorState {
   editStationId: string | null
   /** selected leg of a line in the 3D view (stretch between two stations) */
   selectedLeg: { lineId: string; leg: number } | null
+  /** train the 3D camera follows (null: free camera) and how */
+  followId: string | null
+  followMode: FollowMode
 
   requestFit: () => void
   setScreen: (screen: Screen) => void
@@ -76,6 +80,8 @@ interface EditorState {
   selectWaypoint: (w: { lineId: string; k: number; j: number } | null) => void
   setEditStation: (id: string | null) => void
   selectLeg: (leg: { lineId: string; leg: number } | null) => void
+  setFollow: (id: string | null) => void
+  setFollowMode: (mode: FollowMode) => void
   updateLeg: (lineId: string, leg: number, patch: LegSettings) => void
 
   loadDoc: (doc: CityDoc) => void
@@ -153,11 +159,13 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedPoiId: null,
     editStationId: null,
     selectedLeg: null,
+    followId: null,
+    followMode: 'chase',
 
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -167,6 +175,8 @@ export const useEditor = create<EditorState>((set, get) => {
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
     setEditStation: (editStationId) => set({ editStationId }),
     selectLeg: (selectedLeg) => set({ selectedLeg }),
+    setFollow: (followId) => set({ followId, selectedLeg: null }),
+    setFollowMode: (followMode) => set({ followMode }),
     updateLeg: (lineId, leg, patch) =>
       mutate((d) => {
         const l = d.lines[lineId]

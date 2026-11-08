@@ -1,6 +1,7 @@
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
+import { useEditor } from '../store/editorStore'
 
 /** Touch mapping of the orbit controls: one finger moves the map, two fingers are handled by `TouchRig` below. */
 export const TOUCHES = { ONE: THREE.TOUCH.PAN, TWO: -1 as unknown as THREE.TOUCH }
@@ -55,7 +56,7 @@ export default function TouchRig({ onGesture }: { onGesture?: () => void }) {
       rebase()
     }
     const move = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return
+      if (e.pointerType !== 'touch' || !pts.has(e.pointerId) || useEditor.getState().followId) return
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
       off.copy(camera.position).sub(controls.target)
 

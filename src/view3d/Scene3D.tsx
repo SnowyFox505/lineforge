@@ -1,4 +1,5 @@
 import { Canvas, useThree } from '@react-three/fiber'
+import { AnimatePresence } from 'motion/react'
 import { OrbitControls } from '@react-three/drei'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -18,7 +19,11 @@ import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
 import { buildNetwork3D } from './network3d'
 import type { Network3D, StationGroup, StationNet } from './network3d'
 import Tracks3D from './Tracks3D'
+import FollowCam from './FollowCam'
+import FollowHud from './FollowHud'
+import { followState } from './follow'
 import TouchRig, { TOUCHES } from './TouchRig'
+import { xrayMaterial } from './xray'
 import Trains3D from './Trains3D'
 
 const c = (hex: string) => new THREE.Color(hex)
@@ -143,7 +148,7 @@ function Terrain({ doc, net, see }: { doc: CityDoc; net: Network3D; see: boolean
   return (
     <group>
       <mesh geometry={geo}>
-        <meshStandardMaterial key={see ? 'see' : 'solid'} map={tex} color={see ? '#46505e' : '#ffffff'} roughness={0.95} metalness={0} transparent={see} opacity={see ? 0.3 : 1} depthWrite={!see} />
+        <meshStandardMaterial key={see ? 'see' : 'solid'} map={tex} color={see ? '#46505e' : '#ffffff'} roughness={0.95} metalness={0} transparent={see} opacity={see ? 0.3 : 1} depthWrite={!see} {...xrayMaterial} />
       </mesh>
       <mesh geometry={skirt}>
         <meshStandardMaterial key={see ? 'see' : 'solid'} vertexColors roughness={1} side={THREE.DoubleSide} transparent={see} opacity={see ? 0.3 : 1} />
@@ -277,6 +282,8 @@ export default function Scene3D() {
   const [running, setRunning] = useState(true)
   const [speedIdx, setSpeedIdx] = useState(0)
   const speedRef = useRef(1)
+  const followId = useEditor((s) => s.followId)
+  const setFollow = useEditor((s) => s.setFollow)
   const stopAuto = useCallback(() => setAuto(false), [])
   speedRef.current = running ? SPEEDS[speedIdx] : 0
 
@@ -294,6 +301,7 @@ export default function Scene3D() {
         <Trains3D net={net} speedRef={speedRef} />
         <DevCam />
         <TouchRig onGesture={stopAuto} />
+        <FollowCam />
         <OrbitControls
           makeDefault
           touches={TOUCHES}
@@ -311,9 +319,20 @@ export default function Scene3D() {
       </Canvas>
 
       <LegPanel net={net} />
+      <AnimatePresence>{followId && <FollowHud key="follow" />}</AnimatePresence>
       <div className="pointer-events-none absolute bottom-[98px] right-3 z-10 flex flex-col gap-2">
         <button onClick={() => setAuto((a) => !a)} aria-label="Automatisch drehen" className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${auto ? 'text-accent' : ''}`}>
           <Icon name="undo2" size={19} />
+        </button>
+        <button
+          onClick={() => {
+            if (followId) setFollow(null)
+            else if (followState.trainIds[0]) setFollow(followState.trainIds[0])
+          }}
+          aria-label={followId ? 'Folgen beenden' : 'Einem Zug folgen'}
+          className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${followId ? 'text-accent' : ''}`}
+        >
+          <Icon name="train" size={19} />
         </button>
         <button onClick={() => setSee((v) => !v)} aria-label="Untergrund anzeigen" className={`glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${see ? 'text-accent' : ''}`}>
           <Icon name="layers" size={19} />

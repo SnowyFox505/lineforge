@@ -169,10 +169,10 @@ export default function Buildings3D({ doc, net }: { doc: CityDoc; net: Network3D
   return (
     <group>
       {sets.bodies.map((items, i) => (
-        <Boxes key={i} items={items} color={SHADES[i]} roughness={0.85} />
+        <Boxes key={i} items={items} color={SHADES[i]} roughness={0.85} xray />
       ))}
-      <Boxes items={sets.houses} color="#e9ecf0" roughness={0.9} />
-      <Boxes items={sets.roofs} color={ROOF} roughness={0.8} />
+      <Boxes items={sets.houses} color="#e9ecf0" roughness={0.9} xray />
+      <Boxes items={sets.roofs} color={ROOF} roughness={0.8} xray />
     </group>
   )
 }
