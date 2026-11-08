@@ -491,6 +491,8 @@ export default function StationBuilding(props: ComponentProps<typeof StationBody
       <StationBody
         {...props}
         layout={big}
+        // the platform is built at design size: a curve of the world (1/radius) is R times as tight in design units
+        curve={(props.curve ?? 0) * R}
         lift={lift / R}
         groundY={LAND_Y + (groundY - LAND_Y) / R}
         pillarFree={pillarFree && ((x, z) => pillarFree(x * R, z * R))}

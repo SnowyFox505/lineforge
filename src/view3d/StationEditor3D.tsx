@@ -6,10 +6,10 @@ import * as THREE from 'three'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { isUndergroundStation, lookOf, STATION_LOOKS, UG_COVER, UG_LIFT } from '../model/profiles'
 import { RAIL } from '../model/scale'
-import { layoutStation, MAX_TRACKS, resolveDesign, ROOF_LABEL, stationOperators } from '../model/stationDesign'
+import { layoutStation, MAX_TRACKS, resolveDesign, stationOperators } from '../model/stationDesign'
 import { clusterByDirection, levelHeight, lineDirectionAtStation, MAX_LEVELS } from '../model/stationGroups'
 import type { CityDoc } from '../model/types'
-import type { OperatorId, PlatformLength, PlatformStyle, RoofType, StationDesign } from '../model/types'
+import type { OperatorId, PlatformLength, PlatformStyle, StationDesign } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
@@ -210,13 +210,6 @@ function Panel({ id, level, setLevel }: { id: string; level: number; setLevel: (
         />
       </Section>
 
-      <Section title="Dach">
-        <Segmented<RoofType>
-          value={design.roof}
-          onChange={(v) => patch({ roof: v })}
-          options={(Object.keys(ROOF_LABEL) as RoofType[]).map((r) => ({ value: r, label: ROOF_LABEL[r] }))}
-        />
-      </Section>
 
       <Section title="Verkehr auf den Gleisen">
         <div className="space-y-2">
