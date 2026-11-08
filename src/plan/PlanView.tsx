@@ -103,6 +103,20 @@ function Symbol({ type, x, y, ink, fill }: { type: StationType; x: number; y: nu
   }
 }
 
+/** A stop in the style of the Berlin plan: a tick across the line, or a capsule across the bundle at an interchange. */
+function StopMark({ m, ink, fill }: { m: { kind: 'tick' | 'capsule'; cx: number; cy: number; nx: number; ny: number; t0: number; t1: number }; ink: string; fill: string }) {
+  const pad = m.kind === 'tick' ? 6.5 : 8
+  const a = { x: m.cx + m.nx * (m.t0 - pad), y: m.cy + m.ny * (m.t0 - pad) }
+  const b = { x: m.cx + m.nx * (m.t1 + pad), y: m.cy + m.ny * (m.t1 + pad) }
+  const thick = m.kind === 'tick' ? 4 : 11
+  return (
+    <g strokeLinecap="round">
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={ink} strokeWidth={thick + 4.5} />
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={fill} strokeWidth={thick} />
+    </g>
+  )
+}
+
 export default function PlanView() {
   const doc = useEditor((s) => s.doc)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -309,12 +323,49 @@ export default function PlanView() {
     const py = (y: number) => (y - minY) * U + PAD + TOP
 
     // Bundled lines: lanes sit one stroke width + breathing room apart
-    const gap = 11 / U
+    const gap = 8 / U // the lines of a bundle lie directly side by side
     const paths = layoutLines(pd, gap)
     const lines = Object.values(pd.lines).map((l) => {
       const pts = (paths[l.id] ?? []).map((p) => ({ x: px(p.x), y: py(p.y) }))
       return { line: l, pts, d: pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') }
     })
+
+    // Station marks in the style of the Berlin plan: a tick across the line where one line stops, a capsule across
+    // the bundle where several stop (lines that cross at an angle keep the round marker)
+    const marks: Record<string, { kind: 'tick' | 'capsule'; cx: number; cy: number; nx: number; ny: number; t0: number; t1: number }> = {}
+    for (const st of stations) {
+      const c = { x: px(st.x), y: py(st.y) }
+      const hits: { q: { x: number; y: number }; tx: number; ty: number }[] = []
+      for (const { line, pts } of lines) {
+        if (!line.stations.includes(st.id) || pts.length < 2) continue
+        let best = Infinity
+        let hit: (typeof hits)[number] | null = null
+        for (let i = 0; i + 1 < pts.length; i++) {
+          const a = pts[i]
+          const b = pts[i + 1]
+          const dx = b.x - a.x
+          const dy = b.y - a.y
+          const l2 = dx * dx + dy * dy || 1
+          const t = Math.max(0, Math.min(1, ((c.x - a.x) * dx + (c.y - a.y) * dy) / l2))
+          const q = { x: a.x + dx * t, y: a.y + dy * t }
+          const d = Math.hypot(q.x - c.x, q.y - c.y)
+          if (d < best) {
+            best = d
+            const len = Math.sqrt(l2)
+            hit = { q, tx: dx / len, ty: dy / len }
+          }
+        }
+        if (hit) hits.push(hit)
+      }
+      if (!hits.length || types[st.id] === 'hauptbahnhof' || types[st.id] === 'airport' || types[st.id] === 'landmark') continue
+      // all lines must run the same way through the station (either direction)
+      const ref = hits[0]
+      if (hits.some((h) => Math.abs(h.tx * ref.tx + h.ty * ref.ty) < 0.94)) continue
+      const nx = -ref.ty
+      const ny = ref.tx
+      const offs = hits.map((h) => (h.q.x - c.x) * nx + (h.q.y - c.y) * ny)
+      marks[st.id] = { kind: hits.length > 1 || types[st.id] === 'interchange' ? 'capsule' : 'tick', cx: c.x, cy: c.y, nx, ny, t0: Math.min(...offs), t1: Math.max(...offs) }
+    }
 
     // Line badges at both termini, pushed away from the line direction
     const badges: { key: string; x: number; y: number; w: number; name: string; color: string; r: number }[] = []
@@ -393,7 +444,7 @@ export default function PlanView() {
     const vy = by0 - M - HEAD
     const vh = by1 - by0 + M * 2 + HEAD
     const legendH = Object.keys(pd.lines).length ? 56 + Object.keys(pd.lines).length * 34 : 0
-    return { stations, types, px, py, lines, badges, labels, vx, vy, mapW: vw, mapH: vh, legendH, U, minX, minY }
+    return { stations, types, marks, px, py, lines, badges, labels, vx, vy, mapW: vw, mapH: vh, legendH, U, minX, minY }
   }, [pd])
 
   // sizes the plan and puts it where the user left it (after every render: the box size or the plan may have changed)
@@ -499,19 +550,20 @@ export default function PlanView() {
             </text>
 
             {/* Tracks */}
-            {plan.lines.map(({ line, d }, i) => {
-              const w = OPERATORS[line.operator].width + 1
-              const dl = 0.15 + i * 0.18
-              return (
-                <g key={line.id} strokeLinecap="round" strokeLinejoin="round" fill="none">
-                  {T.glow && (
-                    <path className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.35} filter="url(#soft)" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
-                  )}
-                  <path className="draw-line" d={d} stroke={T.casing} strokeWidth={w + 4} pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
-                  <path className="draw-line" d={d} stroke={line.color} strokeWidth={w} pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${dl}s`, animationDuration: '1.3s' }} />
-                </g>
-              )
-            })}
+            {(['glow', 'casing', 'colour'] as const).map((layer) => (
+              <g key={layer} strokeLinecap="round" strokeLinejoin="round" fill="none">
+                {plan.lines.map(({ line, d }, i) => {
+                  const w = OPERATORS[line.operator].width + 1.4
+                  const dl = 0.15 + i * 0.18
+                  const style = { animationDelay: `${dl}s`, animationDuration: '1.3s' }
+                  if (layer === 'glow') {
+                    return T.glow ? <path key={line.id} className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.3} filter="url(#soft)" pathLength={1} strokeDasharray="1 2" style={style} /> : null
+                  }
+                  // one outline around the whole bundle: every line gets its casing before any colour is drawn
+                  return <path key={line.id} className="draw-line" d={d} stroke={layer === 'casing' ? T.casing : line.color} strokeWidth={layer === 'casing' ? w + 5 : w} pathLength={1} strokeDasharray="1 2" style={style} />
+                })}
+              </g>
+            ))}
 
             {/* Stations */}
             {plan.stations.map((st, idx) => {
@@ -520,7 +572,7 @@ export default function PlanView() {
                 <g key={st.id} className="pop-dot" data-station={st.id} style={{ animationDelay: `${0.7 + delay}s`, cursor: 'grab' }}>
                   <circle cx={plan.px(st.x)} cy={plan.py(st.y)} r={20} fill="transparent" />
                   {doc.stations[st.id]?.planPin && <circle cx={plan.px(st.x)} cy={plan.py(st.y)} r={17} fill="none" stroke={T.ink === '#ffffff' ? '#fff' : '#c8ff3a'} strokeWidth={2} strokeDasharray="4 4" />}
-                  <Symbol type={plan.types[st.id]} x={plan.px(st.x)} y={plan.py(st.y)} ink={T.ink} fill={T.fill} />
+                  {plan.marks[st.id] ? <StopMark m={plan.marks[st.id]} ink={T.ink} fill={T.fill} /> : <Symbol type={plan.types[st.id]} x={plan.px(st.x)} y={plan.py(st.y)} ink={T.ink} fill={T.fill} />}
                 </g>
               )
             })}
