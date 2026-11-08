@@ -257,3 +257,11 @@ input[type='color'].swatch-input::-moz-color-swatch {
 @media (prefers-reduced-motion: reduce) {
   .load-dot { animation: none; opacity: 0.7; }
 }
+
+/* Sheets are always solid: nothing of the screen behind may shine through the text */
+.glass.sheet,
+.menu-flat .glass.sheet {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: linear-gradient(180deg, #1d242f, #11151c);
+}

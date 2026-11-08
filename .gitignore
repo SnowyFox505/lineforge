@@ -28,3 +28,5 @@ dist-ssr
 Bilder von mir für dich/
 
 .vercel
+.env.local
+.env*.local

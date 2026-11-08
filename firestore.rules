@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // everybody can only read and write their own cities
+    match /users/{uid}/{collection}/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

@@ -5,6 +5,7 @@ import Menu from './screens/Menu'
 import { useEditor } from './store/editorStore'
 import Editor from './ui/Editor'
 import LoadingScreen from './ui/LoadingScreen'
+import { useAuth } from './auth/authStore'
 
 const VehicleGallery = lazy(() => import('./screens/VehicleGallery'))
 
@@ -13,6 +14,7 @@ export default function App() {
   const screen = useEditor((s) => s.screen)
   const undo = useEditor((s) => s.undo)
   const redo = useEditor((s) => s.redo)
+  useEffect(() => useAuth.getState().init(), [])
   // loading screen whenever a city is opened: at least a few seconds, and until the editor is on screen
   const [prevScreen, setPrevScreen] = useState(screen)
   const [loading, setLoading] = useState(false)

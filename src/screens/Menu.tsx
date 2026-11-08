@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import { renderThumb } from '../editor2d/thumbnail'
 import { MAP_SIZES } from '../model/constants'
 import type { CityDoc, GameMode } from '../model/types'
-import { deleteCity, exportCityJson, importCityJson, listCityDocs, saveCity } from '../persistence/db'
+import { exportCityJson, importCityJson, listCityDocs, saveCity } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
+import AccountSheet, { WELCOME_KEY } from '../ui/AccountSheet'
 import UpdateOverlay from '../ui/UpdateOverlay'
+import { useAuth } from '../auth/authStore'
 import { downloadBlob, MODE_INFO } from '../ui/SettingsSheet'
 import MenuBackdrop from './MenuBackdrop'
 
@@ -62,6 +64,27 @@ function BackButton({ onClick }: { onClick: () => void }) {
 
 function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number; go: (v: View) => void; onContinue: () => void }) {
   const [updating, setUpdating] = useState(false)
+  const [account, setAccount] = useState(false)
+  const [welcome, setWelcome] = useState(false)
+  const status = useAuth((s) => s.status)
+  const user = useAuth((s) => s.user)
+  const sync = useAuth((s) => s.sync)
+
+  // first start with accounts available: offer to sign in (or continue as guest) once
+  useEffect(() => {
+    if (status !== 'guest') return
+    let seen = false
+    try {
+      seen = localStorage.getItem(WELCOME_KEY) === '1'
+    } catch {
+      // storage blocked: skip the welcome screen
+      seen = true
+    }
+    if (!seen) {
+      setWelcome(true)
+      setAccount(true)
+    }
+  }, [status])
   const item = {
     hidden: { opacity: 0, y: 24 },
     show: { opacity: 1, y: 0, transition: spring },
@@ -74,18 +97,33 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
       animate="show"
       exit={{ opacity: 0, y: -12, transition: { duration: 0.18 } }}
     >
-      {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
-      <motion.button
-        variants={item}
-        whileTap={{ scale: 0.94 }}
-        onClick={() => setUpdating(true)}
-        className="glass absolute right-5 top-[calc(20px+var(--safe-top))] flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold md:right-[5vw] md:top-[5vh]"
-        aria-label="App aktualisieren"
-      >
-        <Icon name="refresh" size={16} stroke={2.2} />
-        Aktualisieren
-      </motion.button>
+      <div className="absolute right-5 top-[calc(20px+var(--safe-top))] z-20 flex items-center gap-2 md:right-[5vw] md:top-[5vh]">
+        {status !== 'off' && (
+          <motion.button
+            variants={item}
+            whileTap={{ scale: 0.94 }}
+            onClick={() => {
+              setWelcome(false)
+              setAccount(true)
+            }}
+            className="glass flex max-w-[9.5rem] items-center gap-2 rounded-full py-2 pl-2 pr-4 text-[13px] font-semibold"
+            aria-label={user ? 'Konto' : 'Anmelden'}
+          >
+            <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-xs font-bold">
+              {user ? user.name.slice(0, 1).toUpperCase() : <Icon name="user" size={16} />}
+              {user && <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0f131b] ${sync === 'error' ? 'bg-red-400' : sync === 'syncing' ? 'bg-amber-300' : 'bg-accent'}`} />}
+            </span>
+            <span className="truncate">{user ? user.name : 'Anmelden'}</span>
+          </motion.button>
+        )}
+        {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
+        <motion.button variants={item} whileTap={{ scale: 0.94 }} onClick={() => setUpdating(true)} className="glass flex items-center gap-2 rounded-full px-3.5 py-2.5 text-[13px] font-semibold" aria-label="App aktualisieren">
+          <Icon name="refresh" size={16} stroke={2.2} />
+          <span className="hidden min-[360px]:inline">Aktualisieren</span>
+        </motion.button>
+      </div>
       {updating && <UpdateOverlay />}
+      <AccountSheet open={account} onClose={() => setAccount(false)} welcome={welcome && !user} />
 
       <div>
         <motion.div variants={item}>
@@ -307,7 +345,7 @@ function Cities({ items, back, onOpen, refresh }: { items: Saved[]; back: () => 
                     className="grid h-10 w-10 place-items-center rounded-full bg-red-500/90 text-white"
                     aria-label="Wirklich löschen"
                     onClick={async () => {
-                      await deleteCity(c.id)
+                      await useAuth.getState().removeCity(c.id)
                       setConfirm(null)
                       refresh()
                     }}
@@ -334,7 +372,9 @@ export default function Menu() {
   const [saved, setSaved] = useState<Saved[]>([])
 
   const refresh = () => void listCityDocs().then(setSaved)
-  useEffect(refresh, [])
+  const tick = useAuth((s) => s.ownerTick)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(refresh, [tick])
 
   return (
     <div className="menu-flat absolute inset-0 overflow-hidden bg-night">

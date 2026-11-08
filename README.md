@@ -79,7 +79,7 @@ pnpm lint     # Oxlint
 pnpm build    # Typecheck + Produktions-Build (inkl. PWA)
 ```
 
-Städte werden automatisch im Browser gespeichert (IndexedDB) und lassen sich als JSON exportieren und importieren.
+Städte werden automatisch im Browser gespeichert (IndexedDB) und lassen sich als JSON exportieren und importieren. Mit einem Konto (E-Mail, Google oder Telefon) werden sie zusätzlich in der Cloud gesichert und auf allen Geräten synchronisiert, die Einrichtung steht in [docs/KONTEN-EINRICHTEN.md](docs/KONTEN-EINRICHTEN.md).
 
 ### Aufbau
 

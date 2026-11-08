@@ -1,0 +1,5 @@
+# Build scripts of dependencies: only esbuild-style helpers that are needed. Firebase's optional install
+# scripts (telemetry / native protobuf codegen) are not needed for the web build.
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false

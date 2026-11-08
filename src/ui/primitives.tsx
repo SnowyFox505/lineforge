@@ -32,7 +32,7 @@ export function Sheet({
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-[3px]" onClick={onClose} />
           <motion.div
-            className="glass relative max-h-[88%] w-full max-w-lg overflow-y-auto rounded-t-[28px] p-5 pb-[calc(1.25rem+var(--safe-bottom))] md:rounded-[28px]"
+            className="glass sheet relative max-h-[88%] w-full max-w-lg overflow-y-auto rounded-t-[28px] p-5 pb-[calc(1.25rem+var(--safe-bottom))] md:rounded-[28px]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
