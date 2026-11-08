@@ -1,4 +1,5 @@
 import { buildField, WATER_THRESHOLD } from '../model/terrainField'
+import { airportLayout } from '../model/airport'
 import { streetPaths } from './streets'
 import { ZONE_STYLE } from './zoneGfx'
 import type { ZoneGfx } from './zoneGfx'
@@ -205,51 +206,64 @@ function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', siz
   ctx.stroke(p.avenues)
 }
 
-/** Runways, taxiway and apron of an airport, laid along the long side of its area. */
+/** Runways, taxiway, apron, terminal and hangars of an airport (layout shared with the 3D view). */
 function drawAirport(ctx: CanvasRenderingContext2D, zones: ZoneGfx, s: number) {
   for (const a of zones.airports) {
-    const w = a.x1 - a.x0
-    const h = a.y1 - a.y0
-    if (w < 6 && h < 6) continue
-    const horiz = w >= h
-    const long = horiz ? w : h
-    const short = horiz ? h : w
-    const cx = (a.x0 + a.x1) / 2
-    const cy = (a.y0 + a.y1) / 2
+    if (a.x1 - a.x0 < 6 && a.y1 - a.y0 < 6) continue
+    const l = airportLayout(a)
+    const rect = (r: { u0: number; u1: number; v0: number; v1: number }) => ctx.fillRect(r.u0, r.v0, r.u1 - r.u0, r.v1 - r.v0)
     ctx.save()
-    ctx.translate(cx, cy)
-    if (!horiz) ctx.rotate(Math.PI / 2)
-    const L = long * 0.88
-    const rw = Math.min(1.5, short * 0.14)
-    const lanes = short > 12 ? [-0.24, 0.24] : [0]
-    // taxiway and apron
-    ctx.strokeStyle = 'rgba(150,158,170,0.55)'
-    ctx.lineWidth = Math.max(0.2, rw * 0.35)
+    ctx.translate(l.cx, l.cy)
+    if (!l.horiz) ctx.rotate(Math.PI / 2)
+    const L = l.runwayLength
+    // taxiway, with links to the runways
+    ctx.lineCap = 'butt'
+    ctx.strokeStyle = 'rgba(150,158,170,0.6)'
+    ctx.lineWidth = l.taxiW
     ctx.beginPath()
-    ctx.moveTo(-L / 2, short * 0.06)
-    ctx.lineTo(L / 2, short * 0.06)
+    ctx.moveTo(-L * 0.42, l.taxiV)
+    ctx.lineTo(L * 0.42, l.taxiV)
+    for (const f of [-0.3, 0.3]) {
+      for (const r of l.runways) {
+        ctx.moveTo(L * f, l.taxiV)
+        ctx.lineTo(L * f, r.v)
+      }
+    }
     ctx.stroke()
-    ctx.fillStyle = 'rgba(126,134,146,0.9)'
-    ctx.fillRect(-long * 0.16, short * 0.12, long * 0.32, Math.min(short * 0.26, 5))
-    for (const f of lanes) {
-      const y = f * short
-      ctx.lineCap = 'butt'
+    if (l.apron) {
+      ctx.fillStyle = 'rgba(126,134,146,0.92)'
+      rect(l.apron)
+    }
+    for (const r of l.runways) {
       ctx.strokeStyle = '#262b32'
-      ctx.lineWidth = rw
+      ctx.lineWidth = r.w
       ctx.beginPath()
-      ctx.moveTo(-L / 2, y)
-      ctx.lineTo(L / 2, y)
+      ctx.moveTo(-L / 2, r.v)
+      ctx.lineTo(L / 2, r.v)
       ctx.stroke()
       if (s >= 2) {
         ctx.strokeStyle = 'rgba(255,255,255,0.8)'
-        ctx.lineWidth = Math.max(0.06, rw * 0.06)
-        ctx.setLineDash([rw * 0.9, rw * 0.7])
+        ctx.lineWidth = Math.max(0.06, r.w * 0.06)
+        ctx.setLineDash([r.w * 0.9, r.w * 0.7])
         ctx.beginPath()
-        ctx.moveTo(-L / 2 + rw, y)
-        ctx.lineTo(L / 2 - rw, y)
+        ctx.moveTo(-L / 2 + r.w, r.v)
+        ctx.lineTo(L / 2 - r.w, r.v)
         ctx.stroke()
         ctx.setLineDash([])
       }
+    }
+    ctx.fillStyle = 'rgba(176,184,196,0.95)'
+    for (const p of l.piers) rect(p)
+    for (const hg of l.hangars) rect(hg)
+    if (l.terminal) {
+      ctx.fillStyle = '#e4e9f0'
+      rect(l.terminal)
+    }
+    if (l.tower) {
+      ctx.beginPath()
+      ctx.arc(l.tower.u, l.tower.v, 0.5, 0, Math.PI * 2)
+      ctx.fillStyle = '#f2f5f8'
+      ctx.fill()
     }
     ctx.restore()
   }

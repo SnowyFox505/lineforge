@@ -10,6 +10,7 @@ import type { CityDoc } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
 import { lookOf } from '../model/profiles'
+import Airports3D from './Airport3D'
 import Buildings3D from './Buildings3D'
 import Label3D from './Label3D'
 import { LegPanel, LegPicker } from './LegTools'
@@ -295,6 +296,7 @@ export default function Scene3D() {
         <directionalLight position={[-doc.size * 0.5, doc.size * 0.4, -doc.size * 0.6]} intensity={0.35} color="#7aa8ff" />
         <Terrain doc={doc} net={net} see={see} />
         {!see && <Buildings3D doc={doc} net={net} />}
+        {!see && <Airports3D doc={doc} net={net} />}
         <LegPicker net={net} see={see} />
         <Tracks3D net={net} />
         <Stations net={net} />
