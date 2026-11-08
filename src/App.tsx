@@ -4,6 +4,7 @@ import { saveCity } from './persistence/db'
 import Menu from './screens/Menu'
 import { useEditor } from './store/editorStore'
 import Editor from './ui/Editor'
+import LoadingScreen from './ui/LoadingScreen'
 
 const VehicleGallery = lazy(() => import('./screens/VehicleGallery'))
 
@@ -12,6 +13,17 @@ export default function App() {
   const screen = useEditor((s) => s.screen)
   const undo = useEditor((s) => s.undo)
   const redo = useEditor((s) => s.redo)
+  // loading screen whenever a city is opened: at least a few seconds, and until the editor is on screen
+  const [prevScreen, setPrevScreen] = useState(screen)
+  const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
+  if (screen !== prevScreen) {
+    setPrevScreen(screen)
+    if (screen === 'editor') {
+      setLoading(true)
+      setReady(false)
+    }
+  }
   // #fahrzeuge opens the vehicle gallery (also linked from the city list)
   const [gallery, setGallery] = useState(() => location.hash === '#fahrzeuge')
   useEffect(() => {
@@ -72,9 +84,25 @@ export default function App() {
         ) : (
           <motion.div key="editor" className="absolute inset-0" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
             <Editor />
+            <ReadyMarker onReady={() => setReady(true)} />
           </motion.div>
         )}
       </AnimatePresence>
+      {loading && <LoadingScreen title={doc.name} ready={ready} minMs={3000} onDone={() => setLoading(false)} />}
     </div>
   )
+}
+
+/** Reports once the editor has been mounted and painted (fonts loaded, two frames drawn). */
+function ReadyMarker({ onReady }: { onReady: () => void }) {
+  useEffect(() => {
+    let alive = true
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve()
+    void fonts.then(() => requestAnimationFrame(() => requestAnimationFrame(() => alive && onReady())))
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
 }

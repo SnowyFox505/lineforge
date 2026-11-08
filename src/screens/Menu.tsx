@@ -337,7 +337,7 @@ export default function Menu() {
   useEffect(refresh, [])
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-night">
+    <div className="menu-flat absolute inset-0 overflow-hidden bg-night">
       <MenuBackdrop dim={view !== 'home'} />
       <AnimatePresence mode="wait" initial>
         {view === 'home' && <Home key="home" latest={saved[0]} count={saved.length} go={setView} onContinue={() => saved[0] && openCity(saved[0].doc)} />}

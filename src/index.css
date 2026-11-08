@@ -221,3 +221,39 @@ input[type='color'].swatch-input::-moz-color-swatch {
 @media (prefers-reduced-motion: reduce) {
   .update-ring { animation-duration: 0.01s; }
 }
+
+/* Start screen: no live blur over the moving background (this is what makes iOS stutter) */
+.menu-flat .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: linear-gradient(180deg, rgba(38, 45, 58, 0.88), rgba(15, 19, 27, 0.92));
+}
+/* on touch devices the glows are painted into the canvas, the DOM ones are hidden */
+@media (hover: none), (pointer: coarse) {
+  .menu-cloud { display: none; }
+}
+/* the glows only drift on mouse devices; on phones they stay put (moving layers cost battery and frames) */
+@media (hover: hover) and (pointer: fine) {
+  .menu-cloud {
+    will-change: transform;
+    animation: menu-cloud var(--d, 24s) ease-in-out infinite;
+  }
+}
+@keyframes menu-cloud {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  33% { transform: translate3d(var(--x1), var(--y1), 0); }
+  66% { transform: translate3d(var(--x2), var(--y2), 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-cloud { animation: none; }
+}
+
+/* Loading screen: three dots that pulse one after another */
+@keyframes load-dot {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.25); }
+}
+.load-dot { animation: load-dot 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .load-dot { animation: none; opacity: 0.7; }
+}
