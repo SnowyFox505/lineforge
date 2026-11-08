@@ -193,10 +193,13 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
   const y1 = Math.min(size - 1, Math.max(from.y, to.y) + M)
   const W = x1 - x0 + 1
   const H = y1 - y0 + 1
+  // State = cell, heading and how far the line has gone in that heading (0..2 cells): turning again right after a short
+  // stub costs extra, so hooks and 1-cell jogs give way to a wide, flat bend (a train cannot follow a 1-cell hook)
+  const RUN = 3
   const N = W * H * 8
-  const g = new Float32Array(N).fill(Infinity)
-  const parent = new Int32Array(N).fill(-1)
-  const closed = new Uint8Array(N)
+  const g = new Float32Array(N * RUN).fill(Infinity)
+  const parent = new Int32Array(N * RUN).fill(-1)
+  const closed = new Uint8Array(N * RUN)
   const heap = new Heap()
 
   const h = (x: number, y: number) => {
@@ -209,7 +212,7 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
   for (let d = 0; d < 8; d++) {
     const c = startDir === null ? 0 : turnCost(startDir, d)
     if (!isFinite(c)) continue
-    const id = sid(from.x, from.y, d)
+    const id = sid(from.x, from.y, d) * RUN + (RUN - 1)
     g[id] = c
     heap.push(c + h(from.x, from.y), id)
   }
@@ -219,8 +222,10 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
     const id = heap.pop()
     if (closed[id]) continue
     closed[id] = 1
-    const d = id & 7
-    const cell = id >> 3
+    const run = id % RUN
+    const sidx = (id / RUN) | 0
+    const d = sidx & 7
+    const cell = sidx >> 3
     const x = (cell % W) + x0
     const y = ((cell / W) | 0) + y0
     if (x === to.x && y === to.y) {
@@ -237,6 +242,8 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
       const len = nd & 1 ? SQ2 : 1
       const ci = ny * size + nx
       let c = len + t
+      // a bend right after a short stub (hook): dearer the sharper it is
+      if (nd !== d && run < RUN - 1) c += 1.2 + t * 0.5
       if (terrain[ci] === WATER) c += 2.4 * len
       const o = occ[ci]
       // running along another line's axis is free: lines bundle into one corridor (the lane layout spreads them side by
@@ -251,12 +258,13 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
         c += hintCost(nd, exitHint)
         let back = id
         for (let q = 0; q < 3 && parent[back] >= 0; q++) back = parent[back]
-        const bc = back >> 3
+        const bc = ((back / RUN) | 0) >> 3
         const bx = (bc % W) + x0
         const by = ((bc / W) | 0) + y0
         if (bx !== nx || by !== ny) c += 0.8 * hintCost(bearingDir(nx - bx, ny - by), exitHint)
       }
-      const nid = sid(nx, ny, nd)
+      const nr = nd === d ? Math.min(RUN - 1, run + 1) : 1
+      const nid = sid(nx, ny, nd) * RUN + nr
       if (closed[nid]) continue
       const ng = gc + c
       if (ng < g[nid]) {
@@ -273,7 +281,7 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
   }
 
   const states: number[] = []
-  for (let s = goal; s >= 0; s = parent[s]) states.push(s)
+  for (let s = goal; s >= 0; s = parent[s]) states.push((s / RUN) | 0)
   states.reverse()
   const pts: Pt[] = []
   states.forEach((s, i) => {
@@ -285,7 +293,7 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
     // keep the first point, the last point and every point where the direction changes
     if (i === 0 || next === undefined || nextDir !== d) pts.push(p)
   })
-  return { pts: simplify(pts), endDir: goal & 7 }
+  return { pts: simplify(pts), endDir: ((goal / RUN) | 0) & 7 }
 }
 
 /** Remove points that lie on a straight line between their neighbours. */
