@@ -182,6 +182,29 @@ describe('3D network geometry', () => {
     }
   })
 
+  it('keeps sidings joined to their track also where several lines share a corridor', () => {
+    let d = city()
+    d = station(d, 'a', 20, 80)
+    d = station(d, 'x', 60, 80, { tracks: 6, platform: 'island' })
+    d = station(d, 'e', 100, 60)
+    d = station(d, 'c', 100, 100)
+    d = line(d, 'G', 'sbahn', ['a', 'x', 'e'])
+    d = line(d, 'T', 'sbahn', ['a', 'x', 'c'])
+    const net = buildNetwork3D(d)
+    for (const ln of net.lines) {
+      const near = (x: number, z: number) => {
+        let best = Infinity
+        for (let i = 0; i < ln.n; i++) best = Math.min(best, Math.hypot(ln.fx[i] - x, ln.fz[i] - z), Math.hypot(ln.bx[i] - x, ln.bz[i] - z))
+        return best
+      }
+      for (const s of ln.sidings) {
+        expect(near(s.x[0], s.z[0])).toBeLessThan(1e-6)
+        expect(near(s.x[s.x.length - 1], s.z[s.z.length - 1])).toBeLessThan(1e-6)
+      }
+    }
+    expect(net.lines.reduce((n, l) => n + l.sidings.length, 0)).toBeGreaterThan(0)
+  })
+
   it('keeps the tracks of one direction together where two lines share a corridor (no swapping pairs)', () => {
     let d = city()
     d = station(d, 'a', 60, 130)

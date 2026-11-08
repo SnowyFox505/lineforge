@@ -73,6 +73,9 @@ export interface LegRange {
 
 /** Extra track of a station that leaves the line's own track and rejoins it behind the platform. */
 export interface Siding {
+  /** index of the line sample where the siding starts, and the line track (forward / return) it leaves */
+  j0: number
+  side: 'f' | 'b'
   x: number[]
   z: number[]
   tx: number[]
@@ -652,6 +655,18 @@ export function groupTracks(lines: LineNet[]) {
       ln.fz[j] += nz * sf[j] * ln.free[j]
       ln.bx[j] += nx * sb[j] * ln.free[j]
       ln.bz[j] += nz * sb[j] * ln.free[j]
+    }
+    // the sidings leave and rejoin the track: they move with it
+    for (const sd of ln.sidings) {
+      const sh = sd.side === 'f' ? sf : sb
+      for (let k = 0; k < sd.x.length; k++) {
+        const j = Math.min(ln.n - 1, sd.j0 + k)
+        sd.x[k] += -ln.tz[j] * sh[j] * ln.free[j]
+        sd.z[k] += ln.tx[j] * sh[j] * ln.free[j]
+      }
+      const t = tangents(sd.x, sd.z)
+      sd.tx = t.tx
+      sd.tz = t.tz
     }
     const ft = tangents(ln.fx, ln.fz)
     const bt = tangents(ln.bx, ln.bz)
@@ -1258,7 +1273,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           Y.push(cy[j])
         }
         const t = tangents(X, Z)
-        sidings.push({ x: X, z: Z, tx: t.tx, tz: t.tz, y: Y })
+        sidings.push({ j0: ja, side: sp.side, x: X, z: Z, tx: t.tx, tz: t.tz, y: Y })
       }
     })
 
