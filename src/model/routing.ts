@@ -1,4 +1,5 @@
 import { octilinearPath } from '../plan/octilinear'
+import { legCurve, nearestOnCurve, pointsFromRoute, routeHints } from './geo'
 import { WATER } from './types'
 import type { CityDoc, Line, Pt } from './types'
 
@@ -336,8 +337,9 @@ export function routeSegment(doc: CityDoc, line: Line, k: number): Pt[] {
   const A = doc.stations[line.stations[k]]
   const B = doc.stations[line.stations[k + 1]]
   if (!A || !B) return []
-  const via = line.via?.[k] ?? []
-  const nodes: Pt[] = [{ x: A.x, y: A.y }, ...via, { x: B.x, y: B.y }]
+  // the curve of the map is the wish: the octilinear route only follows it at a few hint points
+  const hints = (line.via?.[k] ?? []).length ? routeHints(legCurve(doc, line, k)) : []
+  const nodes: Pt[] = [{ x: A.x, y: A.y }, ...hints, { x: B.x, y: B.y }]
   const ctx = buildCtx(doc, line.id, k)
   let dir = exitDir(line.segs?.[k - 1])
   // where the line goes on after station B: the last leg should arrive pointing that way
@@ -356,12 +358,12 @@ export function routeSegment(doc: CityDoc, line: Line, k: number): Pt[] {
 
 // ---- immutable line edits -------------------------------------------------
 
-function withLine(doc: CityDoc, line: Line): CityDoc {
+export function withLine(doc: CityDoc, line: Line): CityDoc {
   return { ...doc, lines: { ...doc.lines, [line.id]: line } }
 }
 
 /** Make sure via/segs arrays have the right shape. */
-function shape(line: Line): Line {
+export function shape(line: Line): Line {
   const n = line.stations.length
   const via = Array.from({ length: n }, (_, i) => line.via?.[i] ?? [])
   const segs = Array.from({ length: Math.max(0, n - 1) }, (_, i) => line.segs?.[i] as Pt[])
@@ -369,16 +371,25 @@ function shape(line: Line): Line {
 }
 
 /** Recompute segment k, the one before it (it now knows where the line goes on) and the one after it (direction continuity). */
-function rerouteAt(doc: CityDoc, lineId: string, k: number): CityDoc {
+export function rerouteAt(doc: CityDoc, lineId: string, k: number): CityDoc {
   let d = doc
   for (const i of [k - 1, k, k + 1]) {
     const line = d.lines[lineId]
     if (!line || i < 0 || i >= line.stations.length - 1) continue
     const segs = [...(line.segs ?? [])]
     segs[i] = routeSegment(d, line, i)
-    d = withLine(d, { ...line, segs })
+    d = withLine(d, withCurvePoints({ ...line, segs }, i))
   }
   return d
+}
+
+/** A leg that has only a machine route (no control points yet) gets its curve from that route. */
+function withCurvePoints(line: Line, k: number): Line {
+  const seg = line.segs?.[k]
+  if ((line.via?.[k] ?? []).length || !seg || seg.length < 2) return line
+  const via = [...(line.via ?? [])]
+  via[k] = pointsFromRoute(seg, line.curve ?? 3)
+  return { ...line, via }
 }
 
 /** Fill in every missing segment (old saves, imports). Returns the same doc when nothing is missing. */
@@ -400,7 +411,7 @@ export function withRoutes(doc: CityDoc): CityDoc {
       if (line.segs?.[k]) continue
       const segs = [...(line.segs ?? [])]
       segs[k] = routeSegment(d, line, k)
-      d = withLine(d, { ...line, segs })
+      d = withLine(d, withCurvePoints({ ...line, segs }, k))
     }
   }
   return d
@@ -577,18 +588,19 @@ export function addWaypoint(doc: CityDoc, lineId: string, p: Pt): CityDoc {
   const n = line.stations.length
   let bestK = -1
   let bestD = Infinity
-  ;(line.segs ?? []).forEach((seg, k) => {
-    if (!seg || seg.length < 2) return
-    const d = nearestOnPolyline(seg, p).dist
+  for (let k = 0; k < n - 1; k++) {
+    const curve = legCurve(doc, line, k)
+    if (curve.length < 2) continue
+    const d = nearestOnCurve(curve, p).dist
     if (d < bestD) {
       bestD = d
       bestK = k
     }
-  })
+  }
   if (bestK >= 0 && bestD <= 3.5) {
-    const seg = line.segs![bestK]
+    const seg = legCurve(doc, line, bestK)
     const list = [...(line.via![bestK] ?? []), p]
-    list.sort((a, b) => nearestOnPolyline(seg, a).along - nearestOnPolyline(seg, b).along)
+    list.sort((a, b) => nearestOnCurve(seg, a).along - nearestOnCurve(seg, b).along)
     const via = [...line.via!]
     via[bestK] = list
     return rerouteAt(withLine(doc, { ...line, via }), lineId, bestK)

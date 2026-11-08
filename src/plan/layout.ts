@@ -1,3 +1,4 @@
+import { lineCurve, mergeCorridors } from '../model/geo'
 import { latticePoints } from '../model/routing'
 import type { CityDoc, Line, Pt } from '../model/types'
 import { joinPaths, segmentPath } from './octilinear'
@@ -27,14 +28,21 @@ const key = (a: Pt, b: Pt) =>
  * Lines that share a stretch of track run side by side, `gap` cells apart (bundling),
  * with a stable lane order, mitred at bends. Coordinates are lattice points; callers add 0.5 for the cell centre.
  */
-export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number } = {}): Record<string, Pt[]> {
+export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; source?: 'grid' | 'geo' } = {}): Record<string, Pt[]> {
   const lines = Object.values(doc.lines)
   const lattices: Record<string, Pt[]> = {}
+  // 'geo': the free curves of the map (lines on the same corridor get identical points); 'grid': the octilinear routes
+  const geoPts: Record<string, Pt[]> = {}
+  if (opts.source === 'geo') {
+    const raw: Record<string, Pt[]> = {}
+    for (const line of lines) raw[line.id] = line.stations.length >= 2 ? lineCurve(doc, line).pts : []
+    Object.assign(geoPts, mergeCorridors(raw))
+  }
   // heavy rail and trams are bundled separately: a tram runs on the street beside the railway, not on its tracks
   const lanes = new Map<string, { h: string[]; t: string[] }>()
 
   for (const line of lines) {
-    const lp = latticePoints(linePolyline(doc, line))
+    const lp = opts.source === 'geo' ? geoPts[line.id] : latticePoints(linePolyline(doc, line))
     lattices[line.id] = lp
     const tram = line.operator === 'tram'
     for (let i = 0; i < lp.length - 1; i++) {

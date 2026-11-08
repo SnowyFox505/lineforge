@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCity } from './factory'
+import { legCurve, nearestOnCurve } from './geo'
 import { addWaypoint, appendStation, dirIndex, latticePoints, moveWaypoint, removeStationEverywhere, removeWaypoint, withRoutes, healHooks } from './routing'
 import { WATER } from './types'
 import type { CityDoc, Pt } from './types'
@@ -81,7 +82,8 @@ describe('routing', () => {
       [{ x: 98, y: 24 }, { x: 98, y: 32 }, { x: 92, y: 38 }, { x: 92, y: 77 }],
       [{ x: 92, y: 77 }, { x: 91, y: 77 }, { x: 71, y: 57 }, { x: 71, y: 33 }, { x: 63, y: 25 }, { x: 63, y: 24 }],
     ]
-    const old: CityDoc = { ...d, lines: { ...d.lines, L: { ...d.lines.L, segs: hooked } } }
+    // an old document: routed by the machine, no control points yet
+    const old: CityDoc = { ...d, lines: { ...d.lines, L: { ...d.lines.L, via: [[], [], []], segs: hooked } } }
     const fixed = healHooks(old)
     const first = fixed.lines.L.segs![1]
     expect(first[0]).toEqual({ x: 92, y: 77 })
@@ -119,30 +121,35 @@ describe('routing', () => {
     expect(wet.length).toBeLessThanOrEqual(5)
   })
 
-  it('follows user waypoints', () => {
+  it('lets the curve follow control points, and a machine route follow the curve', () => {
     let d = city()
     d = addStation(d, 'a', 10, 40)
     d = addStation(d, 'b', 60, 40)
     d = withLineOf(d, 'L', ['a'])
     d = addWaypoint(d, 'L', { x: 35, y: 15 }) // pending: collected for the next segment
     d = appendStation(d, 'L', 'b')
-    const lp = latticePoints(d.lines.L.segs![0])
-    expect(lp.some((p) => p.x === 35 && p.y === 15)).toBe(true)
+    const through = (doc: CityDoc, p: Pt) => nearestOnCurve(legCurve(doc, doc.lines.L, 0), p).dist < 0.05
+    expect(through(d, { x: 35, y: 15 })).toBe(true)
+    // the octilinear route (used by plan and 3D until they use the curve) goes up to the control point's neighbourhood
+    expect(latticePoints(d.lines.L.segs![0]).some((p) => Math.abs(p.y - 15) <= 6)).toBe(true)
     // move and remove it again
     d = moveWaypoint(d, 'L', 0, 0, { x: 35, y: 60 })
-    expect(latticePoints(d.lines.L.segs![0]).some((p) => p.x === 35 && p.y === 60)).toBe(true)
+    expect(through(d, { x: 35, y: 60 })).toBe(true)
     d = removeWaypoint(d, 'L', 0, 0)
+    // without control points the machine routes the leg and the curve is made from its route: straight again
     expect(d.lines.L.segs![0].length).toBe(2)
+    expect(d.lines.L.via![0].length).toBe(1)
   })
 
-  it('inserts a waypoint into the nearest existing segment', () => {
+  it('inserts a control point into the nearest stretch of the curve', () => {
     let d = city()
     d = addStation(d, 'a', 10, 40)
     d = addStation(d, 'b', 60, 40)
     d = withLineOf(d, 'L', ['a', 'b'])
+    const before = d.lines.L.via![0].length
     d = addWaypoint(d, 'L', { x: 35, y: 38 })
-    expect(d.lines.L.via![0]).toHaveLength(1)
-    expect(latticePoints(d.lines.L.segs![0]).some((p) => p.x === 35 && p.y === 38)).toBe(true)
+    expect(d.lines.L.via![0]).toHaveLength(before + 1)
+    expect(d.lines.L.via![0].some((p) => p.x === 35 && p.y === 38)).toBe(true)
   })
 
   it('heals a line when a middle station is removed', () => {

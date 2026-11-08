@@ -183,13 +183,29 @@ function LinePanel() {
   const resetRoute = useEditor((s) => s.resetRoute)
   const removeWaypoint = useEditor((s) => s.removeWaypoint)
   const selectedWp = useEditor((s) => s.selectedWaypoint)
+  const lineMode = useEditor((s) => s.lineMode)
+  const setLineMode = useEditor((s) => s.setLineMode)
   const active = activeId ? doc.lines[activeId] : undefined
   const lines = Object.values(doc.lines)
 
   return (
     <div className="space-y-3">
       <div>
-        <div className="eyebrow mb-2">Neue Linie</div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="eyebrow">Neue Linie</span>
+          <div className="flex rounded-xl bg-white/6 p-0.5 text-xs font-semibold" role="group" aria-label="So baust du">
+            {(
+              [
+                ['draw', 'Zeichnen'],
+                ['connect', 'Stationen verbinden'],
+              ] as const
+            ).map(([m, label]) => (
+              <button key={m} onClick={() => setLineMode(m)} className={`rounded-[10px] px-2.5 py-1.5 transition-colors ${lineMode === m ? 'bg-white/90 text-black' : 'text-white/60'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {(Object.keys(OPERATORS) as OperatorId[]).map((op) => (
             <Chip key={op} onClick={() => addLine(op)}>
@@ -212,7 +228,9 @@ function LinePanel() {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-white/50">Lege eine Linie an, dann tippe die Stationen der Reihe nach an.</p>
+        <p className="text-sm text-white/50">
+          {lineMode === 'draw' ? 'Lege eine Linie an, dann ziehe die Strecke mit dem Finger über die Karte.' : 'Lege eine Linie an, dann tippe die Stationen der Reihe nach an.'}
+        </p>
       )}
 
       <AnimatePresence>
@@ -240,7 +258,9 @@ function LinePanel() {
             <CurveSlider lineId={active.id} value={active.curve ?? 3} />
             <div className="flex items-center gap-2 border-t border-white/8 pt-3">
               <p className="min-w-0 flex-1 text-xs leading-snug text-white/50">
-                Tippe ins Freie, um Wegpunkte zu setzen. Die Linie führt dann dort entlang. Ziehen verschiebt sie.
+                {lineMode === 'draw'
+                  ? 'Ziehe von einem Ende der Linie aus weiter. Tippe auf die Linie für eine Station, ziehe die Rauten, um die Kurve zu formen.'
+                  : 'Tippe die Stationen der Reihe nach an. Tippe ins Freie für einen Punkt, durch den die Linie führt, ziehen verschiebt ihn.'}
               </p>
               {selectedWp && selectedWp.lineId === active.id && (
                 <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs text-red-300" onClick={() => removeWaypoint(selectedWp.lineId, selectedWp.k, selectedWp.j)}>
@@ -249,7 +269,7 @@ function LinePanel() {
               )}
               {(active.via ?? []).some((v) => v.length > 0) && (
                 <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => resetRoute(active.id)}>
-                  Route neu
+                  Automatisch
                 </button>
               )}
             </div>

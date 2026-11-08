@@ -1,4 +1,5 @@
 import { MAP_SIZE } from './constants'
+import { GEO_VERSION } from './geo'
 import type { CityDoc, GameMode } from './types'
 
 export function newId(): string {
@@ -17,5 +18,6 @@ export function createCity(name: string, mode: GameMode, size = MAP_SIZE): CityD
     zoneGrid: new Uint16Array(size * size),
     zones: [],
     pois: [],
+    geoV: GEO_VERSION,
   }
 }

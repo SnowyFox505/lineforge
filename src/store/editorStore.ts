@@ -4,6 +4,8 @@ import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
 import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
+import { migrateGeo } from '../model/geo'
+import { applyStroke, moveStationTo, splitLegAt } from '../model/lineEdit'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
 import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
 
@@ -13,6 +15,8 @@ setAutoFreeze(false)
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
 export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi'
+/** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
+export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
 
 /** Which toolbox a tool belongs to. */
@@ -52,6 +56,7 @@ interface EditorState {
   brush: number
   stationType: StationType
   activeLineId: string | null
+  lineMode: LineMode
   selectedStationId: string | null
   /** Waypoint of a line: k = segment, j = index in that segment's list */
   selectedWaypoint: { lineId: string; k: number; j: number } | null
@@ -76,6 +81,7 @@ interface EditorState {
   setBrush: (brush: number) => void
   setStationType: (type: StationType) => void
   setActiveLine: (id: string | null) => void
+  setLineMode: (mode: LineMode) => void
   selectStation: (id: string | null) => void
   selectWaypoint: (w: { lineId: string; k: number; j: number } | null) => void
   setEditStation: (id: string | null) => void
@@ -124,6 +130,12 @@ interface EditorState {
   moveWaypoint: (lineId: string, k: number, j: number, p: Pt) => void
   removeWaypoint: (lineId: string, k: number, j: number) => void
   resetRoute: (lineId: string) => void
+  /** A stroke drawn on the map becomes part of the line. `snap` = reach (cells) for joining stations. Returns false when it fitted nowhere. */
+  drawStroke: (lineId: string, pts: Pt[], snap: number) => boolean
+  /** Tap on the curve of a line: a new station there. */
+  splitLeg: (lineId: string, p: Pt, maxDist: number) => boolean
+  /** Move a station (call checkpoint() once before a drag; this does not touch the undo stack) */
+  moveStation: (id: string, x: number, y: number) => void
 }
 
 export const useEditor = create<EditorState>((set, get) => {
@@ -152,6 +164,7 @@ export const useEditor = create<EditorState>((set, get) => {
     brush: 2,
     stationType: 'standard',
     activeLineId: null,
+    lineMode: 'draw',
     selectedStationId: null,
     selectedWaypoint: null,
     activeZone: { city: 0, suburb: 0, airport: 0 },
@@ -165,12 +178,13 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: healHooks(withRoutes(doc)), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(healHooks(withRoutes(doc))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
     setStationType: (stationType) => set({ stationType }),
     setActiveLine: (activeLineId) => set({ activeLineId }),
+    setLineMode: (lineMode) => set({ lineMode }),
     selectStation: (selectedStationId) => set({ selectedStationId }),
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
     setEditStation: (editStationId) => set({ editStationId }),
@@ -185,7 +199,7 @@ export const useEditor = create<EditorState>((set, get) => {
       }),
 
     loadDoc: (doc) =>
-      set({ doc: healHooks(withRoutes(doc)), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
+      set({ doc: migrateGeo(healHooks(withRoutes(doc))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
     resizeMap: (newSize) => {
       const old = get().doc.size
       if (newSize <= old) return
@@ -420,6 +434,25 @@ export const useEditor = create<EditorState>((set, get) => {
     moveWaypoint: (lineId, k, j, p) => set({ doc: moveWaypoint(get().doc, lineId, k, j, p) }),
     removeWaypoint: (lineId, k, j) => commit(removeWaypoint(get().doc, lineId, k, j), { selectedWaypoint: null }),
     resetRoute: (lineId) => commit(resetRoute(get().doc, lineId), { selectedWaypoint: null }),
+    drawStroke: (lineId, pts, snap) => {
+      const { doc, stationType } = get()
+      const out = applyStroke(doc, lineId, pts, { snap, stationType })
+      if (!out) return false
+      commit(out.doc, { selectedStationId: out.created.length ? out.created[out.created.length - 1] : get().selectedStationId, selectedWaypoint: null })
+      return true
+    },
+    splitLeg: (lineId, p, maxDist) => {
+      const { doc, stationType } = get()
+      const out = splitLegAt(doc, lineId, p, maxDist, stationType)
+      if (!out) return false
+      commit(out.doc, { selectedStationId: out.created[0] ?? null })
+      return true
+    },
+    moveStation: (id, x, y) => {
+      const { doc } = get()
+      const next = moveStationTo(doc, id, x, y)
+      if (next !== doc) set({ doc: next })
+    },
   }
 })
 

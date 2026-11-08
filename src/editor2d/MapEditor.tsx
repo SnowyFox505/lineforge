@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { OPERATORS } from '../model/constants'
+import { nearestLeg } from '../model/lineEdit'
 import { findBridges, makeSampler } from '../model/terrainField'
 import { WATER } from '../model/types'
 import { effectiveTypes } from '../plan/glyphs'
@@ -23,7 +24,7 @@ const BRUSH_TINT = {
   zoneErase: ['rgba(255,120,120,0.2)', 'rgba(255,170,170,0.95)'],
 } as const
 
-type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp'
+type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag'
 
 interface Anim {
   from: number
@@ -43,6 +44,24 @@ function polylineLength(pts: { x: number; y: number }[]) {
   let len = 0
   for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
   return len
+}
+
+/**
+ * The control points of a line that get a handle on screen: when they sit very close together (a curve taken over from an
+ * old route has many) only every few are shown, so the handles stay big enough to grab.
+ */
+function visibleHandles(line: { via?: { x: number; y: number }[][] }, s: number) {
+  const out: { k: number; j: number; p: { x: number; y: number } }[] = []
+  const minGap = 18 / s // cells
+  line.via?.forEach((list, k) => {
+    let last: { x: number; y: number } | null = null
+    list.forEach((p, j) => {
+      if (last && Math.hypot(p.x - last.x, p.y - last.y) < minGap && j < list.length - 1) return
+      out.push({ k, j, p })
+      last = p
+    })
+  })
+  return out
 }
 
 /** Space reserved for floating UI so the fitted map is never hidden behind it. */
@@ -92,7 +111,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const terrainPaths = useMemo(() => buildTerrainPaths(deferredTerrain, doc.size), [deferredTerrain, doc.size])
   const deferredZones = useDeferredValue(doc.zoneGrid)
   const zoneGfx = useMemo(() => buildZoneGfx({ ...doc, zoneGrid: deferredZones }), [deferredZones, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
-  const linePaths = useMemo(() => layoutLines(doc, 0.82), [doc])
+  const linePaths = useMemo(() => layoutLines(doc, 0.82, { source: 'geo' }), [doc.lines, doc.stations]) // eslint-disable-line react-hooks/exhaustive-deps
   const types = useMemo(() => effectiveTypes(doc), [doc])
   const bridges = useMemo(() => {
     const sample = makeSampler(terrainPaths.field, doc.size)
@@ -103,6 +122,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const selectedWaypoint = useEditor((s) => s.selectedWaypoint)
   const selectedPoiId = useEditor((s) => s.selectedPoiId)
   const wpDrag = useRef<{ lineId: string; k: number; j: number; moved: boolean } | null>(null)
+  /** the stroke being drawn (lattice coordinates); `moved` once the finger has left the tap radius */
+  const stroke = useRef<{ pts: { x: number; y: number }[]; moved: boolean } | null>(null)
+  const stationDrag = useRef<{ id: string; moved: boolean } | null>(null)
+  /** short message on the map (for example when a stroke fitted nowhere) */
+  const flashMsg = useRef<{ text: string; until: number } | null>(null)
 
   /** Frame the network (or a comfortable close-up of an empty map), or the whole map. */
   const fit = useCallback(() => {
@@ -281,8 +305,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         ctx.stroke()
         ctx.restore()
       }
-      al.via?.forEach((list, k) =>
-        list.forEach((p, j) => {
+      for (const { k, j, p } of visibleHandles(al, s)) {
+        {
           const px = ox + (p.x + 0.5) * s
           const py = oy + (p.y + 0.5) * s
           const sel = selectedWaypoint?.lineId === al.id && selectedWaypoint.k === k && selectedWaypoint.j === j
@@ -301,8 +325,71 @@ export default function MapEditor({ insets }: { insets: Insets }) {
           ctx.shadowColor = 'transparent'
           ctx.stroke()
           ctx.restore()
-        }),
-      )
+        }
+      }
+    }
+
+    // --- The stroke being drawn --------------------------------------------------------
+    const sk = stroke.current
+    if (sk && sk.moved && sk.pts.length > 1) {
+      const color = (activeLineId && doc.lines[activeLineId]?.color) || '#ffffff'
+      ctx.save()
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      sk.pts.forEach((q, i) => {
+        const px = ox + (q.x + 0.5) * s
+        const py = oy + (q.y + 0.5) * s
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      })
+      ctx.strokeStyle = 'rgba(5,8,12,0.6)'
+      ctx.lineWidth = 9
+      ctx.stroke()
+      ctx.strokeStyle = color
+      ctx.lineWidth = 5.5
+      ctx.stroke()
+      // the stations the stroke would join
+      const reach = Math.max(1.2, 26 / s)
+      for (const q of [sk.pts[0], sk.pts[sk.pts.length - 1]]) {
+        let best: { x: number; y: number } | null = null
+        let bd = reach
+        for (const st of Object.values(doc.stations)) {
+          const d = Math.hypot(st.x - q.x, st.y - q.y)
+          if (d <= bd) {
+            bd = d
+            best = st
+          }
+        }
+        if (best) {
+          ctx.beginPath()
+          ctx.arc(ox + (best.x + 0.5) * s, oy + (best.y + 0.5) * s, 15, 0, Math.PI * 2)
+          ctx.strokeStyle = '#fff'
+          ctx.lineWidth = 3
+          ctx.stroke()
+        }
+      }
+      ctx.restore()
+    }
+
+    // --- Short message ---------------------------------------------------------------
+    const fm = flashMsg.current
+    if (fm && fm.until > now) {
+      ctx.save()
+      ctx.font = "600 14px 'Space Grotesk Variable', system-ui, sans-serif"
+      const tw = ctx.measureText(fm.text).width
+      const bx = w / 2 - tw / 2 - 14
+      const by = insetsRef.current.top + 14
+      ctx.fillStyle = 'rgba(8,12,18,0.88)'
+      ctx.beginPath()
+      ctx.roundRect(bx, by, tw + 28, 34, 12)
+      ctx.fill()
+      ctx.fillStyle = '#f4f7fa'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(fm.text, bx + 14, by + 17)
+      ctx.restore()
+      animating = true
     }
 
     // --- Stations ------------------------------------------------------------
@@ -460,6 +547,13 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     y: Math.floor((p.y - view.current.oy) / view.current.s),
   })
 
+  /** pointer position in lattice coordinates (the centre of a cell is +0.5 on screen, so a station sits at an integer) */
+  const toLattice = (p: { x: number; y: number }) => ({
+    x: Math.round(((p.x - view.current.ox) / view.current.s - 0.5) * 100) / 100,
+    y: Math.round(((p.y - view.current.oy) / view.current.s - 0.5) * 100) / 100,
+  })
+  const inMap = (c: { x: number; y: number }) => c.x >= 0 && c.y >= 0 && c.x < doc.size && c.y < doc.size
+
   const zoneId = useRef(0)
   /** when the current brush stroke began: a second finger right after it means "zoom", not "paint" */
   const strokeStart = useRef(0)
@@ -504,15 +598,13 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     const { ox, oy, s } = view.current
     let best = null as { lineId: string; k: number; j: number } | null
     let bestD = 20
-    line.via?.forEach((list, k) =>
-      list.forEach((q, j) => {
-        const d = Math.hypot(ox + (q.x + 0.5) * s - p.x, oy + (q.y + 0.5) * s - p.y)
-        if (d < bestD) {
-          bestD = d
-          best = { lineId: line.id, k, j }
-        }
-      }),
-    )
+    for (const { k, j, p: q } of visibleHandles(line, s)) {
+      const d = Math.hypot(ox + (q.x + 0.5) * s - p.x, oy + (q.y + 0.5) * s - p.y)
+      if (d < bestD) {
+        bestD = d
+        best = { lineId: line.id, k, j }
+      }
+    }
     return best
   }
 
@@ -528,6 +620,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       }
     }
     return best
+  }
+
+  function flash(text: string) {
+    flashMsg.current = { text, until: performance.now() + 2600 }
+    draw()
   }
 
   function handleTap(p: { x: number; y: number }) {
@@ -549,14 +646,30 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         st.addStation(c.x, c.y)
       }
     } else if (st.tool === 'line') {
-      if (hit) {
+      if (st.lineMode === 'draw') {
+        // drawing mode: a tap on a station selects it, a tap on the line puts a station there
+        st.selectWaypoint(null)
+        if (hit) {
+          st.selectStation(hit)
+          return
+        }
+        const line = st.activeLineId ? st.doc.lines[st.activeLineId] : undefined
+        if (line) {
+          const reach = Math.max(0.9, 20 / view.current.s)
+          const near = nearestLeg(st.doc, line, toLattice(p))
+          if (near && near.dist <= reach) st.splitLeg(line.id, toLattice(p), reach)
+          else if (st.selectedStationId) st.selectStation(null)
+        } else {
+          flash('Wähle erst eine Linie oder lege eine neue an')
+        }
+      } else if (hit) {
         st.selectStation(hit)
         st.selectWaypoint(null)
         if (st.activeLineId) st.appendToLine(st.activeLineId, hit)
       } else if (st.activeLineId) {
-        // tap on open ground: add a waypoint the route has to pass through
-        const c = toCell(p)
-        if (c.x >= 0 && c.y >= 0 && c.x < st.doc.size && c.y < st.doc.size) st.addWaypoint(st.activeLineId, c)
+        // tap on open ground: add a control point the line has to pass through
+        const c = toLattice(p)
+        if (inMap(c)) st.addWaypoint(st.activeLineId, c)
       }
     } else {
       st.selectStation(hit)
@@ -572,6 +685,9 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     if (pointers.current.size >= 2) {
       // two fingers came down almost together: the first one was the start of a pinch, so the dab it painted is taken back
       if (g.kind === 'paint' && performance.now() - strokeStart.current < 350) useEditor.getState().cancelStroke()
+      // a stroke that was only just started is dropped too: zooming never draws
+      stroke.current = null
+      stationDrag.current = null
       const [a, b] = [...pointers.current.values()]
       g.kind = 'pinch'
       g.lastDist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -591,10 +707,20 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       g.kind = 'pan'
     } else {
       const wp: { lineId: string; k: number; j: number } | null = t === 'line' ? hitWaypoint(p) : null
+      const stNow = useEditor.getState()
+      const hitSt = t === 'station' ? hitStation(p) : null
       if (wp) {
-        useEditor.getState().selectWaypoint(wp)
+        // drawing mode: a handle is only grabbed once it is dragged, a plain tap on it puts a station on the line
+        if (stNow.lineMode !== 'draw') stNow.selectWaypoint(wp)
         wpDrag.current = { lineId: wp.lineId, k: wp.k, j: wp.j, moved: false }
         g.kind = 'wp'
+      } else if (t === 'line' && stNow.lineMode === 'draw' && stNow.activeLineId) {
+        // a finger down on the map with a line chosen: a tap, or the start of a stroke once it moves
+        stroke.current = { pts: [toLattice(p)], moved: false }
+        g.kind = 'draw'
+      } else if (hitSt) {
+        stationDrag.current = { id: hitSt, moved: false }
+        g.kind = 'stationDrag'
       } else {
         g.kind = 'tap'
       }
@@ -637,9 +763,31 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         if (!d.moved) {
           st.checkpoint()
           d.moved = true
+          st.selectWaypoint({ lineId: d.lineId, k: d.k, j: d.j })
         }
-        const c = toCell(p)
-        if (c.x >= 0 && c.y >= 0 && c.x < st.doc.size && c.y < st.doc.size) st.moveWaypoint(d.lineId, d.k, d.j, c)
+        const c = toLattice(p)
+        if (inMap(c)) st.moveWaypoint(d.lineId, d.k, d.j, c)
+      }
+    } else if (g.kind === 'draw' && stroke.current) {
+      const sk = stroke.current
+      if (!sk.moved && Math.hypot(p.x - g.startX, p.y - g.startY) > 8) sk.moved = true
+      if (sk.moved) {
+        const c = toLattice(p)
+        const last = sk.pts[sk.pts.length - 1]
+        if (Math.hypot(c.x - last.x, c.y - last.y) >= 0.12) sk.pts.push(c)
+      }
+    } else if (g.kind === 'stationDrag' && stationDrag.current) {
+      const d = stationDrag.current
+      if (d.moved || Math.hypot(p.x - g.startX, p.y - g.startY) > 8) {
+        const st = useEditor.getState()
+        if (!d.moved) {
+          st.checkpoint()
+          d.moved = true
+        }
+        const c = toLattice(p)
+        const x = Math.round(c.x)
+        const y = Math.round(c.y)
+        if (inMap({ x, y })) st.moveStation(d.id, x, y)
       }
     } else if (g.kind === 'tap') {
       if (Math.hypot(p.x - g.startX, p.y - g.startY) > 8) g.kind = 'pan'
@@ -653,7 +801,27 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     pointers.current.delete(e.pointerId)
     if (e.pointerType !== 'mouse') hover.current = null
     if (g.kind === 'tap' && Math.hypot(p.x - g.startX, p.y - g.startY) <= 8) handleTap(p)
-    if (g.kind === 'wp') wpDrag.current = null
+    if (g.kind === 'wp') {
+      const d = wpDrag.current
+      wpDrag.current = null
+      if (d && !d.moved && useEditor.getState().lineMode === 'draw') handleTap(p)
+    }
+    if (g.kind === 'draw' && stroke.current) {
+      const sk = stroke.current
+      stroke.current = null
+      if (!sk.moved) handleTap(p)
+      else if (sk.pts.length >= 3) {
+        const st = useEditor.getState()
+        if (st.activeLineId && !st.drawStroke(st.activeLineId, sk.pts, Math.max(1.2, 26 / view.current.s))) {
+          flash(st.doc.lines[st.activeLineId]?.stations.length ? 'Beginne den Strich an einem Ende der Linie' : 'Der Strich passt hier nicht (Wasser?)')
+        }
+      }
+    }
+    if (g.kind === 'stationDrag') {
+      const d = stationDrag.current
+      stationDrag.current = null
+      if (d && !d.moved) handleTap(p)
+    }
     if (pointers.current.size === 0) g.kind = 'none'
     else if (g.kind === 'pinch') g.kind = 'none'
     draw()

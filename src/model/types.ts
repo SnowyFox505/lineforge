@@ -124,4 +124,6 @@ export interface CityDoc {
   zoneGrid?: Uint16Array
   zones?: Zone[]
   pois?: Poi[]
+  /** Version of the line geometry: 1 = `via` holds the control points of free curves (see model/geo.ts) */
+  geoV?: number
 }
