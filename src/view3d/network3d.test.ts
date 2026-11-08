@@ -182,6 +182,44 @@ describe('3D network geometry', () => {
     }
   })
 
+  it('keeps the tracks of one direction together where two lines share a corridor (no swapping pairs)', () => {
+    let d = city()
+    d = station(d, 'a', 60, 130)
+    d = station(d, 'b', 60, 60)
+    d = station(d, 'c', 100, 30)
+    d = station(d, 'e', 20, 30)
+    d = line(d, 'G', 'sbahn', ['a', 'b', 'c'])
+    d = line(d, 'T', 'sbahn', ['a', 'b', 'e'])
+    expect(d.lines.G.segs![0]).toEqual(d.lines.T.segs![0])
+    const net = buildNetwork3D(d)
+    const [g, t] = net.lines
+    // along the shared stretch (well clear of both stations) look across the corridor
+    const j0 = Math.floor(g.n * 0.15)
+    const j1 = Math.floor(g.n * 0.35)
+    for (let j = j0; j <= j1; j += 3) {
+      const nx = -g.tz[j]
+      const nz = g.tx[j]
+      // nearest sample of the other line
+      let best = 0
+      let bd = Infinity
+      for (let k = 0; k < t.n; k++) {
+        const dd = Math.hypot(t.cx[k] - g.cx[j], t.cz[k] - g.cz[j])
+        if (dd < bd) {
+          bd = dd
+          best = k
+        }
+      }
+      const lat = (x: number, z: number) => (x - g.cx[j]) * nx + (z - g.cz[j]) * nz
+      // both lines run the same way: every `b` track must lie on one side of every `f` track
+      const bs = [lat(g.bx[j], g.bz[j]), lat(t.bx[best], t.bz[best])]
+      const fs = [lat(g.fx[j], g.fz[j]), lat(t.fx[best], t.fz[best])]
+      expect(Math.max(...bs)).toBeLessThan(Math.min(...fs))
+      // and the four tracks do not lie on top of each other
+      const all = [...bs, ...fs].sort((p, q) => p - q)
+      for (let i = 1; i < all.length; i++) expect(all[i] - all[i - 1]).toBeGreaterThan(0.1)
+    }
+  })
+
   it('lifts one of two crossing lines over the other outside of stations', () => {
     let d = city()
     d = station(d, 'a', 20, 60)

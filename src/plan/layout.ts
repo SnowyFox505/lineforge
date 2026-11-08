@@ -48,9 +48,77 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number }
       if (!list.includes(line.id)) list.push(line.id)
     }
   }
-  for (const e of lanes.values()) {
-    e.h.sort()
-    e.t.sort()
+  // Lane order: the lines of a shared stretch are ordered by where they leave it, so the one that turns left sits on the
+  // left and none has to cross another (a plain id order put them on arbitrary sides in front of every junction).
+  const edgeIdx = new Map<string, Map<string, number>>()
+  for (const line of lines) {
+    const lp = lattices[line.id]
+    const m = new Map<string, number>()
+    for (let i = 0; i < lp.length - 1; i++) {
+      const k = key(lp[i], lp[i + 1])
+      if (!m.has(k)) m.set(k, i)
+    }
+    edgeIdx.set(line.id, m)
+  }
+  const isCanon = (a: Pt, b: Pt) => a.x < b.x || (a.x === b.x && a.y < b.y)
+  const pairMemo = new Map<string, number>()
+  /** <0: `a` takes the lower lane (-normal side) of edge `k`, >0 the higher one */
+  const compare = (a: string, b: string, k: string): number => {
+    const mk = `${a}|${b}|${k}`
+    const hit = pairMemo.get(mk)
+    if (hit !== undefined) return hit
+    const la = lattices[a]
+    const lb = lattices[b]
+    const ia = edgeIdx.get(a)!.get(k)
+    const ib = edgeIdx.get(b)!.get(k)
+    if (ia === undefined || ib === undefined) return a < b ? -1 : 1
+    const oa = isCanon(la[ia], la[ia + 1]) ? 1 : -1
+    const ob = isCanon(lb[ib], lb[ib + 1]) ? 1 : -1
+    // walk along the common stretch in canonical direction (sgn = 1) and against it (sgn = -1) until the two part
+    const walk = (sgn: number) => {
+      let ja = ia
+      let jb = ib
+      const visited: string[] = []
+      for (let guard = 0; guard < 4000; guard++) {
+        visited.push(key(la[ja], la[ja + 1]))
+        const fa = sgn * oa > 0 ? 1 : 0
+        const fb = sgn * ob > 0 ? 1 : 0
+        const na = ja + fa // node where the walk leaves the current edge
+        const nb = jb + fb
+        const pa = na + (fa ? 1 : -1) // the point beyond it
+        const pb = nb + (fb ? 1 : -1)
+        if (pa < 0 || pa >= la.length || pb < 0 || pb >= lb.length) return { visited, cross: 0, dist: Infinity }
+        if (key(la[na], la[pa]) === key(lb[nb], lb[pb])) {
+          ja = fa ? ja + 1 : ja - 1
+          jb = fb ? jb + 1 : jb - 1
+          continue
+        }
+        // they part here: to which side does each one leave? (v = the way we walk)
+        const v = { x: (la[ja + 1].x - la[ja].x) * oa * sgn, y: (la[ja + 1].y - la[ja].y) * oa * sgn }
+        const wa = { x: la[pa].x - la[na].x, y: la[pa].y - la[na].y }
+        const wb = { x: lb[pb].x - lb[nb].x, y: lb[pb].y - lb[nb].y }
+        const cr = (w: Pt) => (v.x * w.y - v.y * w.x) / (Math.hypot(w.x, w.y) || 1)
+        // walking against the canonical direction mirrors left and right
+        return { visited, cross: (cr(wa) - cr(wb)) * sgn, dist: visited.length }
+      }
+      return { visited, cross: 0, dist: Infinity }
+    }
+    const fw = walk(1)
+    const bw = walk(-1)
+    const pick = Math.abs(fw.cross) > 1e-9 && (Math.abs(bw.cross) <= 1e-9 || fw.dist <= bw.dist) ? fw : Math.abs(bw.cross) > 1e-9 ? bw : null
+    // the whole common stretch keeps the same order
+    const out = pick ? (pick.cross < 0 ? -1 : 1) : a < b ? -1 : 1
+    for (const w of [fw, bw]) {
+      for (const vk of w.visited) {
+        pairMemo.set(`${a}|${b}|${vk}`, out)
+        pairMemo.set(`${b}|${a}|${vk}`, -out)
+      }
+    }
+    return out
+  }
+  for (const [k, e] of lanes) {
+    if (e.h.length > 1) e.h.sort((a, b) => compare(a, b, k))
+    if (e.t.length > 1) e.t.sort((a, b) => compare(a, b, k))
   }
   /** Lateral lane position of a line on an edge, in the edge's canonical direction. */
   const laneOffset = (k: string, id: string, tram: boolean) => {

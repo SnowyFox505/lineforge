@@ -239,7 +239,9 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
       let c = len + t
       if (terrain[ci] === WATER) c += 2.4 * len
       const o = occ[ci]
-      if (o) c += o & (1 << (nd & 3)) ? 0.55 * len : 2.6
+      // running along another line's axis is free: lines bundle into one corridor (the lane layout spreads them side by
+      // side); a detour around it would cost far more than the shared stretch. Crossing it at an angle stays dearer.
+      if (o && !(o & (1 << (nd & 3)))) c += 2.6
       if (own[ci]) c += 6
       // trams run on streets, heavy rail on its own track bed: keep out of each other's corridors
       if (foreign[ci]) c += 3 * len

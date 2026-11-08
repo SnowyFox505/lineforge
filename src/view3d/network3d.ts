@@ -102,6 +102,8 @@ export interface LineNet {
   cs: number[]
   /** arc length of the line axis at every sample */
   cum: number[]
+  /** 1 on the open line, falling to 0 on a station's platforms (how free the tracks are to move sideways) */
+  free: number[]
   total: number
   stops: Stop[]
   bridges: Bridge[]
@@ -554,6 +556,110 @@ function curveGroup(g: StationGroup, list: Entry[], coarse: Map<string, Coarse>)
   g.ax = ax
   g.az = az
   g.angle = Math.atan2(-az, ax)
+}
+
+/**
+ * Lines that run side by side keep the tracks of one direction together: all tracks against the direction of travel on
+ * one side, all along it on the other. With one pair per line the two middle tracks would have to cross in front of
+ * every station that the lines share (and again behind it); grouped by direction they simply merge into the station's
+ * two tracks. Trams and heavy rail are not mixed.
+ */
+export function groupTracks(lines: LineNet[]) {
+  if (lines.length < 2) return
+  const reach = 3.6 * LANE_GAP
+  const cellSize = 4
+  const grid = new Map<string, { li: number; j: number }[]>()
+  lines.forEach((ln, li) => {
+    for (let j = 0; j < ln.n; j++) {
+      const k = `${Math.floor(ln.cx[j] / cellSize)},${Math.floor(ln.cz[j] / cellSize)}`
+      const list = grid.get(k)
+      if (list) list.push({ li, j })
+      else grid.set(k, [{ li, j }])
+    }
+  })
+  const pitch = 2 * TRACK_OFF
+  const dF = lines.map((ln) => new Array<number>(ln.n).fill(0))
+  const dB = lines.map((ln) => new Array<number>(ln.n).fill(0))
+  lines.forEach((la, a) => {
+    const tram = la.line.operator === 'tram'
+    for (let j = 0; j < la.n; j++) {
+      if (la.free[j] < 0.02) continue
+      const nx = -la.tz[j]
+      const nz = la.tx[j]
+      // the nearest sample of every other line that runs alongside
+      const near = new Map<number, { u: number; s: number; d: number }>()
+      const gx = Math.floor(la.cx[j] / cellSize)
+      const gz = Math.floor(la.cz[j] / cellSize)
+      for (let ox = -1; ox <= 1; ox++) {
+        for (let oz = -1; oz <= 1; oz++) {
+          for (const o of grid.get(`${gx + ox},${gz + oz}`) ?? []) {
+            if (o.li === a) continue
+            const lb = lines[o.li]
+            if ((lb.line.operator === 'tram') !== tram || lb.free[o.j] < 0.02) continue
+            const dx = lb.cx[o.j] - la.cx[j]
+            const dz = lb.cz[o.j] - la.cz[j]
+            const dist = Math.hypot(dx, dz)
+            if (dist > reach) continue
+            const dot = la.tx[j] * lb.tx[o.j] + la.tz[j] * lb.tz[o.j]
+            if (Math.abs(dot) < 0.96) continue
+            const prev = near.get(o.li)
+            if (!prev || dist < prev.d) near.set(o.li, { u: dx * nx + dz * nz, s: dot > 0 ? 1 : -1, d: dist })
+          }
+        }
+      }
+      if (!near.size) continue
+      // every track of the bundle with the side it uses now (lateral position across the bundle) and its direction
+      const members = [{ u: 0, s: 1, self: true }, ...[...near.values()].map((v) => ({ u: v.u, s: v.s, self: false }))]
+      const tracks: { pos: number; dir: number; self: boolean; f: boolean }[] = []
+      for (const m of members) {
+        tracks.push({ pos: m.u + m.s * TRACK_OFF, dir: m.s, self: m.self, f: true })
+        tracks.push({ pos: m.u - m.s * TRACK_OFF, dir: -m.s, self: m.self, f: false })
+      }
+      // against the direction of travel on the left (-normal), along it on the right: the same order as a line's own pair
+      const ordered = [...tracks.filter((t) => t.dir < 0).sort((p, q) => p.pos - q.pos), ...tracks.filter((t) => t.dir > 0).sort((p, q) => p.pos - q.pos)]
+      const centre = members.reduce((s, m) => s + m.u, 0) / members.length
+      ordered.forEach((t, i) => {
+        if (!t.self) return
+        const target = centre + (i - (ordered.length - 1) / 2) * pitch
+        if (t.f) dF[a][j] = target - TRACK_OFF
+        else dB[a][j] = target + TRACK_OFF
+      })
+    }
+  })
+  lines.forEach((ln, li) => {
+    if (!dF[li].some((v) => v !== 0) && !dB[li].some((v) => v !== 0)) return
+    // a bundle appears and ends gradually: smooth the shifts along the line
+    const W = 10
+    const smooth = (src: number[]) =>
+      src.map((_, j) => {
+        let sum = 0
+        let ws = 0
+        for (let d = -W; d <= W; d++) {
+          const k = j + d
+          if (k < 0 || k >= ln.n) continue
+          const wt = W + 1 - Math.abs(d)
+          sum += src[k] * wt
+          ws += wt
+        }
+        return sum / ws
+      })
+    const sf = smooth(dF[li])
+    const sb = smooth(dB[li])
+    for (let j = 0; j < ln.n; j++) {
+      const nx = -ln.tz[j]
+      const nz = ln.tx[j]
+      ln.fx[j] += nx * sf[j] * ln.free[j]
+      ln.fz[j] += nz * sf[j] * ln.free[j]
+      ln.bx[j] += nx * sb[j] * ln.free[j]
+      ln.bz[j] += nz * sb[j] * ln.free[j]
+    }
+    const ft = tangents(ln.fx, ln.fz)
+    const bt = tangents(ln.bx, ln.bz)
+    ln.ftx = ft.tx
+    ln.ftz = ft.tz
+    ln.btx = bt.tx
+    ln.btz = bt.tz
+  })
 }
 
 /**
@@ -1200,6 +1306,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       cy,
       cs,
       cum,
+      free: w.map((v) => 1 - v),
       total: cum[m - 1],
       stops,
       bridges: bridges.filter((b) => b.d1 - b.d0 >= 1.2),
@@ -1208,6 +1315,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     })
   }
 
+  groupTracks(lines)
   separateCrossings(lines)
 
   const stations: Record<string, StationNet> = {}

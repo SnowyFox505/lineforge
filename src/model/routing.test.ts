@@ -45,6 +45,19 @@ describe('routing', () => {
     expect(all(d, 'L').every((p) => p.y === 10)).toBe(true)
   })
 
+  it('lets a second line share the corridor of the first instead of detouring around it', () => {
+    let d = city()
+    d = addStation(d, 'a', 40, 80)
+    d = addStation(d, 'b', 40, 40)
+    d = addStation(d, 'c', 56, 32)
+    d = addStation(d, 'e', 20, 36)
+    d = withLineOf(d, 'G', ['a', 'b', 'c'])
+    d = withLineOf(d, 'T', ['a', 'b', 'e'])
+    // both lines run straight from a to b: the same two points, no bulge to the side
+    expect(d.lines.T.segs![0]).toEqual([{ x: 40, y: 80 }, { x: 40, y: 40 }])
+    expect(d.lines.G.segs![0]).toEqual(d.lines.T.segs![0])
+  })
+
   it('does not force a corner at every station (never turns sharper than 45° there)', () => {
     let d = city()
     d = addStation(d, 'a', 10, 10)
