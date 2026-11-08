@@ -1,5 +1,6 @@
 import type { CityDoc, ZoneKind } from '../model/types'
 import { buildTerrainPaths } from './terrainRender'
+import { urbanAlpha } from './zoneSoft'
 import type { TerrainPaths, ViewTransform } from './terrainRender'
 
 export interface ZoneGfx {
@@ -7,6 +8,8 @@ export interface ZoneGfx {
   /** edges between two different zones (e.g. between districts), in cell coordinates */
   borders: Path2D
   labels: { name: string; kind: ZoneKind; x: number; y: number; cells: number }[]
+  /** alpha of the towns (1 px per cell, soft towards the grass): painted over the town layers to fade their edges */
+  soft: HTMLCanvasElement | null
   /** bounding boxes of airport areas (cell coordinates), for the runways */
   airports: { x0: number; y0: number; x1: number; y1: number; cells: number }[]
 }
@@ -73,7 +76,20 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
     const s = sums.get(z.id)!
     return { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cells: s.n }
   })
-  return layers.length ? { layers, borders, labels, airports } : null
+  // soft edge: a 1 px per cell alpha image, scaled up smoothly when drawn
+  let soft: HTMLCanvasElement | null = null
+  if (masks.city || masks.suburb) {
+    const a = urbanAlpha(doc)
+    soft = document.createElement('canvas')
+    soft.width = soft.height = size
+    const sc = soft.getContext('2d')!
+    const img = sc.createImageData(size, size)
+    for (let i = 0; i < a.length; i++) {
+      img.data[i * 4 + 3] = Math.round(a[i] * 255)
+    }
+    sc.putImageData(img, 0, 0)
+  }
+  return layers.length ? { layers, borders, labels, airports, soft } : null
 }
 
 /** Names of districts, suburbs and airports (screen space, drawn when zoomed in far enough). */

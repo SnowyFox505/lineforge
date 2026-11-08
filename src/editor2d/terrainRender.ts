@@ -161,6 +161,17 @@ export interface ViewTransform {
 }
 
 
+let scratch: HTMLCanvasElement | null = null
+/** A reusable offscreen canvas of the given size (cleared by the caller). */
+function scratchFor(w: number, h: number): HTMLCanvasElement {
+  scratch ??= document.createElement('canvas')
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w
+    scratch.height = h
+  }
+  return scratch
+}
+
 /** Streets of a town in white on its grey area; finer streets appear as you zoom in. */
 function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number) {
   const p = streetPaths(kind, size)
@@ -298,20 +309,46 @@ export function drawTerrain(
   if (zones) {
     ctx.lineJoin = 'round'
     ctx.lineCap = 'butt'
+    const cell = ctx.getTransform()
     for (const layer of zones.layers) {
       const st = ZONE_STYLE[layer.kind]
-      ctx.globalAlpha = st.alpha
-      ctx.fillStyle = st.fill
-      ctx.fill(layer.paths.water)
-      ctx.globalAlpha = 1
-      ctx.save()
-      ctx.clip(layer.paths.water)
-      if (layer.kind === 'airport') drawAirport(ctx, zones, s)
-      else drawStreets(ctx, layer.kind, size, s)
-      ctx.restore()
-      ctx.strokeStyle = layer.kind === 'airport' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.55)'
-      ctx.lineWidth = Math.max(0.1, 1.3 / s)
-      ctx.stroke(layer.paths.coast)
+      const soft = layer.kind !== 'airport' && zones.soft
+      // towns are painted on a scratch canvas first, so their whole look (colour, streets) can fade out at the edge
+      const target = soft ? scratchFor(ctx.canvas.width, ctx.canvas.height) : null
+      const c = target ? target.getContext('2d')! : ctx
+      if (target) {
+        c.setTransform(1, 0, 0, 1, 0, 0)
+        c.clearRect(0, 0, target.width, target.height)
+        c.setTransform(cell)
+        c.lineJoin = 'round'
+        c.lineCap = 'butt'
+      }
+      c.globalAlpha = st.alpha
+      c.fillStyle = st.fill
+      c.fill(layer.paths.water)
+      c.globalAlpha = 1
+      c.save()
+      c.clip(layer.paths.water)
+      if (layer.kind === 'airport') drawAirport(c, zones, s)
+      else drawStreets(c, layer.kind, size, s)
+      c.restore()
+      if (target && soft) {
+        c.save()
+        c.setTransform(cell)
+        c.globalCompositeOperation = 'destination-in'
+        c.imageSmoothingEnabled = true
+        c.imageSmoothingQuality = 'high'
+        c.drawImage(soft, 0, 0, size, size)
+        c.restore()
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.drawImage(target, 0, 0)
+        ctx.restore()
+      } else {
+        ctx.strokeStyle = layer.kind === 'airport' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.55)'
+        ctx.lineWidth = Math.max(0.1, 1.3 / s)
+        ctx.stroke(layer.paths.coast)
+      }
     }
     ctx.strokeStyle = 'rgba(60,70,84,0.45)'
     ctx.lineWidth = Math.max(0.08, 1.1 / s)

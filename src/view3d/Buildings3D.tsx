@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { lotsOf } from '../editor2d/streets'
+import { urbanAlpha } from '../editor2d/zoneSoft'
 import type { UrbanKind } from '../editor2d/streets'
 import type { CityDoc } from '../model/types'
 import { WATER } from '../model/types'
@@ -67,6 +68,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
   const kindOf = new Map(zones.map((z) => [z.id, z.kind]))
   const half = size / 2
   const blocked = blockedCells(doc, net)
+  const soft = urbanAlpha(doc)
   const cellKind = (x: number, y: number): UrbanKind | null => {
     const cx = Math.floor(x)
     const cy = Math.floor(y)
@@ -112,6 +114,9 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
         }
       }
       if (!ok) continue
+      // towards the edge of a town the houses thin out and get lower, like the ground fades into grass
+      const edge = soft[Math.floor(lot.y) * size + Math.floor(lot.x)]
+      if (edge < 0.12 || (edge < 0.75 && lot.rand > edge * 1.35)) continue
       const dens = kind === 'city' ? density(lot.x, lot.y) : 0.3
       let h: number
       if (kind === 'city') {
@@ -121,6 +126,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
       } else {
         h = 0.34 + lot.rand * 0.2
       }
+      h *= 0.55 + 0.45 * edge
       out.push({
         x: lot.x - half,
         z: lot.y - half,
