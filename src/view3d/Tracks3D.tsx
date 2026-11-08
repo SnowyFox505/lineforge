@@ -217,7 +217,8 @@ export function addArches(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: 
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
     const q = pts[k + 1]
-    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25 * RAIL, 0.12, RAIL_Y - 0.12, 0.06))
+    // the top of the deck lies a little below the top of the ballast: two faces in the same plane would flicker
+    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25 * RAIL, 0.12, RAIL_Y - 0.14, 0.06))
     for (const sgn of [-1, 1]) {
       const a = sideOf(p, 0.6 * RAIL * sgn)
       const c = sideOf(q, 0.6 * RAIL * sgn)
@@ -247,7 +248,7 @@ export function addArches(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: 
         const yaw = Math.atan2(-(q.z - p.z), q.x - p.x)
         const key = `${col}|${aspect.toFixed(1)}`
         const list = b.arcGroups.get(key) ?? []
-        list.push(matrixAt(x, top - aspect * w, z, yaw, w * 1.01, w, 1.1))
+        list.push(matrixAt(x, top - aspect * w, z, yaw, w * 1.01, w, 1.1 * RAIL * 1.25))
         b.arcGroups.set(key, list)
       }
       acc += w
