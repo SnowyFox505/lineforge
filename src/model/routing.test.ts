@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCity } from './factory'
-import { addWaypoint, appendStation, dirIndex, latticePoints, moveWaypoint, removeStationEverywhere, removeWaypoint, withRoutes } from './routing'
+import { addWaypoint, appendStation, dirIndex, latticePoints, moveWaypoint, removeStationEverywhere, removeWaypoint, withRoutes, healHooks } from './routing'
 import { WATER } from './types'
 import type { CityDoc, Pt } from './types'
 
@@ -69,6 +69,27 @@ describe('routing', () => {
     const joined: Pt[] = []
     for (const s of d.lines.L.segs!) for (const p of s) if (!joined.length || joined[joined.length - 1].x !== p.x || joined[joined.length - 1].y !== p.y) joined.push(p)
     expect(maxTurn(joined)).toBeLessThanOrEqual(1)
+  })
+
+  it('heals a saved route that doubles back with a one-cell hook, and leaves ordinary corners alone', () => {
+    let d = city()
+    d = addStation(d, 'a', 98, 24)
+    d = addStation(d, 'b', 92, 77)
+    d = addStation(d, 'c', 63, 24)
+    d = withLineOf(d, 'L', ['a', 'b', 'c'])
+    const hooked: Pt[][] = [
+      [{ x: 98, y: 24 }, { x: 98, y: 32 }, { x: 92, y: 38 }, { x: 92, y: 77 }],
+      [{ x: 92, y: 77 }, { x: 91, y: 77 }, { x: 71, y: 57 }, { x: 71, y: 33 }, { x: 63, y: 25 }, { x: 63, y: 24 }],
+    ]
+    const old: CityDoc = { ...d, lines: { ...d.lines, L: { ...d.lines.L, segs: hooked } } }
+    const fixed = healHooks(old)
+    const first = fixed.lines.L.segs![1]
+    expect(first[0]).toEqual({ x: 92, y: 77 })
+    // no one-cell stub right after the station any more
+    expect(Math.max(Math.abs(first[1].x - first[0].x), Math.abs(first[1].y - first[0].y))).toBeGreaterThan(1)
+    // nothing to heal: the very same document comes back (and healing twice changes nothing more)
+    expect(healHooks(d)).toBe(d)
+    expect(healHooks(fixed).lines.L.segs).toEqual(fixed.lines.L.segs)
   })
 
   it('produces only octilinear segments', () => {

@@ -4,7 +4,7 @@ import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
 import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
-import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, resetRoute, withRoutes } from '../model/routing'
+import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
 import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
 
 // Terrain is a typed array; keep immer from trying to freeze document internals.
@@ -165,7 +165,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: healHooks(withRoutes(doc)), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -185,7 +185,7 @@ export const useEditor = create<EditorState>((set, get) => {
       }),
 
     loadDoc: (doc) =>
-      set({ doc: withRoutes(doc), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
+      set({ doc: healHooks(withRoutes(doc)), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
     resizeMap: (newSize) => {
       const old = get().doc.size
       if (newSize <= old) return

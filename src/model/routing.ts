@@ -406,6 +406,63 @@ export function withRoutes(doc: CityDoc): CityDoc {
   return d
 }
 
+// ---- healing old routes -------------------------------------------------------
+
+const cheb = (a: Pt, b: Pt) => Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y))
+const turnSteps = (a: number, b: number) => {
+  const d = Math.abs(a - b)
+  return Math.min(d, 8 - d)
+}
+
+/** Direction of the first non-empty piece of a route (null when there is none). */
+function entryDir(pts: Pt[] | undefined): number | null {
+  if (!pts) return null
+  for (let i = 0; i + 1 < pts.length; i++) if (cheb(pts[i], pts[i + 1]) > 0) return dirIndex(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y)
+  return null
+}
+
+/**
+ * A hook: a piece of at most one cell between two bends that together turn the line by 135° or more (the way a route
+ * from before the bend-penalty doubled back at a station). A train cannot follow it, the 3D tracks wind up into a tight loop.
+ */
+function hasHook(before: number | null, seg: Pt[], after: number | null): boolean {
+  for (let i = 0; i + 1 < seg.length; i++) {
+    if (cheb(seg[i], seg[i + 1]) > 1) continue
+    const d = dirIndex(seg[i + 1].x - seg[i].x, seg[i + 1].y - seg[i].y)
+    const b = i > 0 ? dirIndex(seg[i].x - seg[i - 1].x, seg[i].y - seg[i - 1].y) : before
+    const a = i + 2 < seg.length ? dirIndex(seg[i + 2].x - seg[i + 1].x, seg[i + 2].y - seg[i + 1].y) : after
+    if (b !== null && a !== null && turnSteps(b, a) >= 3 && turnSteps(b, d) >= 1 && turnSteps(a, d) >= 1) return true
+  }
+  return false
+}
+
+/**
+ * Routes saved with an older version may contain such hooks. Route those legs again (legs with waypoints of the user
+ * stay as they are). Returns the same document when nothing needs healing.
+ */
+export function healHooks(doc: CityDoc): CityDoc {
+  let d = doc
+  for (const id of Object.keys(doc.lines)) {
+    const n = doc.lines[id].segs?.length ?? 0
+    for (let k = 0; k < n; k++) {
+      const cur = d.lines[id]
+      const seg = cur.segs?.[k]
+      if (!seg || seg.length < 2 || (cur.via?.[k] ?? []).length) continue
+      const prev = cur.segs?.[k - 1]
+      const before = prev && prev.length >= 2 ? exitDir(prev) : null
+      if (!hasHook(before, seg, entryDir(cur.segs?.[k + 1]))) continue
+      for (const i of [k - 1, k, k + 1]) {
+        const line = d.lines[id]
+        if (i < 0 || i >= line.stations.length - 1 || (line.via?.[i] ?? []).length) continue
+        const segs = [...(line.segs ?? [])]
+        segs[i] = routeSegment(d, line, i)
+        d = withLine(d, { ...line, segs })
+      }
+    }
+  }
+  return d
+}
+
 export function appendStation(doc: CityDoc, lineId: string, stationId: string): CityDoc {
   const base = doc.lines[lineId]
   if (!base || !doc.stations[stationId]) return doc
