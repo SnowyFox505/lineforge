@@ -21,6 +21,8 @@ export const BUFFER_CLEAR = 1.2
 /** Length over which a track swings from the line axis onto its station track */
 export const TAPER = 5
 export const DEFAULT_CURVE = 3
+/** Length of straight track added beyond both ends of a line (room for the buffer stops) */
+const RUN_OUT = 14
 /** Trams run flush with the street: slightly lower than railway track beds */
 export const TRAM_DIP = 0.08
 export const STEP = 0.4
@@ -31,7 +33,7 @@ export const RAMP_PER_LEVEL = 10
 /** Length of the run-up to a level `lift` above/below the ground: long, so lines are already on their way long before the station */
 export const rampFor = (lift: number) => 12 * Math.abs(lift) + 5
 /** Free space between the main station and the tram stop next to it */
-export const TRAM_GAP = 1.8
+export const TRAM_GAP = 2.5
 /** Lines whose directions differ by less than this share a platform group */
 const COS_GROUP = Math.cos((40 * Math.PI) / 180)
 
@@ -118,6 +120,8 @@ export interface StationGroup {
    * 0 for a straight station; a station on a bend follows the curve of its tracks.
    */
   curv: number
+  /** which side (±1 of the lateral axis) the reception building / station annex stands on: opposite to a tram stop beside it */
+  annex: 1 | -1
   /** rotation about Y so that local +x runs along the tracks */
   angle: number
   /** world position of the platform complex (the station centre, or beside it for the tram stop) */
@@ -408,6 +412,12 @@ function overlapOf(a: Box2, b: Box2): { x: number; z: number; depth: number } | 
   return best
 }
 
+/** How far the ends of a curved platform (with its roof or hall) swing out sideways from the tangent at its middle */
+function swing(g: Pick<StationGroup, 'curv' | 'layout'>): number {
+  const h = (g.layout.length + 1.6) / 2
+  return (Math.abs(g.curv) * h * h) / 2
+}
+
 /** Shortest platform a crowded station is cut down to */
 const MIN_PLATFORM = 2.6
 /** Extra length of roofs and halls beyond the platforms, and extra width beside them */
@@ -419,7 +429,7 @@ const FOOT_W = 0.5
  * shortened until they clear each other; if they are too close even then, they are pushed apart a little.
  */
 export function separateStations(all: { id: string; g: StationGroup }[]): void {
-  const box = (g: StationGroup, len: number): Box2 => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: len / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W })
+  const box = (g: StationGroup, len: number): Box2 => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: len / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W + swing({ curv: g.curv, layout: { ...g.layout, length: len } }) })
   const pushed = new Map<StationGroup, number>()
   for (let pass = 0; pass < 5; pass++) {
     let changed = false
@@ -472,7 +482,7 @@ const CURVE_MAX_K = 1 / 8
  * of the platform; the axis of the group turns to the direction the tracks have at the middle of the station.
  */
 function curveGroup(g: StationGroup, list: Entry[], coarse: Map<string, Coarse>): void {
-  if (g.kind !== 'main' || g.design.angle !== null || !list.length) return
+  if (g.design.angle !== null || !list.length) return
   const H = Math.max(3, Math.round(g.layout.length / 2 / STEP))
   const win: { c: Coarse; a: number; b: number }[] = []
   for (const e of list) {
@@ -627,7 +637,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const lat = lanes[line.id]
     if (!lat || lat.length < 2) continue
     const world: P[] = lat.map((p) => ({ x: p.x + 0.5 - half, z: p.y + 0.5 - half }))
-    const rounded = roundPolyline(extendEnds(cleanPolyline(world), 14), line.curve ?? DEFAULT_CURVE)
+    const rounded = roundPolyline(extendEnds(cleanPolyline(world), RUN_OUT), line.curve ?? DEFAULT_CURVE)
     const r = resample(rounded, STEP)
     const t = tangents(r.pts.map((p) => p.x), r.pts.map((p) => p.z))
     coarse.set(line.id, { pts: r.pts, cum: r.cum, tx: t.tx, tz: t.tz })
@@ -726,6 +736,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         ax,
         az,
         curv: 0,
+        annex: -1,
         angle: Math.atan2(-az, ax),
         ox: sx,
         oz: sz,
@@ -749,6 +760,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           ax: e.tx,
           az: e.tz,
           curv: 0,
+          annex: -1,
           angle: Math.atan2(-e.tz, e.tx),
           ox: sx,
           oz: sz,
@@ -775,14 +787,6 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         g.design = resolveDesign(st, ops, g.level)
         g.layout = layoutStation(g.design, minLen(ops))
       }
-    }
-    // the tram stop sits beside the main station, not inside its track field
-    const main0 = groups.find((g) => g.kind === 'main')
-    for (const g of groups) {
-      if (g.kind !== 'tram' || !main0) continue
-      const off = main0.layout.halfWidth + TRAM_GAP + g.layout.halfWidth
-      g.ox = sx - g.az * off
-      g.oz = sz + g.ax * off
     }
     // station tracks every line uses, and the unused ones that become sidings
     for (const g of groups) {
@@ -817,11 +821,40 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     membersOf.set(st.id, members)
   }
 
-  // neighbouring stations must not grow into each other, and a station on a bend follows the bend
-  separateStations([...groupsOf].flatMap(([id, gs]) => gs.map((g) => ({ id, g }))))
+  // a station on a bend follows the bend; the tram stop sits beside the main station (clear of its bent hall);
+  // neighbouring stations must not grow into each other
   for (const [id, gs] of groupsOf) {
     for (const g of gs) curveGroup(g, membersOf.get(id)?.get(g.index) ?? [], coarse)
+    const main0 = gs.find((g) => g.kind === 'main')
+    const st = doc.stations[id]
+    if (!main0 || !st) continue
+    for (const g of gs) {
+      if (g.kind !== 'tram') continue
+      // the tram stop goes on the side the tram comes from, so its line never has to cross the main platforms or hall
+      const sx0 = st.x + 0.5 - half
+      const sz0 = st.y + 0.5 - half
+      let lat = 0
+      for (const e of membersOf.get(id)?.get(g.index) ?? []) {
+        const c = coarse.get(e.line.id)
+        if (!c) continue
+        const total = c.cum[c.pts.length - 1]
+        for (const i of [Math.max(0, e.i - 24), Math.min(c.pts.length - 1, e.i + 24)]) {
+          // the run-out added beyond the end of a line is no real track
+          if (c.cum[i] < RUN_OUT + 1 || c.cum[i] > total - RUN_OUT - 1) continue
+          const v = -(c.pts[i].x - sx0) * main0.az + (c.pts[i].z - sz0) * main0.ax
+          if (Math.abs(v) > Math.abs(lat)) lat = v
+        }
+      }
+      const side: 1 | -1 = lat < -0.6 ? -1 : 1
+      const swingMain = (side > 0 ? Math.max(0, main0.curv) : Math.max(0, -main0.curv)) * swing(main0)
+      const swingTram = (side > 0 ? Math.max(0, -g.curv) : Math.max(0, g.curv)) * swing(g)
+      const off = main0.layout.halfWidth + TRAM_GAP + g.layout.halfWidth + swingMain + swingTram
+      g.ox = sx0 - main0.az * off * side
+      g.oz = sz0 + main0.ax * off * side
+      main0.annex = side > 0 ? -1 : 1
+    }
   }
+  separateStations([...groupsOf].flatMap(([id, gs]) => gs.map((g) => ({ id, g }))))
 
   // ---- pass C: tracks of every line ---------------------------------------------------------
   const lines: LineNet[] = []
@@ -886,6 +919,9 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         zF,
         zB,
         half: L / 2,
+        // beside a bigger neighbour group (a tram stop next to a hall) the tracks stay on their platform lane for the
+        // neighbour's length too, so they never cut through its hall
+        pin: Math.max(L / 2, ...(groupsOf.get(r.id) ?? []).filter((o) => o !== g && Math.abs(o.lift - g.lift) < 1).map((o) => o.layout.length / 2 + (o.kind === 'main' ? 0.8 : 0))),
         taper: TAPER + (ang / (Math.PI / 2)) * 5 + off * 1.1,
         ramp: rampFor(g.lift),
       }
@@ -904,7 +940,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       let sum = 0
       info.forEach((s, k) => {
         const dd = Math.abs(cum0[j] - cum0[s.i])
-        const ws = smooth01(1 - Math.min(1, Math.max(0, (dd - s.half) / s.taper)))
+        const ws = smooth01(1 - Math.min(1, Math.max(0, (dd - s.pin) / s.taper)))
         wsj.push(ws)
         sum += ws
         if (ws > best) {
@@ -917,9 +953,17 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           if (Math.abs(v) > Math.abs(cy[j])) cy[j] = v
         }
       })
-      const norm = Math.max(1, sum)
-      kap.push(wsj.map((v) => v / norm))
       w[j] = Math.min(1, sum)
+      // a stop that fully holds the axis (on its platform) is not pulled aside by a neighbour's far taper;
+      // where two stops share the pull, a stop's share shrinks as the other one tightens its grip
+      const active = wsj.filter((v) => v > 1e-9).length
+      if (active <= 1) {
+        kap.push(wsj.map((v) => v * (sum > 1 ? 1 / sum : 1)))
+      } else {
+        const u = wsj.map((v, k) => v * wsj.reduce((p, o, m) => (m === k ? p : p * (1 - o)), 1))
+        const su = u.reduce((a, b) => a + b, 0)
+        kap.push(su > 1e-9 ? u.map((v) => (v / su) * w[j]) : wsj.map((v) => (v / sum) * w[j]))
+      }
     }
     const cx: number[] = []
     const cz: number[] = []

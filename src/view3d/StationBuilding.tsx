@@ -148,13 +148,13 @@ function platformFurniture(layout: StationLayout, roof: ResolvedDesign['roof']) 
 }
 
 /** A small station building beside the platforms. */
-function Entrance({ layout, big }: { layout: StationLayout; big: boolean }) {
+function Entrance({ layout, big, annex }: { layout: StationLayout; big: boolean; annex: 1 | -1 }) {
   const len = Math.min(layout.length * (big ? 0.42 : 0.3), big ? 3.4 : 2.0)
   const dep = big ? 0.8 : 0.6
   const hgt = big ? 0.8 : 0.55
-  const z = -(layout.halfWidth + 0.9 + dep / 2)
+  const z = annex * (layout.halfWidth + 0.9 + dep / 2)
   return (
-    <group position={[-layout.length * 0.12, 0, z]}>
+    <group position={[-layout.length * 0.12, 0, z]} rotation={[0, annex > 0 ? Math.PI : 0, 0]}>
       <mesh position={[0, LAND_Y + hgt / 2, 0]}>
         <boxGeometry args={[len, hgt, dep]} />
         <meshStandardMaterial color="#d7dce3" roughness={0.85} />
@@ -356,7 +356,10 @@ export default function StationBuilding({
   entrance = null,
   shell = null,
   curve = 0,
+  annex = -1,
 }: {
+  /** side of the lateral axis for the reception building (see `StationGroup.annex`) */
+  annex?: 1 | -1
   /** curvature of the platform axis (see `StationGroup.curv`); 0 = straight */
   curve?: number
   design: ResolvedDesign
@@ -389,7 +392,7 @@ export default function StationBuilding({
 
   const uEntrance = ubahn || lift <= UG_COVER ? (
 
-        <group position={[L * 0.18, LAND_Y * 0.55, layout.halfWidth + 1.0]} scale={0.45}>
+        <group position={[L * 0.18, LAND_Y * 0.55, annex * (layout.halfWidth + 1.0)]} scale={0.45}>
           {/* stair entrance */}
           <mesh position={[0, LAND_Y + 0.28, 0]}>
             <boxGeometry args={[1.5, 0.56, 1.0]} />
@@ -428,9 +431,9 @@ export default function StationBuilding({
       <Boxes items={furn.wood} color="#7a5a3c" roughness={0.9} />
       <Boxes items={furn.backs} color="#6a4d33" roughness={0.9} />
       <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
-      {entrance && <Entrance layout={layout} big={entrance === 'big'} />}
+      {entrance && <Entrance layout={layout} big={entrance === 'big'} annex={annex} />}
 
-      {shell && lift > UG_COVER && <StationShell look={shell} layout={layout} />}
+      {shell && lift > UG_COVER && <StationShell look={shell} layout={layout} annex={annex} />}
       {roof === 'canopy' && <Canopies layout={layout} />}
       {roof === 'glass' && <Vault halfW={halfW} length={L + 1.2} kind="glass" />}
       {roof === 'hall' && <Vault halfW={halfW} length={L + 1.2} kind="hall" />}

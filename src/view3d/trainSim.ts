@@ -179,16 +179,20 @@ export interface CarPose {
   pitch: number
 }
 
-/** World pose of every car of a train, head first. */
+/** Where the bogies of a car stand, as a share of the car length either side of its middle */
+const BOGIE = 0.36
+
+/**
+ * World pose of every car of a train, head first. A car is a rigid body resting on two bogies that follow the
+ * track: its heading is the line between them, so cars stay joined in tight curves instead of fanning out.
+ */
 export function carPoses(tr: SimTrain): CarPose[] {
   const offs = carOffsets(tr.spec)
   const own = tr.dir > 0 ? 'f' : 'b'
-  return offs.map((o) => {
-    const d = tr.s + tr.dir * o
+  const at = (d: number) => {
     const p = posOn(tr.net, own, d)
     let x = p.x
     let z = p.z
-    const y = p.y
     if (tr.rev) {
       // still on the arrival track near the terminal platform, merging onto the return track further out
       const q = posOn(tr.net, tr.rev.oldDir > 0 ? 'f' : 'b', d)
@@ -196,7 +200,23 @@ export function carPoses(tr: SimTrain): CarPose[] {
       x = q.x + (p.x - q.x) * b
       z = q.z + (p.z - q.z) * b
     }
-    const sgn = tr.dir
-    return { x, y, z, tx: p.tx * sgn, tz: p.tz * sgn, pitch: Math.atan(p.slope * sgn) }
+    return { x, y: p.y, z, tx: p.tx, tz: p.tz, slope: p.slope }
+  }
+  const sgn = tr.dir
+  return offs.map((o, i) => {
+    const d = tr.s + sgn * o
+    const half = tr.spec.lens[i] * BOGIE
+    const f = at(d + sgn * half)
+    const r = at(d - sgn * half)
+    // front minus rear is already the direction of travel
+    const dx = f.x - r.x
+    const dz = f.z - r.z
+    const len = Math.hypot(dx, dz)
+    const mid = at(d)
+    // a degenerate chord (stopped at a buffer, say) falls back to the local tangent
+    const tx = len > 1e-4 ? dx / len : mid.tx * sgn
+    const tz = len > 1e-4 ? dz / len : mid.tz * sgn
+    const rise = f.y - r.y
+    return { x: (f.x + r.x) / 2, y: (f.y + r.y) / 2, z: (f.z + r.z) / 2, tx, tz, pitch: len > 1e-4 ? Math.atan2(rise, len) : Math.atan(mid.slope * sgn) }
   })
 }

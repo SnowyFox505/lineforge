@@ -36,6 +36,29 @@ function segDist(p: { x: number; z: number }, ax: number, az: number, bx: number
 }
 
 describe('train operation', () => {
+  it('keeps the cars of a train joined in the curves', () => {
+    const net = buildNetwork3D(scenario())
+    const sim = new Sim(net)
+    let worst = 0
+    for (let t = 0; t < 300; t += 0.25) {
+      sim.update(0.25)
+      for (const tr of sim.trains) {
+        const poses = carPoses(tr)
+        for (let i = 0; i + 1 < poses.length; i++) {
+          const a = poses[i]
+          const b = poses[i + 1]
+          const la = tr.spec.lens[i] / 2
+          const lb = tr.spec.lens[i + 1] / 2
+          // the rear end of one car and the front end of the next one meet at the coupling
+          const gap = Math.hypot(a.x - a.tx * la - (b.x + b.tx * lb), a.z - a.tz * la - (b.z + b.tz * lb))
+          worst = Math.max(worst, gap)
+        }
+      }
+    }
+    expect(worst).toBeLessThan(0.3)
+  })
+
+
   it('keeps every car on the rails, in front of the buffer stops, for ten minutes of traffic', () => {
     const net = buildNetwork3D(scenario())
     const sim = new Sim(net)
@@ -52,7 +75,8 @@ describe('train operation', () => {
             best = Math.min(best, segDist(p, tr.net.fx[i], tr.net.fz[i], tr.net.fx[i + 1], tr.net.fz[i + 1]), segDist(p, tr.net.bx[i], tr.net.bz[i], tr.net.bx[i + 1], tr.net.bz[i + 1]))
           }
           // merging after a terminal may move up to one platform width away from both rails
-          expect(best).toBeLessThan(tr.rev ? 1.6 : 0.08)
+          // a car rests on two bogies on the rails: in a curve its middle sits a little inside
+          expect(best).toBeLessThan(tr.rev ? 1.6 : 0.2)
         }
         // the centre of the train never gets closer to a buffer than half its length + clearance
         const half = (tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) / 2

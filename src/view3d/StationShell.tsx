@@ -137,11 +137,11 @@ function Hall({ L, side, len, dep, h, roof = true }: { L: number; side: number; 
 }
 
 /** The roofed station as seen from outside. Local frame: x along the tracks, z across (origin = platform centre). */
-export default function StationShell({ look, layout }: { look: StationLook; layout: StationLayout }) {
+export default function StationShell({ look, layout, annex = -1 }: { look: StationLook; layout: StationLayout; annex?: 1 | -1 }) {
   const L = layout.length + 1.6
   const W = layout.halfWidth * 2 + 0.7
   const wallH = 0.78
-  const side = -(layout.halfWidth + 1.1)
+  const side = annex * (layout.halfWidth + 1.1)
   const tooth = useMemo(() => prismGeo(1.5, 0.45, W + 0.6, 0.15), [W])
 
   switch (look) {
