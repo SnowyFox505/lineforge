@@ -1,5 +1,4 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useState } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import type { OperatorId, PoiKind, StationType, ZoneKind } from '../model/types'
 import { useEditor } from '../store/editorStore'
@@ -143,35 +142,6 @@ function StationCard() {
   )
 }
 
-/** Curve radius of a line in the 3D view; committed on release so the undo history stays clean. */
-function CurveSlider({ lineId, value }: { lineId: string; value: number }) {
-  const update = useEditor((s) => s.updateLine)
-  const [v, setV] = useState(value)
-  useEffect(() => setV(value), [value])
-  const commit = () => v !== value && update(lineId, { curve: v })
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between">
-        <span className="eyebrow">Kurven in 3D</span>
-        <span className="text-sm font-bold tabular-nums">{v <= 1 ? 'eng' : v >= 7 ? 'weit' : v.toFixed(1)}</span>
-      </div>
-      <input
-        type="range"
-        className="slider"
-        min={1}
-        max={8}
-        step={0.5}
-        value={v}
-        style={{ ['--p' as string]: `${((v - 1) / 7) * 100}%` }}
-        onChange={(e) => setV(Number(e.target.value))}
-        onPointerUp={commit}
-        onKeyUp={commit}
-      />
-      <p className="text-xs text-white/40">Die 2D-Pläne behalten ihre Knicke, nur die Schienen in 3D werden gerundet.</p>
-    </div>
-  )
-}
-
 function LinePanel() {
   const doc = useEditor((s) => s.doc)
   const activeId = useEditor((s) => s.activeLineId)
@@ -255,7 +225,6 @@ function LinePanel() {
               </button>
             </div>
             <ColorPicker value={active.color} onChange={(color) => updateLine(active.id, { color })} />
-            <CurveSlider lineId={active.id} value={active.curve ?? 3} />
             <div className="flex items-center gap-2 border-t border-white/8 pt-3">
               <p className="min-w-0 flex-1 text-xs leading-snug text-white/50">
                 {lineMode === 'draw'

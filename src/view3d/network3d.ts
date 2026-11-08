@@ -771,7 +771,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   const field = buildField(doc.terrain, doc.size)
   const sample = makeSampler(field, doc.size)
   const groundAt = (x: number, z: number) => groundHeight(sample(x + half, z + half))
-  const lanes = layoutLines(doc, LANE_GAP, { smooth: 4 })
+  // the free curves of the map; a change of lane is spread over about five cells
+  const lanes = layoutLines(doc, LANE_GAP, { smooth: 10, source: 'geo' })
   const lineList = Object.values(doc.lines)
 
   // ---- pass A: smooth axis of every line, with generous run-out at both ends ---------------
@@ -780,7 +781,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const lat = lanes[line.id]
     if (!lat || lat.length < 2) continue
     const world: P[] = lat.map((p) => ({ x: p.x + 0.5 - half, z: p.y + 0.5 - half }))
-    const rounded = roundPolyline(extendEnds(cleanPolyline(world), RUN_OUT), line.curve ?? DEFAULT_CURVE)
+    // the curve is smooth already: no corners to round off
+    const rounded = roundPolyline(extendEnds(cleanPolyline(world), RUN_OUT), 0)
     const r = resample(rounded, STEP)
     const t = tangents(r.pts.map((p) => p.x), r.pts.map((p) => p.z))
     coarse.set(line.id, { pts: r.pts, cum: r.cum, tx: t.tx, tz: t.tz })

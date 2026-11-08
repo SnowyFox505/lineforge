@@ -1,4 +1,4 @@
-import { latticePoints } from './routing'
+import { legCurve } from './geo'
 import type { CityDoc, Line } from './types'
 
 export const MAX_LEVELS = 3
@@ -23,12 +23,14 @@ export interface Dir {
 export function lineDirectionAtStation(doc: CityDoc, line: Line, stationId: string, steps = 14): Dir | null {
   const k = line.stations.indexOf(stationId)
   if (k < 0) return null
-  const before = k > 0 ? latticePoints(line.segs?.[k - 1] ?? []) : []
-  const after = k < line.stations.length - 1 ? latticePoints(line.segs?.[k] ?? []) : []
+  // the curve of the map (samples half a cell apart)
+  const before = k > 0 ? legCurve(doc, line, k - 1) : []
+  const after = k < line.stations.length - 1 ? legCurve(doc, line, k) : []
+  const n = Math.round(steps * 2)
   const st = doc.stations[stationId]
   if (!st) return null
-  const a = before.length >= 2 ? before[Math.max(0, before.length - 1 - steps)] : { x: st.x, y: st.y }
-  const b = after.length >= 2 ? after[Math.min(after.length - 1, steps)] : { x: st.x, y: st.y }
+  const a = before.length >= 2 ? before[Math.max(0, before.length - 1 - n)] : { x: st.x, y: st.y }
+  const b = after.length >= 2 ? after[Math.min(after.length - 1, n)] : { x: st.x, y: st.y }
   const dx = b.x - a.x
   const dz = b.y - a.y
   const l = Math.hypot(dx, dz)

@@ -36,7 +36,7 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
   if (opts.source === 'geo') {
     const raw: Record<string, Pt[]> = {}
     for (const line of lines) raw[line.id] = line.stations.length >= 2 ? lineCurve(doc, line).pts : []
-    Object.assign(geoPts, mergeCorridors(raw))
+    Object.assign(geoPts, mergeCorridors(raw, 1.0))
   }
   // heavy rail and trams are bundled separately: a tram runs on the street beside the railway, not on its tracks
   const lanes = new Map<string, { h: string[]; t: string[] }>()
@@ -68,6 +68,7 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
     }
     edgeIdx.set(line.id, m)
   }
+  const look = opts.source === 'geo' ? 8 : 0
   const isCanon = (a: Pt, b: Pt) => a.x < b.x || (a.x === b.x && a.y < b.y)
   const pairMemo = new Map<string, number>()
   /** <0: `a` takes the lower lane (-normal side) of edge `k`, >0 the higher one */
@@ -103,8 +104,11 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
         }
         // they part here: to which side does each one leave? (v = the way we walk)
         const v = { x: (la[ja + 1].x - la[ja].x) * oa * sgn, y: (la[ja + 1].y - la[ja].y) * oa * sgn }
-        const wa = { x: la[pa].x - la[na].x, y: la[pa].y - la[na].y }
-        const wb = { x: lb[pb].x - lb[nb].x, y: lb[pb].y - lb[nb].y }
+        // on a curve the first piece after the parting can be a sideways jump: look a few cells ahead
+        const qa = Math.max(0, Math.min(la.length - 1, pa + (fa ? 1 : -1) * look))
+        const qb = Math.max(0, Math.min(lb.length - 1, pb + (fb ? 1 : -1) * look))
+        const wa = { x: la[qa].x - la[na].x, y: la[qa].y - la[na].y }
+        const wb = { x: lb[qb].x - lb[nb].x, y: lb[qb].y - lb[nb].y }
         const cr = (w: Pt) => (v.x * w.y - v.y * w.x) / (Math.hypot(w.x, w.y) || 1)
         // walking against the canonical direction mirrors left and right
         return { visited, cross: (cr(wa) - cr(wb)) * sgn, dist: visited.length }
@@ -177,6 +181,19 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
         }
         off[i] = sum / wsum
       }
+    }
+    if (opts.source === 'geo') {
+      // a smooth curve of many short pieces: every point moves along its own normal (no corners to mitre)
+      const res: Pt[] = []
+      for (let i = 0; i <= m; i++) {
+        const a = lp[Math.max(0, i - 1)]
+        const b = lp[Math.min(m, i + 1)]
+        const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
+        const o = i === 0 ? off[0] : i === m ? off[m - 1] : (off[i - 1] + off[i]) / 2
+        res.push({ x: lp[i].x - ((b.y - a.y) / l) * o, y: lp[i].y + ((b.x - a.x) / l) * o })
+      }
+      result[line.id] = res
+      continue
     }
     const nrm = (i: number): Pt => ({ x: -dir[i].y, y: dir[i].x })
     const out: Pt[] = []
