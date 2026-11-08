@@ -85,9 +85,9 @@ export default function UpdateOverlay() {
           {/* the station all lines run into, with a progress ring */}
           <circle className="pop-dot" cx={200} cy={200} r={26} fill="#0a0e14" stroke="#fff" strokeWidth={9} style={{ animationDelay: '1.1s' }} />
           <circle cx={200} cy={200} r={43} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={5} />
-          <circle className="update-ring" cx={200} cy={200} r={43} fill="none" stroke="#c4f03a" strokeWidth={5} strokeLinecap="round" pathLength={1} strokeDasharray="1 2" transform="rotate(-90 200 200)" />
+          <circle className="update-ring" cx={200} cy={200} r={43} fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={5} strokeLinecap="round" pathLength={1} strokeDasharray="1 2" transform="rotate(-90 200 200)" />
           {done && (
-            <motion.path d="M 187 201 l 9 9 l 18 -20" fill="none" stroke="#c4f03a" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4 }} />
+            <motion.path d="M 187 201 l 9 9 l 18 -20" fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4 }} />
           )}
         </svg>
         <div className="mt-2 text-center">

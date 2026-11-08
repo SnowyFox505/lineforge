@@ -135,7 +135,7 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
         <motion.h1 variants={item} className="mt-2 text-[68px] font-bold leading-[0.88] tracking-[-0.045em] md:text-[88px]">
           Line
           <br />
-          <span className="text-accent" style={{ textShadow: '0 0 40px rgba(196,240,58,0.35)' }}>
+          <span className="text-accent" style={{ textShadow: '0 0 40px rgba(var(--accent-rgb),0.35)' }}>
             Forge
           </span>
         </motion.h1>
@@ -232,7 +232,7 @@ function NewCity({ back }: { back: () => void }) {
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setMode(m.id)}
                   className={`card relative rounded-[24px] p-4 text-left transition-colors ${active ? '!border-accent/70' : ''}`}
-                  style={active ? { boxShadow: '0 0 0 1px rgba(196,240,58,0.4), 0 14px 40px -12px rgba(196,240,58,0.35)' } : undefined}
+                  style={active ? { boxShadow: '0 0 0 1px rgba(var(--accent-rgb),0.4), 0 14px 40px -12px rgba(var(--accent-rgb),0.35)' } : undefined}
                 >
                   <span className={`mb-3 grid h-10 w-10 place-items-center rounded-full ${active ? 'bg-accent text-accent-ink' : 'bg-white/8'}`}>
                     <Icon name={m.icon} size={20} />

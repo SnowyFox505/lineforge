@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { BRIDGE_STYLES, legBridge, legProfile, PROFILE_LABEL } from '../model/profiles'
 import type { BridgeStyle, TrackProfile } from '../model/types'
 import { useEditor } from '../store/editorStore'
+import { useTheme } from '../ui/theme'
 import { RAIL_Y } from './heights'
 import type { LineNet, Network3D } from './network3d'
 
@@ -35,6 +36,7 @@ type Strip = { ln: LineNet; lg: LineNet['legs'][number]; geo: THREE.BufferGeomet
 export function LegPicker({ net, see }: { net: Network3D; see: boolean }) {
   const select = useEditor((s) => s.selectLeg)
   const sel = useEditor((s) => s.selectedLeg)
+  const accent = useTheme((s) => s.accent)
   const strips = useMemo(
     () =>
       net.lines.flatMap((ln) =>
@@ -62,7 +64,7 @@ export function LegPicker({ net, see }: { net: Network3D; see: boolean }) {
               select({ lineId: ln.line.id, leg: lg.k })
             }}
           >
-            <meshBasicMaterial color="#c4f03a" transparent opacity={on ? 0.5 : 0} depthWrite={false} depthTest={!on} side={THREE.DoubleSide} />
+            <meshBasicMaterial color={accent} transparent opacity={on ? 0.5 : 0} depthWrite={false} depthTest={!on} side={THREE.DoubleSide} />
           </mesh>
         )
       })}

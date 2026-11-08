@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth'
 import { create } from 'zustand'
-import { deleteCloudCity, flushUploads, startUploads, syncAll } from '../cloud/sync'
+import { deleteCloudCity, flushUploads, pullSettings, pushSettings, startUploads, syncAll } from '../cloud/sync'
+import { useTheme } from '../ui/theme'
 import { adoptGuestCities, clearOwner, countGuestCities, deleteCity, GUEST, setOwner } from '../persistence/db'
 import { accountsAvailable, firebase } from './firebase'
 
@@ -32,6 +33,8 @@ interface AuthState {
   updateName: (name: string) => Promise<void>
   adoptLocalCities: () => Promise<number>
   syncNow: () => Promise<void>
+  /** remembers the accent colour in the account (it follows the person to every device) */
+  saveAccent: (hex: string) => void
   signOut: (force?: boolean) => Promise<'ok' | 'unsynced'>
   removeCity: (id: string) => Promise<void>
 }
@@ -67,6 +70,7 @@ const toAccount = (u: User): Account => ({
 })
 
 let started = false
+let accentTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useAuth = create<AuthState>((set, get) => {
   const run = async (fn: () => Promise<void>): Promise<boolean> => {
@@ -98,6 +102,10 @@ export const useAuth = create<AuthState>((set, get) => {
       startUploads(u.uid, (sync) => set({ sync }))
       set({ status: 'user', user: toAccount(u), ownerTick: get().ownerTick + 1, guestCities: await countGuestCities() })
       void doSync(u.uid)
+      // the colour chosen on another device
+      void pullSettings(u.uid)
+        .then((s) => s.accent && useTheme.getState().setAccent(s.accent))
+        .catch(() => undefined)
     } else {
       setOwner(GUEST)
       startUploads(null)
@@ -188,6 +196,13 @@ export const useAuth = create<AuthState>((set, get) => {
       set({ guestCities: 0, ownerTick: get().ownerTick + 1 })
       await doSync(uid)
       return moved.length
+    },
+
+    saveAccent: (hex) => {
+      const uid = get().user?.uid
+      if (!uid) return
+      clearTimeout(accentTimer)
+      accentTimer = setTimeout(() => void pushSettings(uid, { accent: hex }).catch(() => undefined), 700)
     },
 
     syncNow: async () => {

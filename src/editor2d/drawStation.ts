@@ -1,4 +1,5 @@
 import type { StationType } from '../model/types'
+import { getAccent } from '../ui/theme'
 import { PLANE_POINTS } from '../plan/glyphs'
 
 const FONT = "'Space Grotesk Variable', system-ui, sans-serif"
@@ -23,12 +24,13 @@ export function drawStation(
   ctx.shadowOffsetY = r * 0.25
 
   if (selected) {
+    const acc = getAccent()
     ctx.save()
-    ctx.shadowColor = 'rgba(196,240,58,0.9)'
+    ctx.shadowColor = `rgba(${acc.rgb},0.9)`
     ctx.shadowBlur = r * 2.2
     ctx.beginPath()
     ctx.arc(0, 0, r * 2.3, 0, Math.PI * 2)
-    ctx.strokeStyle = '#c4f03a'
+    ctx.strokeStyle = acc.hex
     ctx.lineWidth = Math.max(2, r * 0.3)
     ctx.stroke()
     ctx.restore()

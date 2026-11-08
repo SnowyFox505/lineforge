@@ -15,6 +15,14 @@ export default function App() {
   const undo = useEditor((s) => s.undo)
   const redo = useEditor((s) => s.redo)
   useEffect(() => useAuth.getState().init(), [])
+  // iOS Safari zooms the whole page on a pinch; the app handles pinching itself
+  useEffect(() => {
+    const stop = (e: Event) => e.preventDefault()
+    for (const n of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(n, stop)
+    return () => {
+      for (const n of ['gesturestart', 'gesturechange', 'gestureend']) document.removeEventListener(n, stop)
+    }
+  }, [])
   // loading screen whenever a city is opened: at least a few seconds, and until the editor is on screen
   const [prevScreen, setPrevScreen] = useState(screen)
   const [loading, setLoading] = useState(false)

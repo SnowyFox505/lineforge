@@ -105,6 +105,10 @@ export default function PlanView() {
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [box, setBox] = useState({ w: 0, h: 0 })
   const T = THEMES[theme]
+  const zoomNow = useRef(1)
+  useEffect(() => {
+    zoomNow.current = zoom
+  }, [zoom])
   const hasStations = Object.keys(doc.stations).length > 0
 
   useEffect(() => {
@@ -114,6 +118,32 @@ export default function PlanView() {
     ro.observe(el)
     setBox({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()
+  }, [hasStations])
+
+  // two fingers pinch the plan bigger or smaller (one finger keeps scrolling it)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    let startDist = 0
+    let startZoom = 1
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const start = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = dist(e.touches)
+        startZoom = zoomNow.current
+      } else startDist = 0
+    }
+    const move = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || startDist <= 0) return
+      e.preventDefault()
+      setZoom(Math.min(3, Math.max(0.5, startZoom * (dist(e.touches) / startDist))))
+    }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', start)
+      el.removeEventListener('touchmove', move)
+    }
   }, [hasStations])
 
   const plan = useMemo(() => {
@@ -276,7 +306,7 @@ export default function PlanView() {
 
   return (
     <div className="absolute inset-0">
-      <div ref={wrapRef} className="h-full overflow-auto" style={{ background: `linear-gradient(180deg, ${T.bgA}, ${T.bgB})` }}>
+      <div ref={wrapRef} className="h-full overflow-auto" style={{ touchAction: 'pan-x pan-y', background: `linear-gradient(180deg, ${T.bgA}, ${T.bgB})` }}>
         <div className="flex min-h-full items-center justify-center px-3 pb-[130px] pt-[84px]">
           <svg
             ref={svgRef}

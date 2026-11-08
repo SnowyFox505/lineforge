@@ -1,4 +1,5 @@
 import type { PoiKind } from '../model/types'
+import { getAccent } from '../ui/theme'
 
 export const POI_STYLE: Record<PoiKind, { label: string; color: string; hint: string }> = {
   stadium: { label: 'Stadion', color: '#ff5470', hint: 'Bei Spielen strömen viele Menschen gleichzeitig an und ab.' },
@@ -14,9 +15,10 @@ export function drawPoi(ctx: CanvasRenderingContext2D, kind: PoiKind, x: number,
   if (selected) {
     ctx.beginPath()
     ctx.arc(0, 0, r * 1.9, 0, Math.PI * 2)
-    ctx.strokeStyle = '#c4f03a'
+    const acc = getAccent()
+    ctx.strokeStyle = acc.hex
     ctx.lineWidth = 2.5
-    ctx.shadowColor = 'rgba(196,240,58,0.9)'
+    ctx.shadowColor = `rgba(${acc.rgb},0.9)`
     ctx.shadowBlur = 14
     ctx.stroke()
     ctx.shadowBlur = 0

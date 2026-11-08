@@ -88,6 +88,8 @@ interface EditorState {
   /** Push the current document on the undo stack (call once per user gesture). */
   checkpoint: () => void
   undo: () => void
+  /** throws away the stroke that was just started (back to the last checkpoint) without leaving a redo step */
+  cancelStroke: () => void
   redo: () => void
 
   paint: (cx: number, cy: number, value: number) => void
@@ -227,6 +229,11 @@ export const useEditor = create<EditorState>((set, get) => {
     checkpoint: () => {
       const { doc, past } = get()
       set({ past: [...past, doc].slice(-HISTORY_LIMIT), future: [] })
+    },
+    cancelStroke: () => {
+      const { past } = get()
+      if (!past.length) return
+      set({ doc: past[past.length - 1], past: past.slice(0, -1) })
     },
     undo: () => {
       const { past, doc, future } = get()

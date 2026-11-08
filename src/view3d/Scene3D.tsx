@@ -1,6 +1,6 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
 import { buildZoneGfx } from '../editor2d/zoneGfx'
@@ -18,6 +18,7 @@ import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
 import { buildNetwork3D } from './network3d'
 import type { Network3D, StationGroup, StationNet } from './network3d'
 import Tracks3D from './Tracks3D'
+import TouchRig, { TOUCHES } from './TouchRig'
 import Trains3D from './Trains3D'
 
 const c = (hex: string) => new THREE.Color(hex)
@@ -276,6 +277,7 @@ export default function Scene3D() {
   const [running, setRunning] = useState(true)
   const [speedIdx, setSpeedIdx] = useState(0)
   const speedRef = useRef(1)
+  const stopAuto = useCallback(() => setAuto(false), [])
   speedRef.current = running ? SPEEDS[speedIdx] : 0
 
   return (
@@ -291,8 +293,11 @@ export default function Scene3D() {
         <Stations net={net} />
         <Trains3D net={net} speedRef={speedRef} />
         <DevCam />
+        <TouchRig onGesture={stopAuto} />
         <OrbitControls
           makeDefault
+          touches={TOUCHES}
+          screenSpacePanning={false}
           enableDamping
           dampingFactor={0.08}
           autoRotate={auto}

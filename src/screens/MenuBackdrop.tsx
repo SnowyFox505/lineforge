@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { getAccent, useTheme } from '../ui/theme'
 import { clamp01, drawLight, drawStation, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from '../ui/netCanvas'
 
 const INTRO = 3.6 // seconds until the network is complete
@@ -6,7 +7,7 @@ const FRAME_MS = 31 // about 30 frames per second: smooth enough, easy on the ba
 
 const CLOUDS = [
   { cls: '-left-24 top-10 h-96 w-96 opacity-40', color: '#2b6cff', d: 22, x1: '50px', y1: '40px', x2: '-20px', y2: '70px' },
-  { cls: '-right-32 top-1/3 h-[26rem] w-[26rem] opacity-30', color: '#c4f03a', d: 26, x1: '-60px', y1: '-30px', x2: '10px', y2: '50px' },
+  { cls: '-right-32 top-1/3 h-[26rem] w-[26rem] opacity-30', color: 'var(--color-accent)', d: 26, x1: '-60px', y1: '-30px', x2: '10px', y2: '50px' },
   { cls: '-bottom-20 left-1/4 h-80 w-80 opacity-30', color: '#e055c4', d: 30, x1: '40px', y1: '-40px', x2: '-40px', y2: '10px' },
 ]
 
@@ -57,7 +58,7 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
       const vh = window.innerHeight
       const blobs = [
         { x: -96 + 192, y: 40 + 192, r: 192, color: '43,108,255', a: 0.4 },
-        { x: vw + 128 - 208, y: vh / 3 + 208, r: 208, color: '196,240,58', a: 0.3 },
+        { x: vw + 128 - 208, y: vh / 3 + 208, r: 208, color: getAccent().rgb, a: 0.3 },
         { x: vw / 4 + 160, y: vh + 80 - 160, r: 160, color: '224,85,196', a: 0.3 },
       ]
       for (const b of blobs) {
@@ -179,6 +180,11 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
 
     const ro = new ResizeObserver(resize)
     ro.observe(netCanvas)
+    // a new accent colour repaints the baked glow
+    const unsub = useTheme.subscribe(() => {
+      netDone = false
+      render(t)
+    })
     resize()
     if (!reduced) {
       last = performance.now()
@@ -187,6 +193,7 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      unsub()
     }
   }, [])
 

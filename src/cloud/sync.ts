@@ -54,6 +54,24 @@ async function pullCity(uid: string, id: string): Promise<CityDoc> {
   return decodeCity(snap.data().data.toUint8Array())
 }
 
+/** Personal settings (for now the accent colour) live in users/{uid}/settings/profile and follow the person to every device. */
+export interface CloudSettings {
+  accent?: string
+}
+
+export async function pullSettings(uid: string): Promise<CloudSettings> {
+  const { db } = await firebase()
+  const { doc: ref, getDoc } = await import('firebase/firestore')
+  const snap = await getDoc(ref(db, 'users', uid, 'settings', 'profile'))
+  return snap.exists() ? (snap.data() as CloudSettings) : {}
+}
+
+export async function pushSettings(uid: string, settings: CloudSettings): Promise<void> {
+  const { db } = await firebase()
+  const { doc: ref, setDoc } = await import('firebase/firestore')
+  await setDoc(ref(db, 'users', uid, 'settings', 'profile'), settings, { merge: true })
+}
+
 export interface SyncResult {
   pulled: number
   pushed: number

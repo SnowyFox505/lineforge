@@ -15,6 +15,9 @@
   --bg: #07090d;
   --text: #eef2f6;
   --accent: #c4f03a;
+  --accent-hi: #d6fb5c;
+  --accent-lo: #b4e32a;
+  --accent-rgb: 196, 240, 58;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -78,11 +81,11 @@ canvas {
   }
 
   .btn-primary {
-    background: linear-gradient(180deg, #d6fb5c, #b4e32a);
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent-lo));
     color: var(--color-accent-ink);
     font-weight: 700;
     box-shadow:
-      0 10px 30px -8px rgba(196, 240, 58, 0.55),
+      0 10px 30px -8px rgba(var(--accent-rgb), 0.55),
       inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
@@ -112,8 +115,8 @@ canvas {
       box-shadow 0.2s;
   }
   .field:focus {
-    border-color: rgba(196, 240, 58, 0.7);
-    box-shadow: 0 0 0 4px rgba(196, 240, 58, 0.12);
+    border-color: rgba(var(--accent-rgb), 0.7);
+    box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
   }
 }
 
@@ -148,7 +151,7 @@ input[type='range'].slider::-webkit-slider-thumb {
   margin-top: -8px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(196, 240, 58, 0.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(var(--accent-rgb), 0.25);
   border: none;
 }
 input[type='range'].slider::-moz-range-thumb {
@@ -157,7 +160,7 @@ input[type='range'].slider::-moz-range-thumb {
   border-radius: 50%;
   background: #fff;
   border: none;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(196, 240, 58, 0.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(var(--accent-rgb), 0.25);
 }
 
 input[type='color'].swatch-input {
@@ -264,4 +267,21 @@ input[type='color'].swatch-input::-moz-color-swatch {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: linear-gradient(180deg, #1d242f, #11151c);
+}
+
+/* Colour slider: a rainbow track instead of the accent fill */
+input[type='range'].hue-slider::-webkit-slider-runnable-track {
+  height: 12px;
+  background: var(--track);
+}
+input[type='range'].hue-slider::-moz-range-track {
+  height: 12px;
+  border-radius: 99px;
+  background: var(--track);
+}
+input[type='range'].hue-slider::-moz-range-progress {
+  background: transparent;
+}
+input[type='range'].hue-slider::-webkit-slider-thumb {
+  margin-top: -5px;
 }

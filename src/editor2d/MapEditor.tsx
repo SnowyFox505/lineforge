@@ -7,6 +7,7 @@ import { layoutLines } from '../plan/layout'
 import { useEditor } from '../store/editorStore'
 import type { Tool } from '../store/editorStore'
 import { drawPoi } from './drawPoi'
+import { useTheme, getAccent } from '../ui/theme'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
 import { buildTerrainPaths, drawTerrain } from './terrainRender'
@@ -129,6 +130,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     view.current = { s, ox: w / 2 - cx * s, oy: top + availH / 2 - cy * s }
   }, [doc.size, doc.stations])
 
+  const accent = useTheme((s) => s.accent) // a new accent colour repaints the map
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -276,10 +278,10 @@ export default function MapEditor({ insets }: { insets: Insets }) {
           ctx.save()
           ctx.translate(px, py)
           ctx.rotate(Math.PI / 4)
-          ctx.shadowColor = sel ? '#c4f03a' : 'rgba(0,0,0,0.5)'
+          ctx.shadowColor = sel ? getAccent().hex : 'rgba(0,0,0,0.5)'
           ctx.shadowBlur = sel ? 14 : 6
           ctx.fillStyle = '#fff'
-          ctx.strokeStyle = sel ? '#c4f03a' : al.color
+          ctx.strokeStyle = sel ? getAccent().hex : al.color
           ctx.lineWidth = 3
           ctx.beginPath()
           ctx.roundRect(-rr * 0.75, -rr * 0.75, rr * 1.5, rr * 1.5, 2.5)
@@ -311,7 +313,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       if (rt > 0 && rt < 1) {
         ctx.beginPath()
         ctx.arc(px, py, r * (1 + rt * 3.2), 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(196,240,58,${0.55 * (1 - rt)})`
+        ctx.strokeStyle = `rgba(${getAccent().rgb},${0.55 * (1 - rt)})`
         ctx.lineWidth = 2
         ctx.stroke()
       }
@@ -366,7 +368,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, activeLineId, tool, brush, fit])
+  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, activeLineId, tool, brush, fit, accent])
 
   useEffect(() => {
     userMoved.current = false
@@ -447,6 +449,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   })
 
   const zoneId = useRef(0)
+  /** when the current brush stroke began: a second finger right after it means "zoom", not "paint" */
+  const strokeStart = useRef(0)
 
   function paintAt(cell: { x: number; y: number }) {
     const st = useEditor.getState()
@@ -554,6 +558,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     hover.current = p
     const g = gesture.current
     if (pointers.current.size >= 2) {
+      // two fingers came down almost together: the first one was the start of a pinch, so the dab it painted is taken back
+      if (g.kind === 'paint' && performance.now() - strokeStart.current < 350) useEditor.getState().cancelStroke()
       const [a, b] = [...pointers.current.values()]
       g.kind = 'pinch'
       g.lastDist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -567,6 +573,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       if (t === 'water' || t === 'erase') useEditor.getState().checkpoint()
       else zoneId.current = useEditor.getState().beginZonePaint()
       g.kind = 'paint'
+      strokeStart.current = performance.now()
       paintAt(toCell(p))
     } else if (t === 'pan') {
       g.kind = 'pan'
