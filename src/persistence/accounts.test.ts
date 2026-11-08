@@ -1,6 +1,5 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { normalizePhone } from '../auth/authStore'
 import { decodeCity, encodeCity, MAX_BYTES } from '../cloud/codec'
 import { planSync } from '../cloud/sync'
 import { createCity } from '../model/factory'
@@ -104,14 +103,5 @@ describe('sync plan', () => {
     )
     expect(plan.push.sort()).toEqual(['b', 'd'])
     expect(plan.pull.sort()).toEqual(['c', 'e'])
-  })
-})
-
-describe('phone numbers', () => {
-  it('turns what people type into the international format', () => {
-    expect(normalizePhone('0151 2345678')).toBe('+491512345678')
-    expect(normalizePhone('+49 (151) 234-5678')).toBe('+491512345678')
-    expect(normalizePhone('0049 151 2345678')).toBe('+491512345678')
-    expect(normalizePhone('+43 660 1234567')).toBe('+436601234567')
   })
 })

@@ -1,4 +1,4 @@
-import type { ConfirmationResult, RecaptchaVerifier, User } from 'firebase/auth'
+import type { User } from 'firebase/auth'
 import { create } from 'zustand'
 import { deleteCloudCity, flushUploads, startUploads, syncAll } from '../cloud/sync'
 import { adoptGuestCities, clearOwner, countGuestCities, deleteCity, GUEST, setOwner } from '../persistence/db'
@@ -19,8 +19,6 @@ interface AuthState {
   user: Account | null
   busy: boolean
   error: string | null
-  /** phone login: waiting for the code from the text message */
-  codeSent: boolean
   sync: 'idle' | 'syncing' | 'error'
   /** counts up whenever the person (and so the list of cities) changes */
   ownerTick: number
@@ -31,8 +29,6 @@ interface AuthState {
   signUpEmail: (name: string, email: string, password: string) => Promise<boolean>
   resetPassword: (email: string) => Promise<boolean>
   signInGoogle: () => Promise<boolean>
-  startPhone: (number: string) => Promise<boolean>
-  confirmPhone: (code: string) => Promise<boolean>
   updateName: (name: string) => Promise<void>
   adoptLocalCities: () => Promise<number>
   syncNow: () => Promise<void>
@@ -54,26 +50,12 @@ export function friendlyError(e: unknown): string {
     'auth/network-request-failed': 'Keine Verbindung zum Internet.',
     'auth/popup-closed-by-user': 'Die Anmeldung wurde abgebrochen.',
     'auth/cancelled-popup-request': 'Die Anmeldung wurde abgebrochen.',
-    'auth/invalid-phone-number': 'Diese Telefonnummer ist ungültig. Beispiel: +49 151 2345678',
-    'auth/missing-phone-number': 'Bitte gib eine Telefonnummer ein.',
-    'auth/invalid-verification-code': 'Der Code stimmt nicht.',
-    'auth/code-expired': 'Der Code ist abgelaufen. Fordere einen neuen an.',
-    'auth/quota-exceeded': 'Heute können keine weiteren SMS verschickt werden.',
     'auth/operation-not-allowed': 'Diese Anmeldeart ist noch nicht freigeschaltet.',
     'auth/unauthorized-domain': 'Diese Adresse ist für die Anmeldung noch nicht freigegeben.',
     'auth/requires-recent-login': 'Bitte melde dich neu an und versuche es noch einmal.',
   }
   if (map[code]) return map[code]
   return e instanceof Error && !code ? e.message : 'Das hat leider nicht geklappt. Versuche es noch einmal.'
-}
-
-/** "0151 2345678" -> "+491512345678" (without country code Germany is assumed) */
-export function normalizePhone(input: string): string {
-  const raw = input.replace(/[\s()/.-]/g, '')
-  if (raw.startsWith('+')) return raw
-  if (raw.startsWith('00')) return `+${raw.slice(2)}`
-  if (raw.startsWith('0')) return `+49${raw.slice(1)}`
-  return `+49${raw}`
 }
 
 const toAccount = (u: User): Account => ({
@@ -84,8 +66,6 @@ const toAccount = (u: User): Account => ({
   photo: u.photoURL,
 })
 
-let confirmation: ConfirmationResult | null = null
-let verifier: RecaptchaVerifier | null = null
 let started = false
 
 export const useAuth = create<AuthState>((set, get) => {
@@ -130,7 +110,6 @@ export const useAuth = create<AuthState>((set, get) => {
     user: null,
     busy: false,
     error: null,
-    codeSent: false,
     sync: 'idle',
     ownerTick: 0,
     guestCities: 0,
@@ -194,36 +173,6 @@ export const useAuth = create<AuthState>((set, get) => {
         }
       }),
 
-    startPhone: (number) =>
-      run(async () => {
-        const { auth } = await firebase()
-        const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth')
-        let host = document.getElementById('recaptcha-host')
-        if (!host) {
-          host = document.createElement('div')
-          host.id = 'recaptcha-host'
-          document.body.appendChild(host)
-        }
-        verifier?.clear()
-        verifier = new RecaptchaVerifier(auth, host, { size: 'invisible' })
-        try {
-          confirmation = await signInWithPhoneNumber(auth, normalizePhone(number), verifier)
-          set({ codeSent: true })
-        } catch (e) {
-          verifier.clear()
-          verifier = null
-          throw e
-        }
-      }),
-
-    confirmPhone: (code) =>
-      run(async () => {
-        if (!confirmation) throw new Error('Bitte fordere zuerst einen Code an.')
-        await confirmation.confirm(code.trim())
-        confirmation = null
-        set({ codeSent: false })
-      }),
-
     updateName: async (name) => {
       const { auth } = await firebase()
       const { updateProfile } = await import('firebase/auth')
@@ -261,8 +210,7 @@ export const useAuth = create<AuthState>((set, get) => {
       const { auth } = await firebase()
       const { signOut } = await import('firebase/auth')
       await signOut(auth)
-      confirmation = null
-      set({ codeSent: false, error: null })
+      set({ error: null })
       return 'ok'
     },
 

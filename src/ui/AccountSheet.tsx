@@ -3,7 +3,7 @@ import { useAuth } from '../auth/authStore'
 import Icon from './Icon'
 import { Segmented, Sheet } from './primitives'
 
-type Tab = 'in' | 'up' | 'phone'
+type Tab = 'in' | 'up'
 
 export const WELCOME_KEY = 'lineforge-welcome-seen'
 
@@ -34,8 +34,6 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
   const [resetSent, setResetSent] = useState(false)
   const [adopted, setAdopted] = useState<number | null>(null)
   const [unsynced, setUnsynced] = useState(false)
@@ -71,9 +69,7 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (tab === 'in') await a.signInEmail(email, password)
-    else if (tab === 'up') await a.signUpEmail(name, email, password)
-    else if (!a.codeSent) await a.startPhone(phone)
-    else await a.confirmPhone(code)
+    else await a.signUpEmail(name, email, password)
   }
 
   const title = signedIn ? 'Dein Konto' : welcome ? 'Willkommen bei LineForge' : 'Anmelden'
@@ -88,7 +84,7 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-lg font-bold">{a.user!.name}</div>
-              <div className="truncate text-sm text-white/55">{a.user!.email ?? a.user!.phone ?? 'Angemeldet'}</div>
+              <div className="truncate text-sm text-white/55">{a.user!.email ?? 'Angemeldet'}</div>
             </div>
           </div>
 
@@ -163,7 +159,6 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
             options={[
               { value: 'in', label: 'Anmelden' },
               { value: 'up', label: 'Neu hier' },
-              { value: 'phone', label: 'Telefon' },
             ]}
           />
 
@@ -173,36 +168,20 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
                 <input className="field w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Wie sollen wir dich nennen?" autoComplete="name" maxLength={40} />
               </Field>
             )}
-            {tab !== 'phone' && (
-              <>
+            <>
                 <Field label="E-Mail">
                   <input className="field w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" autoComplete="email" required />
                 </Field>
                 <Field label="Passwort">
                   <input className="field w-full" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tab === 'up' ? 'Mindestens 6 Zeichen' : 'Dein Passwort'} autoComplete={tab === 'up' ? 'new-password' : 'current-password'} minLength={6} required />
                 </Field>
-              </>
-            )}
-            {tab === 'phone' && (
-              <>
-                <Field label="Telefonnummer">
-                  <input className="field w-full" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+49 151 2345678" autoComplete="tel" disabled={a.codeSent} required />
-                </Field>
-                {a.codeSent && (
-                  <Field label="Code aus der SMS">
-                    <input className="field w-full tracking-[0.4em]" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" autoFocus required />
-                  </Field>
-                )}
-                <p className="text-xs text-white/40">Wir schicken dir einmalig einen Code per SMS. Ohne Ländervorwahl nehmen wir Deutschland (+49) an.</p>
-              </>
-            )}
-
+            </>
             {a.error && <p className="rounded-2xl bg-red-500/10 p-3 text-sm text-red-200">{a.error}</p>}
             {resetSent && <p className="rounded-2xl bg-accent/10 p-3 text-sm text-accent">Wir haben dir eine E-Mail zum Zurücksetzen geschickt.</p>}
 
             <button type="submit" disabled={a.busy} className="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[15px] disabled:opacity-60">
               {a.busy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-              {tab === 'in' ? 'Anmelden' : tab === 'up' ? 'Konto erstellen' : a.codeSent ? 'Code bestätigen' : 'Code per SMS senden'}
+              {tab === 'in' ? 'Anmelden' : 'Konto erstellen'}
             </button>
 
             {tab === 'in' && (
