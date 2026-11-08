@@ -148,9 +148,9 @@ function platformFurniture(layout: StationLayout, roof: ResolvedDesign['roof']) 
 
 /** A small station building beside the platforms. */
 function Entrance({ layout, big }: { layout: StationLayout; big: boolean }) {
-  const len = Math.min(layout.length * (big ? 0.5 : 0.35), big ? 5 : 2.6)
-  const dep = big ? 1.0 : 0.7
-  const hgt = big ? 0.85 : 0.6
+  const len = Math.min(layout.length * (big ? 0.42 : 0.3), big ? 3.4 : 2.0)
+  const dep = big ? 0.8 : 0.6
+  const hgt = big ? 0.8 : 0.55
   const z = -(layout.halfWidth + 0.9 + dep / 2)
   return (
     <group position={[-layout.length * 0.12, 0, z]}>

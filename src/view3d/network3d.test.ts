@@ -4,6 +4,7 @@ import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
 import { LAND_Y } from './heights'
 import { LEVEL_BASE } from '../model/stationGroups'
+import { trainLength, VEHICLES } from '../model/vehicles'
 import { posOn, buildNetwork3D, BUFFER_CLEAR, LEVEL_H, TRAM_GAP } from './network3d'
 
 function city(): CityDoc {
@@ -60,7 +61,8 @@ describe('3D network geometry', () => {
     d = station(d, 'b', 70, 60)
     d = line(d, 'L', 'fernverkehr', ['a', 'b'])
     const net = buildNetwork3D(d)
-    expect(net.stations.a.layout.length).toBeGreaterThanOrEqual(11)
+    // a 'short' platform is shorter than the train: it grows to fit it
+    expect(net.stations.a.layout.length).toBeGreaterThanOrEqual(trainLength(VEHICLES.fernverkehr))
   })
 
   it('keeps curves smooth and lets every line run straight along the axis of its own platform group', () => {

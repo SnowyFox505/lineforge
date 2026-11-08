@@ -381,7 +381,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const sz = st.y + 0.5 - half
     const allOps = stationOperators(doc, st.id)
     const baseDesign = resolveDesign(st, allOps)
-    const minLen = (ops: OperatorId[]) => ops.reduce((m, op) => Math.max(m, trainLength(VEHICLES[op]) + 2), 0)
+    const minLen = (ops: OperatorId[]) => ops.reduce((m, op) => Math.max(m, trainLength(VEHICLES[op]) + 1.2), 0)
     stationBase.set(st.id, { st, design: baseDesign, layout: layoutStation(baseDesign, minLen(allOps)) })
 
     const entries: Entry[] = []

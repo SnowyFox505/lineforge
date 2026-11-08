@@ -139,7 +139,7 @@ function Hall({ L, side, len, dep, h, roof = true }: { L: number; side: number; 
 /** The roofed station as seen from outside. Local frame: x along the tracks, z across (origin = platform centre). */
 export default function StationShell({ look, layout }: { look: StationLook; layout: StationLayout }) {
   const L = layout.length + 1.6
-  const W = layout.halfWidth * 2 + 1.1
+  const W = layout.halfWidth * 2 + 0.7
   const wallH = 0.78
   const side = -(layout.halfWidth + 1.1)
   const tooth = useMemo(() => prismGeo(1.5, 0.45, W + 0.6, 0.15), [W])
@@ -156,7 +156,7 @@ export default function StationShell({ look, layout }: { look: StationLook; layo
               <Mat color="#9fd8ff" opacity={0.28} />
             </mesh>
           ))}
-          <Hall L={L} side={side} len={Math.min(L * 0.5, 7)} dep={1.1} h={1.1} roof />
+          <Hall L={L} side={side} len={Math.min(L * 0.42, 4.2)} dep={0.9} h={0.95} roof />
         </group>
       )
     case 'glas':
@@ -177,19 +177,19 @@ export default function StationShell({ look, layout }: { look: StationLook; layo
               <Mat color="#8fb3d0" opacity={0.55} />
             </mesh>
           ))}
-          <Hall L={L} side={side} len={Math.min(L * 0.55, 8)} dep={1.3} h={1.35} roof />
-          <Tower x={-L * 0.05 - Math.min(L * 0.55, 8) * 0.38} z={side} h={2.6} w={0.6} />
+          <Hall L={L} side={side} len={Math.min(L * 0.45, 4.6)} dep={1.0} h={1.1} roof />
+          <Tower x={-L * 0.05 - Math.min(L * 0.45, 4.6) * 0.38} z={side} h={2.0} w={0.5} />
         </group>
       )
     case 'modern':
       return (
         <group>
           <mesh position={[0, PF + 0.85, 0]}>
-            <boxGeometry args={[L + 1.2, 0.09, W + 1.4]} />
+            <boxGeometry args={[L + 0.8, 0.09, W + 0.9]} />
             <Mat color="#eef1f5" rough={0.4} metal={0.2} />
           </mesh>
           <mesh position={[0, PF + 0.8, 0]}>
-            <boxGeometry args={[L + 1.1, 0.02, W + 1.3]} />
+            <boxGeometry args={[L + 0.7, 0.02, W + 0.8]} />
             <Mat color="#2e6cd6" />
           </mesh>
           <Walls L={L} W={W} h={0.8} color="#9fd8ff" opacity={0.3} thick={0.03} />
@@ -256,11 +256,11 @@ export default function StationShell({ look, layout }: { look: StationLook; layo
       return (
         <group>
           <mesh position={[0, PF + 0.9, 0]}>
-            <boxGeometry args={[L * 0.8, 0.06, W + 0.5]} />
+            <boxGeometry args={[L * 0.8, 0.06, W + 0.3]} />
             <Mat color="#e7ebf1" />
           </mesh>
           <mesh position={[0, PF + 0.87, 0]}>
-            <boxGeometry args={[L * 0.8 - 0.05, 0.02, W + 0.58]} />
+            <boxGeometry args={[L * 0.8 - 0.05, 0.02, W + 0.36]} />
             <Mat color="#2e6cd6" />
           </mesh>
           {[-0.4, 0, 0.4].flatMap((f) => [-1, 1].map((s) => (
@@ -269,9 +269,9 @@ export default function StationShell({ look, layout }: { look: StationLook; layo
               <Mat color="#cdd4de" metal={0.5} />
             </mesh>
           )))}
-          <Hall L={L} side={side} len={2.4} dep={0.9} h={0.75} roof />
+          <Hall L={L} side={side} len={1.8} dep={0.7} h={0.65} roof />
           <mesh position={[-L * 0.05, LAND_Y + 0.75 + 0.3, side]} rotation={[0, 0, 0]}>
-            <boxGeometry args={[2.6, 0.06, 1.1]} />
+            <boxGeometry args={[2.0, 0.06, 0.9]} />
             <Mat color={SLATE} />
           </mesh>
         </group>

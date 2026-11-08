@@ -1,6 +1,6 @@
 import type { CityDoc, OperatorId, PlatformLength, PlatformStyle, RoofType, Station, StationDesign, StationType } from './types'
 
-export const PLATFORM_LENGTH: Record<PlatformLength, number> = { short: 6, medium: 9, long: 13 }
+export const PLATFORM_LENGTH: Record<PlatformLength, number> = { short: 4.5, medium: 6.5, long: 9 }
 export const MAX_TRACKS = 8
 
 export const ROOF_LABEL: Record<RoofType, string> = {
@@ -76,11 +76,11 @@ export interface StationLayout {
 
 /** Distance of the two tracks of a line from its axis */
 export const TRACK_OFFSET = 0.23
-const GAP = 0.62 // spacing of neighbouring tracks without a platform between them
-const ISLAND = 1.45 // spacing of two tracks that share an island platform
-const SIDE_W = 0.8 // width of a side platform
+const GAP = 0.5 // spacing of neighbouring tracks without a platform between them
+const ISLAND = 1.2 // spacing of two tracks that share an island platform
+const SIDE_W = 0.55 // width of a side platform
 /** Distance from the track axis to the platform edge (ballast + clearance for the train body) */
-const EDGE = 0.28
+const EDGE = 0.24
 
 /** Lateral positions of the tracks (centred on the route axis) and the island platforms between them. */
 export function trackPositions(n: number, style: PlatformStyle): { zs: number[]; platforms: { z0: number; z1: number }[] } {
