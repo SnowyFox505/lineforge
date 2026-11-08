@@ -422,7 +422,7 @@ function entryDir(pts: Pt[] | undefined): number | null {
 }
 
 /**
- * A hook: a piece of at most one cell between two bends that together turn the line by 135° or more (the way a route
+ * A hook: a piece of at most one cell between two bends that together turn the line by 135Â° or more (the way a route
  * from before the bend-penalty doubled back at a station). A train cannot follow it, the 3D tracks wind up into a tight loop.
  */
 function hasHook(before: number | null, seg: Pt[], after: number | null): boolean {
