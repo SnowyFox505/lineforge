@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { AnimatePresence, MotionConfig, motion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/authStore'
 import Icon from './Icon'
 import { Segmented, Sheet } from './primitives'
@@ -6,6 +7,9 @@ import { Segmented, Sheet } from './primitives'
 type Tab = 'in' | 'up'
 
 export const WELCOME_KEY = 'lineforge-welcome-seen'
+
+const SOFT = { type: 'spring', stiffness: 380, damping: 32, mass: 0.9 } as const
+const SWAP = { duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const
 
 function GoogleG() {
   return (
@@ -27,7 +31,52 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-/** Sign-in, sign-up, phone login and the profile of a signed-in person. `welcome` is the first-start variant with a guest button. */
+/** Burst of little lights around a check mark: the "it worked" moment. */
+function Celebrate({ headline, sub }: { headline: string; sub: string }) {
+  const colors = ['#ff5470', '#3db8ff', '#a6e03c', '#ffc233', '#9a6bff', '#c4f03a', '#ff5470', '#3db8ff']
+  return (
+    <motion.div className="grid place-items-center py-8 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }} transition={SWAP}>
+      <div className="relative grid h-28 w-28 place-items-center">
+        {colors.map((c, i) => {
+          const a = (i / colors.length) * Math.PI * 2
+          return (
+            <motion.span
+              key={i}
+              className="absolute h-2.5 w-2.5 rounded-full"
+              style={{ background: c, boxShadow: `0 0 12px ${c}` }}
+              initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
+              animate={{ x: Math.cos(a) * 54, y: Math.sin(a) * 54, scale: [0, 1.2, 0], opacity: [1, 1, 0] }}
+              transition={{ duration: 0.9, delay: 0.25, ease: 'easeOut' }}
+            />
+          )
+        })}
+        <motion.span className="absolute inset-0 rounded-full border-2 border-accent" initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 1.5, opacity: 0 }} transition={{ duration: 0.9, delay: 0.2, ease: 'easeOut' }} />
+        <motion.div
+          className="grid h-20 w-20 place-items-center rounded-full"
+          style={{ background: 'linear-gradient(160deg,#d6fb5c,#9bd21c)', boxShadow: '0 0 40px rgba(196,240,58,0.5)' }}
+          initial={{ scale: 0, rotate: -40 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 360, damping: 16 }}
+        >
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0d1300" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <motion.path d="M5 12.5l4.5 4.5L19 7.5" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.2, ease: 'easeOut' }} />
+          </svg>
+        </motion.div>
+      </div>
+      <motion.div className="mt-4 text-xl font-bold tracking-tight" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, ...SOFT }}>
+        {headline}
+      </motion.div>
+      <motion.div className="mt-1 text-sm text-white/55" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, ...SOFT }}>
+        {sub}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+const list = { show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } } }
+const rise = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: SOFT } }
+
+/** Sign-in, sign-up and the profile of a signed-in person. `welcome` is the first-start variant with a guest button. */
 export default function AccountSheet({ open, onClose, welcome = false }: { open: boolean; onClose: () => void; welcome?: boolean }) {
   const a = useAuth()
   const [tab, setTab] = useState<Tab>('in')
@@ -37,23 +86,39 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
   const [resetSent, setResetSent] = useState(false)
   const [adopted, setAdopted] = useState<number | null>(null)
   const [unsynced, setUnsynced] = useState(false)
+  const [celebrate, setCelebrate] = useState<null | { headline: string; sub: string }>(null)
+  const [leaving, setLeaving] = useState(false)
   const signedIn = a.status === 'user' && a.user
+  const wasSignedOut = useRef(true)
+  const justSignedUp = useRef(false)
 
-  // signing in worked: remember that the welcome screen has been dealt with
+  // remember whether the sheet was opened signed out: only then a sign-in is celebrated
   useEffect(() => {
-    if (a.status === 'user') {
-      try {
-        localStorage.setItem(WELCOME_KEY, '1')
-      } catch {
-        // private mode: the welcome screen may appear again, which is harmless
-      }
+    if (open) wasSignedOut.current = a.status !== 'user'
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // signing in worked: remember that the welcome screen has been dealt with, and celebrate
+  useEffect(() => {
+    if (a.status !== 'user') return
+    try {
+      localStorage.setItem(WELCOME_KEY, '1')
+    } catch {
+      // private mode: the welcome screen may appear again, which is harmless
     }
-  }, [a.status])
+    if (open && wasSignedOut.current && a.user) {
+      wasSignedOut.current = false
+      setCelebrate({ headline: justSignedUp.current ? `Willkommen, ${a.user.name}!` : `Schön, dass du da bist, ${a.user.name}!`, sub: justSignedUp.current ? 'Dein Konto ist startklar.' : 'Deine Städte werden geholt …' })
+      const t = setTimeout(() => setCelebrate(null), 1700)
+      return () => clearTimeout(t)
+    }
+  }, [a.status, a.user, open])
 
   const close = () => {
     a.clearError()
     setResetSent(false)
     setUnsynced(false)
+    setLeaving(false)
     onClose()
   }
 
@@ -63,148 +128,234 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
     } catch {
       // see above
     }
-    close()
+    setLeaving(true)
+    setTimeout(close, 950)
   }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    justSignedUp.current = tab === 'up'
     if (tab === 'in') await a.signInEmail(email, password)
     else await a.signUpEmail(name, email, password)
   }
 
-  const title = signedIn ? 'Dein Konto' : welcome ? 'Willkommen bei LineForge' : 'Anmelden'
+  const title = celebrate || leaving ? '' : signedIn ? 'Dein Konto' : welcome ? 'Willkommen bei LineForge' : 'Anmelden'
+  const view = leaving ? 'guest' : celebrate ? 'celebrate' : signedIn ? 'profile' : 'form'
 
   return (
-    <Sheet open={open} onClose={close} title={title}>
-      {signedIn ? (
-        <div className="space-y-5">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full text-xl font-bold text-accent-ink" style={{ background: 'linear-gradient(160deg,#d6fb5c,#9bd21c)' }}>
-              {a.user!.photo ? <img src={a.user!.photo} alt="" className="h-full w-full rounded-full object-cover" referrerPolicy="no-referrer" /> : a.user!.name.slice(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-lg font-bold">{a.user!.name}</div>
-              <div className="truncate text-sm text-white/55">{a.user!.email ?? 'Angemeldet'}</div>
-            </div>
-          </div>
+    <MotionConfig reducedMotion="user">
+      <Sheet open={open} onClose={close} title={title}>
+        <AnimatePresence mode="wait" initial={false}>
+          {view === 'guest' && <Celebrate key="guest" headline="Los geht's!" sub="Deine Städte bleiben auf diesem Gerät." />}
+          {view === 'celebrate' && celebrate && <Celebrate key="celebrate" headline={celebrate.headline} sub={celebrate.sub} />}
 
-          <Field label="Anzeigename">
-            <div className="flex gap-2">
-              <input className="field min-w-0 flex-1" defaultValue={a.user!.name} onChange={(e) => setName(e.target.value)} maxLength={40} />
-              <button className="btn-soft rounded-2xl px-4 text-sm" onClick={() => name.trim() && void a.updateName(name)}>
-                Speichern
-              </button>
-            </div>
-          </Field>
+          {view === 'profile' && (
+            <motion.div key="profile" variants={list} initial="hidden" animate="show" exit={{ opacity: 0, y: -10, transition: SWAP }} className="space-y-5">
+              <motion.div variants={rise} className="flex items-center gap-4">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full text-xl font-bold text-accent-ink" style={{ background: 'linear-gradient(160deg,#d6fb5c,#9bd21c)' }}>
+                  {a.user!.photo ? <img src={a.user!.photo} alt="" className="h-full w-full rounded-full object-cover" referrerPolicy="no-referrer" /> : a.user!.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-lg font-bold">{a.user!.name}</div>
+                  <div className="truncate text-sm text-white/55">{a.user!.email ?? 'Angemeldet'}</div>
+                </div>
+              </motion.div>
 
-          <div className="card flex items-center gap-3 rounded-2xl p-3.5">
-            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${a.sync === 'error' ? 'bg-red-400' : a.sync === 'syncing' ? 'animate-pulse bg-amber-300' : 'bg-accent'}`} />
-            <div className="min-w-0 flex-1 text-sm">
-              <div className="font-semibold">{a.sync === 'syncing' ? 'Synchronisiere …' : a.sync === 'error' ? 'Noch nicht synchronisiert' : 'Deine Städte sind in der Cloud'}</div>
-              <div className="text-xs text-white/50">{a.sync === 'error' ? 'Keine Verbindung? Es wird später automatisch nachgeholt.' : 'Auf jedem Gerät, auf dem du angemeldet bist.'}</div>
-            </div>
-            <button className="btn-soft shrink-0 rounded-full px-3.5 py-2 text-xs" onClick={() => void a.syncNow()}>
-              Jetzt
-            </button>
-          </div>
+              <motion.div variants={rise}>
+                <Field label="Anzeigename">
+                  <div className="flex gap-2">
+                    <input className="field min-w-0 flex-1" defaultValue={a.user!.name} onChange={(e) => setName(e.target.value)} maxLength={40} />
+                    <motion.button whileTap={{ scale: 0.94 }} className="btn-soft rounded-2xl px-4 text-sm" onClick={() => name.trim() && void a.updateName(name)}>
+                      Speichern
+                    </motion.button>
+                  </div>
+                </Field>
+              </motion.div>
 
-          {a.guestCities > 0 && adopted === null && (
-            <div className="card rounded-2xl p-3.5">
-              <div className="text-sm font-semibold">
-                {a.guestCities} {a.guestCities === 1 ? 'Stadt liegt' : 'Städte liegen'} ohne Konto auf diesem Gerät
-              </div>
-              <p className="mt-1 text-xs text-white/50">Übernimm sie in dein Konto, dann sind sie überall dabei.</p>
-              <button className="btn-primary mt-3 w-full rounded-2xl px-4 py-3 text-sm" onClick={() => void a.adoptLocalCities().then(setAdopted)}>
-                In mein Konto übernehmen
-              </button>
-            </div>
+              <motion.div variants={rise} className="card flex items-center gap-3 rounded-2xl p-3.5">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${a.sync === 'error' ? 'bg-red-400' : a.sync === 'syncing' ? 'animate-pulse bg-amber-300' : 'bg-accent'}`} />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="font-semibold">{a.sync === 'syncing' ? 'Synchronisiere …' : a.sync === 'error' ? 'Noch nicht synchronisiert' : 'Deine Städte sind in der Cloud'}</div>
+                  <div className="text-xs text-white/50">{a.sync === 'error' ? 'Keine Verbindung? Es wird später automatisch nachgeholt.' : 'Auf jedem Gerät, auf dem du angemeldet bist.'}</div>
+                </div>
+                <motion.button whileTap={{ scale: 0.92 }} className="btn-soft shrink-0 rounded-full px-3.5 py-2 text-xs" onClick={() => void a.syncNow()}>
+                  Jetzt
+                </motion.button>
+              </motion.div>
+
+              <AnimatePresence initial={false}>
+                {a.guestCities > 0 && adopted === null && (
+                  <motion.div key="adopt" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={SOFT} style={{ overflow: 'hidden' }}>
+                    <div className="card rounded-2xl p-3.5">
+                      <div className="text-sm font-semibold">
+                        {a.guestCities} {a.guestCities === 1 ? 'Stadt liegt' : 'Städte liegen'} ohne Konto auf diesem Gerät
+                      </div>
+                      <p className="mt-1 text-xs text-white/50">Übernimm sie in dein Konto, dann sind sie überall dabei.</p>
+                      <motion.button whileTap={{ scale: 0.97 }} className="btn-primary mt-3 w-full rounded-2xl px-4 py-3 text-sm" onClick={() => void a.adoptLocalCities().then(setAdopted)}>
+                        In mein Konto übernehmen
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <AnimatePresence>
+                {adopted !== null && (
+                  <motion.p key="adopted" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-sm text-accent">
+                    {adopted} Stadt/Städte übernommen.
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence initial={false}>
+                {unsynced && (
+                  <motion.p key="unsynced" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden rounded-2xl bg-red-500/10 text-sm text-red-200">
+                    <span className="block p-3">Einige Änderungen sind noch nicht in der Cloud (vielleicht bist du offline). Beim Abmelden gehen sie verloren.</span>
+                  </motion.p>
+                )}
+              </AnimatePresence>
+              <motion.button
+                variants={rise}
+                whileTap={{ scale: 0.97 }}
+                className="btn-soft flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm text-red-200"
+                onClick={async () => {
+                  const r = await a.signOut(unsynced)
+                  if (r === 'unsynced') setUnsynced(true)
+                  else close()
+                }}
+              >
+                {unsynced ? 'Trotzdem abmelden' : 'Abmelden'}
+              </motion.button>
+            </motion.div>
           )}
-          {adopted !== null && <p className="text-sm text-accent">{adopted} Stadt/Städte übernommen.</p>}
 
-          {unsynced && <p className="rounded-2xl bg-red-500/10 p-3 text-sm text-red-200">Einige Änderungen sind noch nicht in der Cloud (vielleicht bist du offline). Beim Abmelden gehen sie verloren.</p>}
-          <button
-            className="btn-soft flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm text-red-200"
-            onClick={async () => {
-              const r = await a.signOut(unsynced)
-              if (r === 'unsynced') setUnsynced(true)
-              else close()
-            }}
-          >
-            {unsynced ? 'Trotzdem abmelden' : 'Abmelden'}
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {welcome && <p className="text-sm text-white/60">Melde dich an, dann sind deine Städte auf jedem Gerät da. Oder leg direkt los: als Gast bleiben sie auf diesem Gerät.</p>}
+          {view === 'form' && (
+            <motion.div key="form" variants={list} initial="hidden" animate="show" exit={{ opacity: 0, y: -10, transition: SWAP }} className="space-y-4">
+              {welcome && (
+                <motion.p variants={rise} className="text-sm text-white/60">
+                  Melde dich an, dann sind deine Städte auf jedem Gerät da. Oder leg direkt los: als Gast bleiben sie auf diesem Gerät.
+                </motion.p>
+              )}
 
-          <button
-            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-[15px] font-semibold text-[#1f1f1f] active:scale-[0.98] disabled:opacity-50"
-            disabled={a.busy}
-            onClick={() => void a.signInGoogle()}
-          >
-            <GoogleG /> Mit Google fortfahren
-          </button>
+              <motion.button
+                variants={rise}
+                whileTap={{ scale: 0.97 }}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-[15px] font-semibold text-[#1f1f1f] disabled:opacity-50"
+                disabled={a.busy}
+                onClick={() => {
+                  justSignedUp.current = false
+                  void a.signInGoogle()
+                }}
+              >
+                <GoogleG /> Mit Google fortfahren
+              </motion.button>
 
-          <div className="flex items-center gap-3 text-xs text-white/35">
-            <span className="h-px flex-1 bg-white/10" /> oder <span className="h-px flex-1 bg-white/10" />
-          </div>
+              <motion.div variants={rise} className="flex items-center gap-3 text-xs text-white/35">
+                <span className="h-px flex-1 bg-white/10" /> oder <span className="h-px flex-1 bg-white/10" />
+              </motion.div>
 
-          <Segmented<Tab>
-            value={tab}
-            onChange={(t) => {
-              setTab(t)
-              a.clearError()
-              setResetSent(false)
-            }}
-            options={[
-              { value: 'in', label: 'Anmelden' },
-              { value: 'up', label: 'Neu hier' },
-            ]}
-          />
+              <motion.div variants={rise}>
+                <Segmented<Tab>
+                  value={tab}
+                  onChange={(t) => {
+                    setTab(t)
+                    a.clearError()
+                    setResetSent(false)
+                  }}
+                  options={[
+                    { value: 'in', label: 'Anmelden' },
+                    { value: 'up', label: 'Neu hier' },
+                  ]}
+                />
+              </motion.div>
 
-          <form onSubmit={submit} className="space-y-3">
-            {tab === 'up' && (
-              <Field label="Name">
-                <input className="field w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Wie sollen wir dich nennen?" autoComplete="name" maxLength={40} />
-              </Field>
-            )}
-            <>
+              <motion.form variants={rise} onSubmit={submit} layout="position" className="space-y-3">
+                {/* the name field flies in from the right when you go to "Neu hier" and flies back out when you return */}
+                <AnimatePresence initial={false}>
+                  {tab === 'up' && (
+                    <motion.div
+                      key="name"
+                      initial={{ height: 0, opacity: 0, x: 70 }}
+                      animate={{ height: 'auto', opacity: 1, x: 0 }}
+                      exit={{ height: 0, opacity: 0, x: 70 }}
+                      transition={SOFT}
+                      style={{ overflow: 'hidden', margin: '-4px', padding: '4px' }}
+                    >
+                      <div className="pb-3">
+                        <Field label="Name">
+                          <input className="field w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Wie sollen wir dich nennen?" autoComplete="name" maxLength={40} />
+                        </Field>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <Field label="E-Mail">
                   <input className="field w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" autoComplete="email" required />
                 </Field>
                 <Field label="Passwort">
                   <input className="field w-full" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tab === 'up' ? 'Mindestens 6 Zeichen' : 'Dein Passwort'} autoComplete={tab === 'up' ? 'new-password' : 'current-password'} minLength={6} required />
                 </Field>
-            </>
-            {a.error && <p className="rounded-2xl bg-red-500/10 p-3 text-sm text-red-200">{a.error}</p>}
-            {resetSent && <p className="rounded-2xl bg-accent/10 p-3 text-sm text-accent">Wir haben dir eine E-Mail zum Zurücksetzen geschickt.</p>}
 
-            <button type="submit" disabled={a.busy} className="btn-primary flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[15px] disabled:opacity-60">
-              {a.busy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-              {tab === 'in' ? 'Anmelden' : 'Konto erstellen'}
-            </button>
+                <AnimatePresence initial={false}>
+                  {a.error && (
+                    <motion.p
+                      key={a.error}
+                      initial={{ opacity: 0, height: 0, x: 0 }}
+                      animate={{ opacity: 1, height: 'auto', x: [0, -9, 8, -5, 3, 0] }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ height: SOFT, opacity: { duration: 0.2 }, x: { duration: 0.45, delay: 0.1 } }}
+                      className="overflow-hidden rounded-2xl bg-red-500/10 text-sm text-red-200"
+                    >
+                      <span className="block p-3">{a.error}</span>
+                    </motion.p>
+                  )}
+                  {resetSent && (
+                    <motion.p key="reset" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden rounded-2xl bg-accent/10 text-sm text-accent">
+                      <span className="block p-3">Wir haben dir eine E-Mail zum Zurücksetzen geschickt.</span>
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
-            {tab === 'in' && (
-              <button
-                type="button"
-                className="w-full text-center text-sm text-white/55 underline-offset-4 hover:underline"
-                onClick={async () => {
-                  if (!email.trim()) return void useAuth.setState({ error: 'Gib oben deine E-Mail ein, dann schicken wir dir den Link.' })
-                  setResetSent(await a.resetPassword(email))
-                }}
-              >
-                Passwort vergessen?
-              </button>
-            )}
-          </form>
+                <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={a.busy} className="btn-primary flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl px-4 py-3.5 text-[15px] disabled:opacity-60">
+                  <AnimatePresence initial={false}>
+                    {a.busy && <motion.span key="spin" initial={{ width: 0, opacity: 0 }} animate={{ width: 16, opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="h-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+                  </AnimatePresence>
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span key={tab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.16 }}>
+                      {tab === 'in' ? 'Anmelden' : 'Konto erstellen'}
+                    </motion.span>
+                  </AnimatePresence>
+                </motion.button>
 
-          {welcome && (
-            <button className="btn-soft flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm" onClick={guest}>
-              <Icon name="arrow" size={16} /> Als Gast fortfahren
-            </button>
+                <AnimatePresence initial={false}>
+                  {tab === 'in' && (
+                    <motion.button
+                      key="forgot"
+                      type="button"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="block w-full overflow-hidden text-center text-sm text-white/55 underline-offset-4 hover:underline"
+                      onClick={async () => {
+                        if (!email.trim()) return void useAuth.setState({ error: 'Gib oben deine E-Mail ein, dann schicken wir dir den Link.' })
+                        setResetSent(await a.resetPassword(email))
+                      }}
+                    >
+                      <span className="block py-1">Passwort vergessen?</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </motion.form>
+
+              {welcome && (
+                <motion.button variants={rise} whileTap={{ scale: 0.97 }} className="btn-soft flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm" onClick={guest}>
+                  <Icon name="arrow" size={16} /> Als Gast fortfahren
+                </motion.button>
+              )}
+            </motion.div>
           )}
-        </div>
-      )}
-    </Sheet>
+        </AnimatePresence>
+      </Sheet>
+    </MotionConfig>
   )
 }
