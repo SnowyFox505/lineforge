@@ -4,9 +4,10 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
-import { isUndergroundStation, lookOf, STATION_LOOKS } from '../model/profiles'
+import { isUndergroundStation, lookOf, STATION_LOOKS, UG_COVER, UG_LIFT } from '../model/profiles'
+import { RAIL } from '../model/scale'
 import { layoutStation, MAX_TRACKS, resolveDesign, ROOF_LABEL, stationOperators } from '../model/stationDesign'
-import { clusterByDirection, lineDirectionAtStation, MAX_LEVELS } from '../model/stationGroups'
+import { clusterByDirection, levelHeight, lineDirectionAtStation, MAX_LEVELS } from '../model/stationGroups'
 import type { CityDoc } from '../model/types'
 import type { OperatorId, PlatformLength, PlatformStyle, RoofType, StationDesign } from '../model/types'
 import { useEditor } from '../store/editorStore'
@@ -14,6 +15,7 @@ import Icon from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
 import { LAND_Y } from './heights'
 import StationBuilding from './StationBuilding'
+import type { EntranceSign } from './StationBuilding'
 import { TrainStatic } from './vehicles3d'
 import { trainLength, VEHICLES } from '../model/vehicles'
 
@@ -294,6 +296,14 @@ export default function StationEditor3D() {
     const minLen = [...used].reduce((m, op) => Math.max(m, trainLength(VEHICLES[op]) + 2), 0)
     return layoutStation(design, minLen)
   }, [design, ops])
+  // what the station looks like in the world: the same rules as there (level height, tunnel, outer look, entrance building)
+  const levelCount = Math.max(1, assign.length)
+  const liftWorld = st && levelCount === 1 && isUndergroundStation(doc, st) ? UG_LIFT : levelHeight(levelCount, activeLevel)
+  const lift = liftWorld / RAIL // the editor builds at design size
+  const underground = lift <= UG_COVER / RAIL
+  const sign: EntranceSign = ops.includes('ubahn') ? 'U' : ops.includes('sbahn') ? 'S' : 'Bf'
+  const entrance = st && activeLevel === 0 && lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null
+  const look = st ? lookOf(st) : null
   // camera distance that frames the whole station, whatever its size
   const dist = layout ? Math.max(layout.length, layout.halfWidth * 2 + 4) * 1.45 + 6 : 24
 
@@ -317,7 +327,7 @@ export default function StationEditor3D() {
               {/* ground slab; see-through when the metro level is shown */}
               <mesh position={[0, LAND_Y - 0.25, 0]}>
                 <boxGeometry args={[layout.length + 14, 0.5, layout.halfWidth * 2 + 14]} />
-                <meshStandardMaterial color="#2f6246" roughness={1} transparent={design.ubahn} opacity={design.ubahn ? 0.55 : 1} />
+                <meshStandardMaterial key={design.ubahn || underground ? 'see' : 'solid'} color="#2f6246" roughness={1} transparent={design.ubahn || underground} opacity={design.ubahn || underground ? 0.5 : 1} depthWrite={!(design.ubahn || underground)} />
               </mesh>
               {design.ubahn && (
                 <mesh position={[0, LAND_Y - 1.6, 0]}>
@@ -325,8 +335,10 @@ export default function StationEditor3D() {
                   <meshStandardMaterial color="#10161d" roughness={1} transparent opacity={0.35} />
                 </mesh>
               )}
-              <StationBuilding design={design} layout={layout} underground />
-              <PreviewTrains tracks={layout.tracks} colors={colors} length={layout.length} />
+              <StationBuilding design={design} layout={layout} underground lift={lift} liftScale={RAIL} shell={look} entrance={entrance} sign={sign} />
+              <group position={[0, lift, 0]}>
+                <PreviewTrains tracks={layout.tracks} colors={colors} length={layout.length} />
+              </group>
               <OrbitControls enableDamping dampingFactor={0.08} target={[0, 0.6, 0]} maxPolarAngle={Math.PI / 2.05} minDistance={4} maxDistance={60} />
             </Canvas>
           </div>
