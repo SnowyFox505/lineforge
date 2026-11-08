@@ -19,7 +19,7 @@ function Mat({ color, opacity = 1, metal = 0.1, rough = 0.8 }: { color: string; 
 function Barrel({ L, W, k, base, color, opacity = 1, ribs = true }: { L: number; W: number; k: number; base: number; color: string; opacity?: number; ribs?: boolean }) {
   const r = W / 2
   const geo = useMemo(() => {
-    const g = new THREE.CylinderGeometry(r, r, L, 40, 1, true, 0, Math.PI)
+    const g = new THREE.CylinderGeometry(r, r, L, 40, Math.min(48, Math.max(1, Math.ceil(L / 0.45))), true, 0, Math.PI)
     g.rotateZ(Math.PI / 2)
     return g
   }, [r, L])

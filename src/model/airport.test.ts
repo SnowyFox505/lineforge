@@ -11,6 +11,16 @@ describe('airport layout', () => {
     expect(airportBoxes(d)).toEqual([{ zoneId: 1, name: 'F', x0: 20, y0: 10, x1: 50, y1: 24 }])
   })
 
+  it('ignores single cells left behind after erasing a part of the area', () => {
+    const d = createCity('T', 'creative', 64)
+    d.zones = [{ id: 1, kind: 'airport', name: 'F' }]
+    for (let y = 10; y < 24; y++) for (let x = 20; x < 50; x++) d.zoneGrid![y * 64 + x] = 1
+    // the user extended the area to the right, then erased it again but missed two cells
+    d.zoneGrid![12 * 64 + 59] = 1
+    d.zoneGrid![18 * 64 + 61] = 1
+    expect(airportBoxes(d)).toEqual([{ zoneId: 1, name: 'F', x0: 20, y0: 10, x1: 50, y1: 24 }])
+  })
+
   it('lays a big airport out along its long side with everything inside the area', () => {
     const l = airportLayout({ x0: 0, y0: 0, x1: 34, y1: 16 })
     expect(l.horiz).toBe(true)

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { OPERATORS } from '../model/constants'
 import type { StationType } from '../model/types'
 import { useEditor } from '../store/editorStore'
@@ -14,6 +14,11 @@ const TARGET_W = 500 // px the longer side of the network is scaled to
 const MIN_U = 10
 const MAX_U = 38
 const PAD = 0
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 8
+/** space the header and the tab bar cover (the plan is centred between them) */
+const VIEW_TOP = 84
+const VIEW_BOTTOM = 130
 const FONT = 17
 const SANS = "'Space Grotesk Variable', Helvetica, Arial, sans-serif"
 
@@ -101,14 +106,9 @@ export default function PlanView() {
   const doc = useEditor((s) => s.doc)
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(1)
   const [theme, setTheme] = useState<ThemeName>('dark')
   const [box, setBox] = useState({ w: 0, h: 0 })
   const T = THEMES[theme]
-  const zoomNow = useRef(1)
-  useEffect(() => {
-    zoomNow.current = zoom
-  }, [zoom])
   const hasStations = Object.keys(doc.stations).length > 0
 
   useEffect(() => {
@@ -120,31 +120,121 @@ export default function PlanView() {
     return () => ro.disconnect()
   }, [hasStations])
 
-  // two fingers pinch the plan bigger or smaller (one finger keeps scrolling it)
+  // --- pan and zoom: drag to move, pinch / mouse wheel / double tap to zoom (all around the fingers or cursor) ---
+  const view = useRef({ zoom: 1, x: 0, y: 0, auto: true })
+  const geo = useRef({ mapW: 1, totalH: 1, fit: 1, boxW: 0, boxH: 0 })
+  const apply = useCallback(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const g = geo.current
+    const v = view.current
+    const s = g.fit * v.zoom
+    const w = g.mapW * s
+    const h = g.totalH * s
+    const room = g.boxH - VIEW_TOP - VIEW_BOTTOM
+    if (v.auto) {
+      v.x = (g.boxW - w) / 2
+      v.y = h > room ? VIEW_TOP : VIEW_TOP + (room - h) / 2
+    } else {
+      // never lose the plan completely
+      v.x = Math.min(g.boxW - 70, Math.max(70 - w, v.x))
+      v.y = Math.min(g.boxH - 70, Math.max(70 - h, v.y))
+    }
+    svg.setAttribute('width', String(w))
+    svg.setAttribute('height', String(h))
+    svg.style.transform = `translate(${v.x}px, ${v.y}px)`
+  }, [])
+  const zoomAt = useCallback(
+    (factor: number, fx: number, fy: number) => {
+      apply() // settles the automatic centring before the first manual change
+      const v = view.current
+      const g = geo.current
+      const z1 = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor))
+      if (z1 === v.zoom) return
+      const s0 = g.fit * v.zoom
+      const s1 = g.fit * z1
+      v.x = fx - ((fx - v.x) / s0) * s1
+      v.y = fy - ((fy - v.y) / s0) * s1
+      v.zoom = z1
+      v.auto = false
+      apply()
+    },
+    [apply],
+  )
+  const centre = () => ({ x: geo.current.boxW / 2, y: VIEW_TOP + (geo.current.boxH - VIEW_TOP - VIEW_BOTTOM) / 2 })
+  const resetView = useCallback(() => {
+    view.current = { zoom: 1, x: 0, y: 0, auto: true }
+    apply()
+  }, [apply])
+
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    let startDist = 0
-    let startZoom = 1
-    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
-    const start = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        startDist = dist(e.touches)
-        startZoom = zoomNow.current
-      } else startDist = 0
+    const pts = new Map<number, { x: number; y: number }>()
+    const local = (e: { clientX: number; clientY: number }) => {
+      const r = el.getBoundingClientRect()
+      return { x: e.clientX - r.left, y: e.clientY - r.top }
     }
-    const move = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || startDist <= 0) return
+    const down = (e: PointerEvent) => {
+      pts.set(e.pointerId, local(e))
+      el.setPointerCapture?.(e.pointerId)
+    }
+    const move = (e: PointerEvent) => {
+      const prev = pts.get(e.pointerId)
+      if (!prev) return
+      const cur = local(e)
+      if (pts.size === 1) {
+        apply()
+        const v = view.current
+        v.x += cur.x - prev.x
+        v.y += cur.y - prev.y
+        v.auto = false
+        apply()
+      } else if (pts.size === 2) {
+        const [a, b] = [...pts.entries()]
+        const other = a[0] === e.pointerId ? b[1] : a[1]
+        const d0 = Math.hypot(prev.x - other.x, prev.y - other.y)
+        const d1 = Math.hypot(cur.x - other.x, cur.y - other.y)
+        const m0 = { x: (prev.x + other.x) / 2, y: (prev.y + other.y) / 2 }
+        const m1 = { x: (cur.x + other.x) / 2, y: (cur.y + other.y) / 2 }
+        if (d0 > 4 && d1 > 4) zoomAt(d1 / d0, m0.x, m0.y)
+        const v = view.current
+        v.x += m1.x - m0.x
+        v.y += m1.y - m0.y
+        v.auto = false
+        apply()
+      }
+      pts.set(e.pointerId, cur)
+    }
+    const up = (e: PointerEvent) => {
+      pts.delete(e.pointerId)
+    }
+    const wheel = (e: WheelEvent) => {
       e.preventDefault()
-      setZoom(Math.min(3, Math.max(0.5, startZoom * (dist(e.touches) / startDist))))
+      const p = local(e)
+      // a trackpad pinch arrives as ctrl + wheel with small steps
+      zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)), p.x, p.y)
     }
-    el.addEventListener('touchstart', start, { passive: true })
-    el.addEventListener('touchmove', move, { passive: false })
+    const dbl = (e: MouseEvent) => {
+      const p = local(e)
+      if (view.current.zoom > 1.3) resetView()
+      else zoomAt(2.4, p.x, p.y)
+    }
+    el.addEventListener('pointerdown', down)
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', up)
+    el.addEventListener('pointercancel', up)
+    el.addEventListener('wheel', wheel, { passive: false })
+    el.addEventListener('dblclick', dbl)
     return () => {
-      el.removeEventListener('touchstart', start)
-      el.removeEventListener('touchmove', move)
+      el.removeEventListener('pointerdown', down)
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', up)
+      el.removeEventListener('pointercancel', up)
+      el.removeEventListener('wheel', wheel)
+      el.removeEventListener('dblclick', dbl)
     }
-  }, [hasStations])
+  }, [hasStations, apply, zoomAt, resetView])
 
   const plan = useMemo(() => {
     const stations = Object.values(doc.stations)
@@ -249,6 +339,11 @@ export default function PlanView() {
     return { stations, types, px, py, lines, badges, labels, vx, vy, mapW: vw, mapH: vh, legendH }
   }, [doc])
 
+  // sizes the plan and puts it where the user left it (after every render: the box size or the plan may have changed)
+  useLayoutEffect(() => {
+    apply()
+  })
+
   function serialize() {
     const svg = svgRef.current!.cloneNode(true) as SVGSVGElement
     svg.removeAttribute('style')
@@ -301,20 +396,18 @@ export default function PlanView() {
   const widthFit = box.w > 0 ? Math.min((box.w - 24) / mapW, 1.6) : 1
   const heightFit = box.w > box.h && box.h > 300 ? (box.h - 214) / totalH : Infinity
   const fit = Math.max(0.2, Math.min(widthFit, heightFit))
-  const scale = fit * zoom
   const lineList = Object.values(doc.lines)
+  geo.current = { mapW, totalH, fit, boxW: box.w, boxH: box.h }
 
   return (
     <div className="absolute inset-0">
-      <div ref={wrapRef} className="h-full overflow-auto" style={{ touchAction: 'pan-x pan-y', background: `linear-gradient(180deg, ${T.bgA}, ${T.bgB})` }}>
-        <div className="flex min-h-full items-center justify-center px-3 pb-[130px] pt-[84px]">
+      <div ref={wrapRef} className="relative h-full touch-none select-none overflow-hidden" style={{ touchAction: 'none', cursor: 'grab', background: `linear-gradient(180deg, ${T.bgA}, ${T.bgB})` }}>
+        <div>
           <svg
             ref={svgRef}
             xmlns="http://www.w3.org/2000/svg"
             viewBox={`${vx} ${vy} ${mapW} ${totalH}`}
-            width={mapW * scale}
-            height={totalH * scale}
-            style={{ display: 'block', flexShrink: 0, fontFamily: SANS, borderRadius: 24, boxShadow: '0 30px 80px -20px rgba(0,0,0,0.6)' }}
+            style={{ position: 'absolute', left: 0, top: 0, display: 'block', fontFamily: SANS, borderRadius: 24, boxShadow: '0 30px 80px -20px rgba(0,0,0,0.6)', transformOrigin: '0 0', willChange: 'transform' }}
           >
             <defs>
               <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -437,8 +530,9 @@ export default function PlanView() {
 
       <div className="pointer-events-none absolute bottom-[98px] right-3 z-10 flex flex-col gap-2">
         {[
-          { icon: 'zoomin' as const, on: () => setZoom((z) => Math.min(3, z * 1.3)), label: 'Vergrößern' },
-          { icon: 'zoomout' as const, on: () => setZoom((z) => Math.max(0.5, z / 1.3)), label: 'Verkleinern' },
+          { icon: 'zoomin' as const, on: () => zoomAt(1.4, centre().x, centre().y), label: 'Vergrößern' },
+          { icon: 'zoomout' as const, on: () => zoomAt(1 / 1.4, centre().x, centre().y), label: 'Verkleinern' },
+          { icon: 'fit' as const, on: resetView, label: 'Einpassen' },
           { icon: (theme === 'dark' ? 'sun' : 'moon') as 'sun' | 'moon', on: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), label: 'Hell/Dunkel' },
           { icon: 'download' as const, on: exportSvg, label: 'SVG exportieren' },
           { icon: 'image' as const, on: exportPng, label: 'PNG exportieren' },

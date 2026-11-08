@@ -1,3 +1,4 @@
+import { airportBoxes } from '../model/airport'
 import type { CityDoc, ZoneKind } from '../model/types'
 import { buildTerrainPaths } from './terrainRender'
 import { urbanAlpha } from './zoneSoft'
@@ -72,10 +73,7 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
       const s = sums.get(z.id)!
       return { name: z.name, kind: z.kind, x: s.x / s.n, y: s.y / s.n, cells: s.n }
     })
-  const airports = zones.filter((z) => z.kind === 'airport' && sums.has(z.id)).map((z) => {
-    const s = sums.get(z.id)!
-    return { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cells: s.n }
-  })
+  const airports = airportBoxes(doc).map((b) => ({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, cells: sums.get(b.zoneId)?.n ?? 0 }))
   // soft edge: a 1 px per cell alpha image, scaled up smoothly when drawn
   let soft: HTMLCanvasElement | null = null
   if (masks.city || masks.suburb) {

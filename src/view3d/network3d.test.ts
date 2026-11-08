@@ -5,7 +5,7 @@ import type { CityDoc, OperatorId } from '../model/types'
 import { LAND_Y } from './heights'
 import { LEVEL_BASE } from '../model/stationGroups'
 import { trainLength, VEHICLES } from '../model/vehicles'
-import { posOn, buildNetwork3D, BUFFER_CLEAR, LEVEL_H, TRAM_GAP } from './network3d'
+import { posOn, buildNetwork3D, BUFFER_CLEAR, groupFrame, LEVEL_H, TRAM_GAP } from './network3d'
 
 function city(): CityDoc {
   return createCity('T', 'creative', 128)
@@ -222,6 +222,82 @@ describe('3D network geometry', () => {
     // trams sit flush with the street, a little below a railway bed
     expect(t1.cy[Math.floor(t1.n / 4)]).toBeLessThan(s1.cy[Math.floor(s1.n / 4)])
   })
+  it('does not let stations that stand close together grow into each other', () => {
+    let d = city()
+    d = station(d, 'a', 40, 60, { length: 'long', tracks: 4, roof: 'hall' })
+    d = station(d, 'b', 43, 60, { length: 'long', tracks: 4, roof: 'hall' })
+    d = station(d, 'c', 45, 63, { length: 'medium' })
+    d = station(d, 'e', 90, 60)
+    d = line(d, 'L', 'sbahn', ['a', 'b', 'e'])
+    d = line(d, 'M', 'sbahn', ['c', 'e'])
+    const net = buildNetwork3D(d)
+    const gs = Object.values(net.stations).flatMap((s) => s.groups.map((g) => ({ id: s.st.id, g })))
+    const box = (g: (typeof gs)[number]['g']) => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 0.8, halfW: g.layout.halfWidth + 0.5 })
+    // two rectangles (platforms with their roofs) overlap unless some axis separates them
+    const overlap = (p: ReturnType<typeof box>, q: ReturnType<typeof box>) =>
+      [[p.ax, p.az], [-p.az, p.ax], [q.ax, q.az], [-q.az, q.ax]].every(([ux, uz]) => {
+        const reach = (r: ReturnType<typeof box>) => r.halfL * Math.abs(r.ax * ux + r.az * uz) + r.halfW * Math.abs(-r.az * ux + r.ax * uz)
+        return reach(p) + reach(q) > Math.abs((q.ox - p.ox) * ux + (q.oz - p.oz) * uz) + 1e-6
+      })
+    let pairs = 0
+    for (let i = 0; i < gs.length; i++) {
+      for (let j = i + 1; j < gs.length; j++) {
+        if (gs[i].id === gs[j].id) continue
+        pairs++
+        expect(overlap(box(gs[i].g), box(gs[j].g))).toBe(false)
+      }
+    }
+    expect(pairs).toBeGreaterThan(0)
+    // a platform is shortened, not dropped
+    for (const { g } of gs) expect(g.layout.length).toBeGreaterThanOrEqual(2.6 - 1e-6)
+  })
+
+  it('bends a station that stands on a curve, and keeps the tracks on the platform', () => {
+    let d = city()
+    d = station(d, 'a', 20, 60)
+    d = station(d, 'b', 60, 60, { length: 'long' })
+    d = station(d, 'c', 85, 85)
+    d = line(d, 'L', 'sbahn', ['a', 'b', 'c'])
+    d = { ...d, lines: { ...d.lines, L: { ...d.lines.L, curve: 14 } } }
+    const net = buildNetwork3D(d)
+    const g = net.stations.b.groups[0]
+    expect(Math.abs(g.curv)).toBeGreaterThan(0)
+    // never sharper than a realistic platform curve
+    expect(Math.abs(g.curv * g.layout.length)).toBeLessThanOrEqual(0.55 + 1e-6)
+    expect(1 / Math.abs(g.curv)).toBeGreaterThanOrEqual(8 - 1e-6)
+    const ln = net.lines[0]
+    const stop = ln.stops.find((s) => s.stationId === 'b')!
+    // along the whole platform both tracks stay at their lateral position on the curved platform axis
+    for (let off = -g.layout.length / 2; off <= g.layout.length / 2; off += 0.5) {
+      const fr = groupFrame(g, off)
+      const f = posOn(ln, 'f', stop.d + off * Math.sign(g.ax * posOn(ln, 'c', stop.d).tx + g.az * posOn(ln, 'c', stop.d).tz || 1))
+      const lat = (f.x - fr.x) * fr.nx + (f.z - fr.z) * fr.nz
+      expect(Math.abs(lat - stop.zF)).toBeLessThan(0.35)
+    }
+  })
+
+  it('keeps a loop line that ends where it began in order (it passes the first station twice)', () => {
+    let d = city()
+    d = station(d, 'h', 98, 24)
+    d = station(d, 'f', 92, 77)
+    d = station(d, 'x', 63, 24)
+    d = line(d, 'S3', 'sbahn', ['h', 'f', 'x', 'h'])
+    const net = buildNetwork3D(d)
+    const ln = net.lines[0]
+    expect(ln.stops).toHaveLength(4)
+    // the stops come in route order, spread along the whole line
+    for (let k = 1; k < ln.stops.length; k++) expect(ln.stops[k].d).toBeGreaterThan(ln.stops[k - 1].d + 5)
+    expect(ln.total).toBeGreaterThan(120)
+    // no hairpin on the way
+    let worst = 0
+    for (let j = 0; j + 4 < ln.n; j++) {
+      let t = Math.abs(Math.atan2(ln.tz[j + 4], ln.tx[j + 4]) - Math.atan2(ln.tz[j], ln.tx[j]))
+      if (t > Math.PI) t = 2 * Math.PI - t
+      worst = Math.max(worst, t)
+    }
+    expect(worst).toBeLessThan(1.3)
+  })
+
   it('keeps the bends of a busy station smooth (no hairpins, no jumps between neighbouring platforms)', () => {
     let d = city()
     d = station(d, 'w', 30, 58)

@@ -8,6 +8,7 @@ import type { StationLook } from '../model/types'
 import StationShell from './StationShell'
 import { TAPER } from './network3d'
 import { smooth01 } from './curves'
+import Bend from './Bend'
 
 export const PF_TOP = RAIL_Y + 0.1
 
@@ -181,7 +182,7 @@ function Vault({ halfW, length, kind }: { halfW: number; length: number; kind: '
   const k = kind === 'hall' ? 0.7 : 0.42
   const r = halfW
   const geo = useMemo(() => {
-    const g = new THREE.CylinderGeometry(r, r, length, 36, 1, true, 0, Math.PI)
+    const g = new THREE.CylinderGeometry(r, r, length, 36, Math.min(48, Math.max(1, Math.ceil(length / 0.45))), true, 0, Math.PI)
     g.rotateZ(Math.PI / 2)
     return g
   }, [r, length])
@@ -354,7 +355,10 @@ export default function StationBuilding({
   sign = 'U',
   entrance = null,
   shell = null,
+  curve = 0,
 }: {
+  /** curvature of the platform axis (see `StationGroup.curv`); 0 = straight */
+  curve?: number
   design: ResolvedDesign
   layout: StationLayout
   underground?: boolean
@@ -407,7 +411,7 @@ export default function StationBuilding({
       
   ) : null
 
-  return (
+  const body = (
     <group>
       {lift > 0.15 && <Supports layout={layout} lift={lift} groundY={groundY} free={pillarFree} />}
       {lift < -0.15 && lift > UG_COVER && <PitWalls layout={layout} lift={lift} />}
@@ -460,4 +464,5 @@ export default function StationBuilding({
       </group>
     </group>
   )
+  return curve ? <Bend k={curve}>{body}</Bend> : body
 }

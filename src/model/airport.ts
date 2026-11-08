@@ -42,27 +42,50 @@ export interface AirportLayout {
   stands: { u: number; v: number }[]
 }
 
-/** Bounding boxes of all airport areas of a city. */
+/**
+ * Bounding boxes of all airport areas of a city. Only the biggest connected piece of an area counts:
+ * single cells left over from erasing (or a stray dab) must not keep the runway long.
+ */
 export function airportBoxes(doc: CityDoc): AirportBox[] {
   const { size, zoneGrid, zones } = doc
   if (!zoneGrid || !zones) return []
   const out: AirportBox[] = []
+  const seen = new Uint8Array(size * size)
+  const stack: number[] = []
   for (const z of zones) {
     if (z.kind !== 'airport') continue
-    let x0 = size
-    let y0 = size
-    let x1 = -1
-    let y1 = -1
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        if (zoneGrid[y * size + x] !== z.id) continue
-        x0 = Math.min(x0, x)
-        y0 = Math.min(y0, y)
-        x1 = Math.max(x1, x + 1)
-        y1 = Math.max(y1, y + 1)
+    let best: { n: number; x0: number; y0: number; x1: number; y1: number } | null = null
+    for (let start = 0; start < size * size; start++) {
+      if (zoneGrid[start] !== z.id || seen[start]) continue
+      const c = { n: 0, x0: size, y0: size, x1: -1, y1: -1 }
+      stack.push(start)
+      seen[start] = 1
+      while (stack.length) {
+        const i = stack.pop()!
+        const x = i % size
+        const y = (i - x) / size
+        c.n++
+        c.x0 = Math.min(c.x0, x)
+        c.y0 = Math.min(c.y0, y)
+        c.x1 = Math.max(c.x1, x + 1)
+        c.y1 = Math.max(c.y1, y + 1)
+        // 8 neighbours: the soft brush edge can touch only at a corner
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue
+            const j = ny * size + nx
+            if (zoneGrid[j] === z.id && !seen[j]) {
+              seen[j] = 1
+              stack.push(j)
+            }
+          }
+        }
       }
+      if (!best || c.n > best.n) best = c
     }
-    if (x1 > 0) out.push({ zoneId: z.id, name: z.name, x0, y0, x1, y1 })
+    if (best) out.push({ zoneId: z.id, name: z.name, x0: best.x0, y0: best.y0, x1: best.x1, y1: best.y1 })
   }
   return out
 }

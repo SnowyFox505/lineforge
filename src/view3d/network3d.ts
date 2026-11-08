@@ -113,6 +113,11 @@ export interface StationGroup {
   lift: number
   ax: number
   az: number
+  /**
+   * Curvature of the platform axis (1/units, positive = turning towards the local +z side).
+   * 0 for a straight station; a station on a bend follows the curve of its tracks.
+   */
+  curv: number
   /** rotation about Y so that local +x runs along the tracks */
   angle: number
   /** world position of the platform complex (the station centre, or beside it for the tram stop) */
@@ -359,6 +364,167 @@ interface Siding3 {
 }
 
 /**
+ * Point and lateral direction of a platform group's axis at arc position `s` (from its origin along the axis).
+ * A straight group is a line; a curved one an arc of curvature `curv`. Lateral position z of the platform
+ * is then `point + (nx, nz) * z`.
+ */
+export function groupFrame(g: Pick<StationGroup, 'ox' | 'oz' | 'ax' | 'az' | 'curv'>, s: number): { x: number; z: number; nx: number; nz: number } {
+  const nax = -g.az
+  const naz = g.ax
+  const k = g.curv
+  if (Math.abs(k) < 1e-6) return { x: g.ox + g.ax * s, z: g.oz + g.az * s, nx: nax, nz: naz }
+  const th = k * s
+  const sn = Math.sin(th)
+  const cs = Math.cos(th)
+  const a = sn / k
+  const b = (1 - cs) / k
+  return { x: g.ox + g.ax * a + nax * b, z: g.oz + g.az * a + naz * b, nx: -g.ax * sn + nax * cs, nz: -g.az * sn + naz * cs }
+}
+
+interface Box2 {
+  ox: number
+  oz: number
+  ax: number
+  az: number
+  halfL: number
+  halfW: number
+}
+
+/** Do two oriented rectangles overlap? Returns the push that separates them (minimum translation of `b`), or null. */
+function overlapOf(a: Box2, b: Box2): { x: number; z: number; depth: number } | null {
+  const dx = b.ox - a.ox
+  const dz = b.oz - a.oz
+  let best: { x: number; z: number; depth: number } | null = null
+  for (const [ux, uz] of [[a.ax, a.az], [-a.az, a.ax], [b.ax, b.az], [-b.az, b.ax]]) {
+    const reach = (r: Box2) => r.halfL * Math.abs(r.ax * ux + r.az * uz) + r.halfW * Math.abs(-r.az * ux + r.ax * uz)
+    const dist = dx * ux + dz * uz
+    const depth = reach(a) + reach(b) - Math.abs(dist)
+    if (depth <= 0) return null
+    if (!best || depth < best.depth) {
+      const sg = dist >= 0 ? 1 : -1
+      best = { x: ux * sg, z: uz * sg, depth }
+    }
+  }
+  return best
+}
+
+/** Shortest platform a crowded station is cut down to */
+const MIN_PLATFORM = 2.6
+/** Extra length of roofs and halls beyond the platforms, and extra width beside them */
+const FOOT_L = 0.8
+const FOOT_W = 0.5
+
+/**
+ * Stations that stand close together would grow into each other (platforms, roofs, halls). Their platforms are
+ * shortened until they clear each other; if they are too close even then, they are pushed apart a little.
+ */
+export function separateStations(all: { id: string; g: StationGroup }[]): void {
+  const box = (g: StationGroup, len: number): Box2 => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: len / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W })
+  const pushed = new Map<StationGroup, number>()
+  for (let pass = 0; pass < 5; pass++) {
+    let changed = false
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const A = all[i]
+        const B = all[j]
+        if (A.id === B.id || Math.abs(A.g.lift - B.g.lift) > 1) continue
+        const LA = A.g.layout.length
+        const LB = B.g.layout.length
+        if (!overlapOf(box(A.g, LA), box(B.g, LB))) continue
+        // shorten both in the same proportion until they clear each other
+        let f = 1
+        while (f > 0.2) {
+          f -= 0.05
+          if (!overlapOf(box(A.g, Math.max(MIN_PLATFORM, LA * f)), box(B.g, Math.max(MIN_PLATFORM, LB * f)))) break
+        }
+        const nA = Math.max(MIN_PLATFORM, LA * f)
+        const nB = Math.max(MIN_PLATFORM, LB * f)
+        if (nA < LA - 1e-6) A.g.layout = { ...A.g.layout, length: nA }
+        if (nB < LB - 1e-6) B.g.layout = { ...B.g.layout, length: nB }
+        changed = true
+        // still touching at the shortest platforms: move them apart (at most 1.6 each)
+        const hit = overlapOf(box(A.g, nA), box(B.g, nB))
+        if (hit) {
+          const room = (g: StationGroup) => Math.max(0, 1.6 - (pushed.get(g) ?? 0))
+          const half = hit.depth / 2 + 0.05
+          const mA = Math.min(half, room(A.g))
+          const mB = Math.min(half, room(B.g))
+          A.g.ox -= hit.x * mA
+          A.g.oz -= hit.z * mA
+          B.g.ox += hit.x * mB
+          B.g.oz += hit.z * mB
+          pushed.set(A.g, (pushed.get(A.g) ?? 0) + mA)
+          pushed.set(B.g, (pushed.get(B.g) ?? 0) + mB)
+        }
+      }
+    }
+    if (!changed) break
+  }
+}
+
+/** A platform's total turn (radians) below which it stays straight, and the sharpest a platform may be bent */
+const CURVE_MIN = 0.1
+const CURVE_MAX_TURN = 0.55
+const CURVE_MAX_K = 1 / 8
+
+/**
+ * A station on a bend gets a curved platform. The curvature is read off the tracks of its lines over the length
+ * of the platform; the axis of the group turns to the direction the tracks have at the middle of the station.
+ */
+function curveGroup(g: StationGroup, list: Entry[], coarse: Map<string, Coarse>): void {
+  if (g.kind !== 'main' || g.design.angle !== null || !list.length) return
+  const H = Math.max(3, Math.round(g.layout.length / 2 / STEP))
+  const win: { c: Coarse; a: number; b: number }[] = []
+  for (const e of list) {
+    const c = coarse.get(e.line.id)
+    if (!c) continue
+    const a = Math.max(0, e.i - H)
+    const b = Math.min(c.pts.length - 1, e.i + H)
+    if (b - a >= H) win.push({ c, a, b })
+  }
+  if (!win.length) return
+  // direction of the chord over the platform length, aligned with the group axis
+  let sx = 0
+  let sz = 0
+  for (const w of win) {
+    let dx = w.c.pts[w.b].x - w.c.pts[w.a].x
+    let dz = w.c.pts[w.b].z - w.c.pts[w.a].z
+    const l = Math.hypot(dx, dz) || 1
+    dx /= l
+    dz /= l
+    const s = dx * g.ax + dz * g.az >= 0 ? 1 : -1
+    sx += dx * s
+    sz += dz * s
+  }
+  const ml = Math.hypot(sx, sz)
+  if (ml < 1e-6) return
+  const ax = sx / ml
+  const az = sz / ml
+  let kSum = 0
+  for (const w of win) {
+    const s = (w.c.pts[w.b].x - w.c.pts[w.a].x) * ax + (w.c.pts[w.b].z - w.c.pts[w.a].z) * az >= 0 ? 1 : -1
+    // heading at both ends, in the frame (axis, lateral); oriented along the axis
+    const head = (i: number) => {
+      const tx = w.c.tx[i] * s
+      const tz = w.c.tz[i] * s
+      return Math.atan2(-tx * az + tz * ax, tx * ax + tz * az)
+    }
+    let turn = head(s > 0 ? w.b : w.a) - head(s > 0 ? w.a : w.b)
+    if (turn > Math.PI) turn -= Math.PI * 2
+    if (turn < -Math.PI) turn += Math.PI * 2
+    kSum += turn / Math.max(1e-6, w.c.cum[w.b] - w.c.cum[w.a])
+  }
+  let k = kSum / win.length
+  if (Math.abs(k * g.layout.length) < CURVE_MIN) return
+  const kMax = Math.min(CURVE_MAX_K, CURVE_MAX_TURN / g.layout.length)
+  k = Math.max(-kMax, Math.min(kMax, k))
+  g.curv = k
+  g.ax = ax
+  g.az = az
+  g.angle = Math.atan2(-az, ax)
+}
+
+/**
  * Lines that cross outside of stations do not touch: the one on top climbs onto a viaduct, passes over the other
  * and comes down again. Stations deal with their own crossings through platform levels.
  */
@@ -467,22 +633,34 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     coarse.set(line.id, { pts: r.pts, cum: r.cum, tx: t.tx, tz: t.tz })
   }
 
-  // nearest sample index at or after `from`
+  // The sample at or after `from` where the line passes a station. A line that visits a station twice (a loop that ends
+  // where it began) passes it at both ends: the first pass that comes about as close as the closest one counts, so the
+  // stops stay in the order of the route.
   const nearest = (c: Coarse, sx: number, sz: number, from: number) => {
-    let best = Infinity
-    let bi = from
-    for (let i = from; i < c.pts.length; i++) {
-      const d = (c.pts[i].x - sx) ** 2 + (c.pts[i].z - sz) ** 2
-      if (d < best) {
-        best = d
-        bi = i
+    const n = c.pts.length
+    const dist = (i: number) => Math.hypot(c.pts[i].x - sx, c.pts[i].z - sz)
+    let min = Infinity
+    let argMin = from
+    for (let i = from; i < n; i++) {
+      const d = dist(i)
+      if (d < min) {
+        min = d
+        argMin = i
       }
     }
-    return bi
+    let prev = Infinity
+    for (let i = from; i < n; i++) {
+      const d = dist(i)
+      const next = i + 1 < n ? dist(i + 1) : Infinity
+      if (d <= prev && d <= next && d <= min + 0.35) return i
+      prev = d
+    }
+    return argMin
   }
 
   // ---- pass B: platform groups of every station -------------------------------------------
   const groupsOf = new Map<string, StationGroup[]>()
+  const membersOf = new Map<string, Map<number, Entry[]>>()
   const sidingPlan = new Map<string, Siding3[]>() // `${stationId}|${group}` -> sidings
   const entryOf = new Map<string, Entry>() // `${lineId}|${stationId}`
   const stationBase = new Map<string, { st: Station; design: ResolvedDesign; layout: StationLayout }>()
@@ -547,6 +725,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         lift,
         ax,
         az,
+        curv: 0,
         angle: Math.atan2(-az, ax),
         ox: sx,
         oz: sz,
@@ -569,6 +748,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           lift: 0,
           ax: e.tx,
           az: e.tz,
+          curv: 0,
           angle: Math.atan2(-e.tz, e.tx),
           ox: sx,
           oz: sz,
@@ -634,6 +814,13 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       sidingPlan.set(`${st.id}|${g.index}`, plan)
     }
     groupsOf.set(st.id, groups)
+    membersOf.set(st.id, members)
+  }
+
+  // neighbouring stations must not grow into each other, and a station on a bend follows the bend
+  separateStations([...groupsOf].flatMap(([id, gs]) => gs.map((g) => ({ id, g }))))
+  for (const [id, gs] of groupsOf) {
+    for (const g of gs) curveGroup(g, membersOf.get(id)?.get(g.index) ?? [], coarse)
   }
 
   // ---- pass C: tracks of every line ---------------------------------------------------------
@@ -680,14 +867,24 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       const ang = Math.acos(Math.min(1, Math.abs(dot)))
       const st = doc.stations[r.id]
       const off = Math.hypot(g.ox - (st.x + 0.5 - half), g.oz - (st.y + 0.5 - half))
+      // a loop that calls at the same station again may run through it the other way round
+      let sgn = e.sgn
+      let zF = e.zF
+      let zB = e.zB
+      if (raw.slice(0, k).some((q) => q.id === r.id)) {
+        const d2 = pt.tx[idx] * g.ax + pt.tz[idx] * g.az
+        sgn = d2 >= 0 ? 1 : -1
+        zF = trackFor(g.layout, line.operator, sgn)
+        zB = trackFor(g.layout, line.operator, sgn > 0 ? -1 : 1)
+      }
       return {
         id: r.id,
         k,
         i: idx,
         g,
-        sgn: e.sgn,
-        zF: e.zF,
-        zB: e.zB,
+        sgn,
+        zF,
+        zB,
         half: L / 2,
         taper: TAPER + (ang / (Math.PI / 2)) * 5 + off * 1.1,
         ramp: rampFor(g.lift),
@@ -732,9 +929,9 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       info.forEach((s, k) => {
         const f = kap[j][k]
         if (f <= 0) return
-        const along = (cum0[j] - cum0[s.i]) * s.sgn
-        x += (s.g.ox + s.g.ax * along - px[j]) * f
-        z += (s.g.oz + s.g.az * along - pz[j]) * f
+        const fr = groupFrame(s.g, (cum0[j] - cum0[s.i]) * s.sgn)
+        x += (fr.x - px[j]) * f
+        z += (fr.z - pz[j]) * f
       })
       cx.push(x)
       cz.push(z)
@@ -760,8 +957,9 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         const f = kap[j][k]
         if (f <= 0) return
         const zt = ztOf(k)
-        ox -= s.g.az * zt * f
-        oz += s.g.ax * zt * f
+        const fr = s.g.curv === 0 ? null : groupFrame(s.g, (cum0[j] - cum0[s.i]) * s.sgn)
+        ox += (fr ? fr.nx : -s.g.az) * zt * f
+        oz += (fr ? fr.nz : s.g.ax) * zt * f
       })
       return { x: cx[j] + ox, z: cz[j] + oz }
     }
