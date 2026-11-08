@@ -15,6 +15,8 @@ export const followState = {
   dir: new THREE.Vector3(1, 0, 0),
   /** true while the train is below the ground */
   underground: false,
+  /** true while the train is in or just before a station: roofs and halls open up around it */
+  inStation: false,
   line: '',
   color: '#ffffff',
   status: '',

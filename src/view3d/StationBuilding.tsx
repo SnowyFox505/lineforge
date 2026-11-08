@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { ComponentProps } from 'react'
 import * as THREE from 'three'
 import { scaleLayout } from '../model/stationDesign'
@@ -11,6 +11,7 @@ import StationShell from './StationShell'
 import { TAPER } from './network3d'
 import { smooth01 } from './curves'
 import Bend from './Bend'
+import { xrayCompile } from './xray'
 
 export const PF_TOP = RAIL_Y + 0.1
 
@@ -482,12 +483,26 @@ function StationBody({
  * built at design size and scaled down about the ground, so roofs, benches and platforms keep their proportions.
  */
 export default function StationBuilding(props: ComponentProps<typeof StationBody>) {
+  const root = useRef<THREE.Group>(null)
+  // every material of the station joins the x-ray effect, so the follow camera sees the train through roofs and halls
+  useEffect(() => {
+    root.current?.traverse((o) => {
+      const mats = (o as THREE.Mesh).material
+      for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
+        if (m.userData.xr || !((m as THREE.MeshStandardMaterial).isMeshStandardMaterial)) continue
+        m.userData.xr = true
+        m.onBeforeCompile = xrayCompile
+        m.customProgramCacheKey = () => 'lf-xray'
+        m.needsUpdate = true
+      }
+    })
+  })
   const R = props.layout.scale ?? 1
   const big = useMemo(() => (R === 1 ? props.layout : scaleLayout(props.layout, 1 / R)), [props.layout, R])
-  if (R === 1) return <StationBody {...props} />
+  if (R === 1) return <group ref={root}><StationBody {...props} /></group>
   const { lift = 0, groundY = LAND_Y, pillarFree } = props
   return (
-    <group position={[0, LAND_Y * (1 - R), 0]} scale={R}>
+    <group ref={root} position={[0, LAND_Y * (1 - R), 0]} scale={R}>
       <StationBody
         {...props}
         layout={big}

@@ -44,6 +44,8 @@ export default function Trains3D({ net, speedRef }: { net: Network3D; speedRef: 
         followState.pos.set(h.x, h.y + RAIL_Y, h.z)
         followState.dir.set(h.tx * Math.cos(h.pitch), Math.sin(h.pitch), h.tz * Math.cos(h.pitch)).normalize()
         followState.underground = h.y < -0.9
+        // within a platform's length (plus a run-up) of a stop of its line
+        followState.inStation = tr.net.stops.some((st) => Math.abs(tr.s - st.d) < st.half + 6)
         followState.line = tr.net.line.name
         followState.color = tr.net.line.color
         followState.status = tr.phase === 'dwell' ? `Halt in ${stationName(tr.at)}` : `Weiter nach ${stationName(tr.to)}`

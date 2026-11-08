@@ -13,6 +13,7 @@ import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
 import { buildTerrainPaths } from './terrainRender'
 import { drawTerrainCached, newTerrainCache } from './terrainCache'
+import TrainLayer from './TrainLayer'
 
 const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'zoneErase'
 const BRUSH_TINT = {
@@ -844,6 +845,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
           draw()
         }}
       />
+      <TrainLayer view={view} doc={doc} paths={linePaths} />
     </div>
   )
 }

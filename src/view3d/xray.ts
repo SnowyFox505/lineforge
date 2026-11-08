@@ -9,6 +9,8 @@ export const xray = {
   focus: { value: new THREE.Vector3() },
   radius: { value: 10 },
   strength: { value: 0 },
+  /** how far above the train things start to dissolve: 0 underground, a little more at a station on the ground (the ground itself stays) */
+  lift: { value: 0 },
   rim: { value: new THREE.Color('#c4f03a') },
 }
 
@@ -17,10 +19,11 @@ varying vec3 vXrWorld;
 uniform vec3 uXrFocus;
 uniform float uXrRadius;
 uniform float uXrStrength;
+uniform float uXrLift;
 uniform vec3 uXrRim;
 // x: 1 = keep the fragment, 0 = it dissolves;  y: glow of the ring around the bubble
 vec2 xrayState(vec3 w) {
-  float above = smoothstep(uXrFocus.y - 0.3, uXrFocus.y + 0.4, w.y);
+  float above = smoothstep(uXrFocus.y + uXrLift - 0.3, uXrFocus.y + uXrLift + 0.4, w.y);
   float d = length(w.xz - uXrFocus.xz);
   float inside = 1.0 - smoothstep(uXrRadius * 0.6, uXrRadius, d);
   float ring = smoothstep(uXrRadius * 0.78, uXrRadius * 0.96, d) * (1.0 - smoothstep(uXrRadius * 0.96, uXrRadius * 1.06, d));
@@ -37,6 +40,7 @@ export function xrayCompile(shader: THREE.WebGLProgramParametersWithUniforms) {
   shader.uniforms.uXrFocus = xray.focus
   shader.uniforms.uXrRadius = xray.radius
   shader.uniforms.uXrStrength = xray.strength
+  shader.uniforms.uXrLift = xray.lift
   shader.uniforms.uXrRim = xray.rim
   shader.vertexShader = 'varying vec3 vXrWorld;\n' + shader.vertexShader.replace(
     '#include <begin_vertex>',

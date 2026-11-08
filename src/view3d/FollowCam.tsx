@@ -30,11 +30,12 @@ export default function FollowCam() {
     const st = useEditor.getState()
     const active = !!st.followId
 
-    // the x-ray bubble grows when the train goes below ground and closes when it comes up
-    const goal = active && followState.underground ? 1 : 0
+    // the x-ray bubble grows when the train goes below ground or into a station (roofs, halls) and closes when it is out again
+    const goal = active && (followState.underground || followState.inStation) ? 1 : 0
     xray.strength.value += (goal - xray.strength.value) * (1 - Math.exp(-dt * 3.2))
     if (xray.strength.value < 0.002 && goal === 0) xray.strength.value = 0
     xray.focus.value.copy(followState.pos)
+    xray.lift.value += ((followState.underground ? 0 : 0.55) - xray.lift.value) * (1 - Math.exp(-dt * 6))
     xray.radius.value = st.followMode === 'cockpit' ? 8 : 10.5
 
     if (!controls) return
