@@ -136,6 +136,11 @@ interface EditorState {
   splitLeg: (lineId: string, p: Pt, maxDist: number) => boolean
   /** Move a station (call checkpoint() once before a drag; this does not touch the undo stack) */
   moveStation: (id: string, x: number, y: number) => void
+  /** Fix a station at a place of the network plan (call checkpoint() once before a drag; this does not touch the undo stack) */
+  pinStation: (id: string, p: Pt) => void
+  unpinStation: (id: string) => void
+  /** Let the plan place every station by itself again */
+  clearPins: () => void
 }
 
 export const useEditor = create<EditorState>((set, get) => {
@@ -447,6 +452,32 @@ export const useEditor = create<EditorState>((set, get) => {
       if (!out) return false
       commit(out.doc, { selectedStationId: out.created[0] ?? null })
       return true
+    },
+    pinStation: (id, p) => {
+      const { doc } = get()
+      const st = doc.stations[id]
+      if (!st || (st.planPin?.x === p.x && st.planPin?.y === p.y)) return
+      set({ doc: { ...doc, stations: { ...doc.stations, [id]: { ...st, planPin: p } } } })
+    },
+    unpinStation: (id) => {
+      const { doc } = get()
+      const st = doc.stations[id]
+      if (!st?.planPin) return
+      const { planPin: _gone, ...rest } = st
+      void _gone
+      commit({ ...doc, stations: { ...doc.stations, [id]: rest } })
+    },
+    clearPins: () => {
+      const { doc } = get()
+      if (!Object.values(doc.stations).some((s) => s.planPin)) return
+      const stations = Object.fromEntries(
+        Object.entries(doc.stations).map(([id, st]) => {
+          const { planPin: _gone, ...rest } = st
+          void _gone
+          return [id, rest]
+        }),
+      )
+      commit({ ...doc, stations })
     },
     moveStation: (id, x, y) => {
       const { doc } = get()

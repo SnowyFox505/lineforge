@@ -9,6 +9,7 @@ import { effectiveTypes, planePath } from './glyphs'
 import { placeLabels } from './labels'
 import type { LabelRect } from './labels'
 import { layoutLines } from './layout'
+import { schematize } from './schematic'
 
 const TARGET_W = 500 // px the longer side of the network is scaled to
 const MIN_U = 10
@@ -120,6 +121,9 @@ export default function PlanView() {
     return () => ro.disconnect()
   }, [hasStations])
 
+  /** what the drag handlers need to turn a pointer position into a place in the plan */
+  const planRef = useRef<{ U: number; minX: number; minY: number; vx: number; vy: number; mapW: number; totalH: number; offset: { x: number; y: number } } | null>(null)
+
   // --- pan and zoom: drag to move, pinch / mouse wheel / double tap to zoom (all around the fingers or cursor) ---
   const view = useRef({ zoom: 1, x: 0, y: 0, auto: true })
   const geo = useRef({ mapW: 1, totalH: 1, fit: 1, boxW: 0, boxH: 0 })
@@ -175,11 +179,46 @@ export default function PlanView() {
       const r = el.getBoundingClientRect()
       return { x: e.clientX - r.left, y: e.clientY - r.top }
     }
+    // a station dragged to another place of the plan is pinned there
+    let drag: { id: string; pointer: number; x0: number; y0: number; moved: boolean } | null = null
+    let frame = 0
+    let latest: { x: number; y: number } | null = null
+    const stationOf = (t: EventTarget | null) => (t as Element | null)?.closest?.('[data-station]')?.getAttribute('data-station') ?? null
+    const toPlan = (e: { clientX: number; clientY: number }) => {
+      const pc = planRef.current
+      const svg = svgRef.current
+      if (!pc || !svg) return null
+      const r = svg.getBoundingClientRect()
+      const sx = pc.vx + ((e.clientX - r.left) / r.width) * pc.mapW
+      const sy = pc.vy + ((e.clientY - r.top) / r.height) * pc.totalH
+      return { x: Math.round((sx - PAD) / pc.U + pc.minX - pc.offset.x), y: Math.round((sy - PAD) / pc.U + pc.minY - pc.offset.y) }
+    }
     const down = (e: PointerEvent) => {
+      const sid = stationOf(e.target)
+      if (sid && pts.size === 0) {
+        drag = { id: sid, pointer: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false }
+        el.setPointerCapture?.(e.pointerId)
+        return
+      }
       pts.set(e.pointerId, local(e))
       el.setPointerCapture?.(e.pointerId)
     }
     const move = (e: PointerEvent) => {
+      if (drag && drag.pointer === e.pointerId) {
+        if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return
+        if (!drag.moved) {
+          useEditor.getState().checkpoint()
+          drag.moved = true
+        }
+        latest = toPlan(e)
+        if (!frame) {
+          frame = requestAnimationFrame(() => {
+            frame = 0
+            if (drag && latest) useEditor.getState().pinStation(drag.id, latest)
+          })
+        }
+        return
+      }
       const prev = pts.get(e.pointerId)
       if (!prev) return
       const cur = local(e)
@@ -207,6 +246,14 @@ export default function PlanView() {
       pts.set(e.pointerId, cur)
     }
     const up = (e: PointerEvent) => {
+      if (drag && drag.pointer === e.pointerId) {
+        cancelAnimationFrame(frame)
+        frame = 0
+        if (drag.moved && latest) useEditor.getState().pinStation(drag.id, latest)
+        drag = null
+        latest = null
+        return
+      }
       pts.delete(e.pointerId)
     }
     const wheel = (e: WheelEvent) => {
@@ -216,6 +263,13 @@ export default function PlanView() {
       zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)), p.x, p.y)
     }
     const dbl = (e: MouseEvent) => {
+      // the pointer is captured by the plan, so look at what lies under it
+      const under = document.elementsFromPoint(e.clientX, e.clientY).find((n) => n.closest('[data-station]'))
+      const sid = under?.closest('[data-station]')?.getAttribute('data-station') ?? null
+      if (sid) {
+        useEditor.getState().unpinStation(sid)
+        return
+      }
       const p = local(e)
       if (view.current.zoom > 1.3) resetView()
       else zoomAt(2.4, p.x, p.y)
@@ -236,10 +290,13 @@ export default function PlanView() {
     }
   }, [hasStations, apply, zoomAt, resetView])
 
+  // the map turned into a schematic plan (stations on a grid, every connection at 0/45/90 degrees)
+  const sch = useMemo(() => schematize(doc), [doc.stations, doc.lines]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pd = sch.doc
   const plan = useMemo(() => {
-    const stations = Object.values(doc.stations)
+    const stations = Object.values(pd.stations)
     if (!stations.length) return null
-    const types = effectiveTypes(doc)
+    const types = effectiveTypes(pd)
     const xs = stations.map((s) => s.x)
     const ys = stations.map((s) => s.y)
     const minX = Math.min(...xs)
@@ -253,8 +310,8 @@ export default function PlanView() {
 
     // Bundled lines: lanes sit one stroke width + breathing room apart
     const gap = 11 / U
-    const paths = layoutLines(doc, gap)
-    const lines = Object.values(doc.lines).map((l) => {
+    const paths = layoutLines(pd, gap)
+    const lines = Object.values(pd.lines).map((l) => {
       const pts = (paths[l.id] ?? []).map((p) => ({ x: px(p.x), y: py(p.y) }))
       return { line: l, pts, d: pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') }
     })
@@ -272,7 +329,7 @@ export default function PlanView() {
         const dx = pts[a].x - pts[b].x
         const dy = pts[a].y - pts[b].y
         const len = Math.hypot(dx, dy) || 1
-        const station = doc.stations[line.stations[a === 0 ? 0 : line.stations.length - 1]]
+        const station = pd.stations[line.stations[a === 0 ? 0 : line.stations.length - 1]]
         const dist = (station ? markerRadius(types[station.id]) : 10) + 20
         badges.push({
           key: `${line.id}-${k}`,
@@ -335,9 +392,9 @@ export default function PlanView() {
     const vx = bx0 - M - (vw - contentW) / 2
     const vy = by0 - M - HEAD
     const vh = by1 - by0 + M * 2 + HEAD
-    const legendH = Object.keys(doc.lines).length ? 56 + Object.keys(doc.lines).length * 34 : 0
-    return { stations, types, px, py, lines, badges, labels, vx, vy, mapW: vw, mapH: vh, legendH }
-  }, [doc])
+    const legendH = Object.keys(pd.lines).length ? 56 + Object.keys(pd.lines).length * 34 : 0
+    return { stations, types, px, py, lines, badges, labels, vx, vy, mapW: vw, mapH: vh, legendH, U, minX, minY }
+  }, [pd])
 
   // sizes the plan and puts it where the user left it (after every render: the box size or the plan may have changed)
   useLayoutEffect(() => {
@@ -397,6 +454,8 @@ export default function PlanView() {
   const heightFit = box.w > box.h && box.h > 300 ? (box.h - 214) / totalH : Infinity
   const fit = Math.max(0.2, Math.min(widthFit, heightFit))
   const lineList = Object.values(doc.lines)
+  planRef.current = { U: plan.U, minX: plan.minX, minY: plan.minY, vx, vy, mapW, totalH, offset: sch.offset }
+  const anyPin = Object.values(doc.stations).some((s) => s.planPin)
   geo.current = { mapW, totalH, fit, boxW: box.w, boxH: box.h }
 
   return (
@@ -458,7 +517,9 @@ export default function PlanView() {
             {plan.stations.map((st, idx) => {
               const delay = 0.1 + (idx + 1) * 0.035
               return (
-                <g key={st.id} className="pop-dot" style={{ animationDelay: `${0.7 + delay}s` }}>
+                <g key={st.id} className="pop-dot" data-station={st.id} style={{ animationDelay: `${0.7 + delay}s`, cursor: 'grab' }}>
+                  <circle cx={plan.px(st.x)} cy={plan.py(st.y)} r={20} fill="transparent" />
+                  {doc.stations[st.id]?.planPin && <circle cx={plan.px(st.x)} cy={plan.py(st.y)} r={17} fill="none" stroke={T.ink === '#ffffff' ? '#fff' : '#c8ff3a'} strokeWidth={2} strokeDasharray="4 4" />}
                   <Symbol type={plan.types[st.id]} x={plan.px(st.x)} y={plan.py(st.y)} ink={T.ink} fill={T.fill} />
                 </g>
               )
@@ -533,6 +594,7 @@ export default function PlanView() {
           { icon: 'zoomin' as const, on: () => zoomAt(1.4, centre().x, centre().y), label: 'Vergrößern' },
           { icon: 'zoomout' as const, on: () => zoomAt(1 / 1.4, centre().x, centre().y), label: 'Verkleinern' },
           { icon: 'fit' as const, on: resetView, label: 'Einpassen' },
+          ...(anyPin ? [{ icon: 'refresh' as const, on: () => useEditor.getState().clearPins(), label: 'Plan neu berechnen' }] : []),
           { icon: (theme === 'dark' ? 'sun' : 'moon') as 'sun' | 'moon', on: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), label: 'Hell/Dunkel' },
           { icon: 'download' as const, on: exportSvg, label: 'SVG exportieren' },
           { icon: 'image' as const, on: exportPng, label: 'PNG exportieren' },

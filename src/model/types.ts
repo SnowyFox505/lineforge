@@ -65,6 +65,8 @@ export interface Station {
   look?: StationLook
   /** Underground station (platforms below the ground). Default: true for stations that only the metro serves. */
   underground?: boolean
+  /** Position of the station in the network plan, set by hand (plan cells, see plan/schematic.ts); without it the plan places the station */
+  planPin?: Pt
 }
 
 export interface Line {
