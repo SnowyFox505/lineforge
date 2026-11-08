@@ -227,3 +227,6 @@ export const useAuth = create<AuthState>((set, get) => {
     },
   }
 })
+
+// dev only: lets scripted browser tests simulate a sign-in without creating real accounts
+if (import.meta.env.DEV) (window as unknown as { __auth: unknown }).__auth = useAuth

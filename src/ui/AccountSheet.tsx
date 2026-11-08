@@ -86,7 +86,8 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
   const [resetSent, setResetSent] = useState(false)
   const [adopted, setAdopted] = useState<number | null>(null)
   const [unsynced, setUnsynced] = useState(false)
-  const [celebrate, setCelebrate] = useState<null | { headline: string; sub: string }>(null)
+  // null, or what was done: signed in / created an account (the name is read live, it can still change a moment later)
+  const [celebrate, setCelebrate] = useState<null | 'in' | 'up'>(null)
   const [leaving, setLeaving] = useState(false)
   const signedIn = a.status === 'user' && a.user
   const wasSignedOut = useRef(true)
@@ -108,11 +109,16 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
     }
     if (open && wasSignedOut.current && a.user) {
       wasSignedOut.current = false
-      setCelebrate({ headline: justSignedUp.current ? `Willkommen, ${a.user.name}!` : `Schön, dass du da bist, ${a.user.name}!`, sub: justSignedUp.current ? 'Dein Konto ist startklar.' : 'Deine Städte werden geholt …' })
-      const t = setTimeout(() => setCelebrate(null), 1700)
-      return () => clearTimeout(t)
+      setCelebrate(justSignedUp.current ? 'up' : 'in')
     }
   }, [a.status, a.user, open])
+
+  // the celebration ends by itself (its own timer: changes of the name in between must not cancel it)
+  useEffect(() => {
+    if (!celebrate) return
+    const t = setTimeout(() => setCelebrate(null), 1700)
+    return () => clearTimeout(t)
+  }, [celebrate])
 
   const close = () => {
     a.clearError()
@@ -147,7 +153,7 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
       <Sheet open={open} onClose={close} title={title}>
         <AnimatePresence mode="wait" initial={false}>
           {view === 'guest' && <Celebrate key="guest" headline="Los geht's!" sub="Deine Städte bleiben auf diesem Gerät." />}
-          {view === 'celebrate' && celebrate && <Celebrate key="celebrate" headline={celebrate.headline} sub={celebrate.sub} />}
+          {view === 'celebrate' && celebrate && <Celebrate key="celebrate" headline={celebrate === 'up' ? `Willkommen, ${a.user?.name ?? ''}!` : `Schön, dass du da bist, ${a.user?.name ?? ''}!`} sub={celebrate === 'up' ? 'Dein Konto ist startklar.' : 'Deine Städte werden geholt …'} />}
 
           {view === 'profile' && (
             <motion.div key="profile" variants={list} initial="hidden" animate="show" exit={{ opacity: 0, y: -10, transition: SWAP }} className="space-y-5">
