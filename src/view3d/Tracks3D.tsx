@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { RAIL } from '../model/scale'
 import { LAND_Y, RAIL_Y } from './heights'
 import { UG_COVER } from '../model/profiles'
 import { xrayMaterial } from './xray'
@@ -89,11 +90,11 @@ export function addTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: num
   const n = X.length
   const nrm = (i: number) => ({ x: -TZ[i], z: TX[i] })
   for (let j = 0; j < n - 1; j++) {
-    b.ballast.push(boxAlong3(X[j], Y[j], Z[j], X[j + 1], Y[j + 1], Z[j + 1], 0.52, 0.1, RAIL_Y - 0.1, 0.1))
+    b.ballast.push(boxAlong3(X[j], Y[j], Z[j], X[j + 1], Y[j + 1], Z[j + 1], 0.52 * RAIL, 0.1 * RAIL, RAIL_Y - 0.1 * RAIL, 0.1))
     const na = nrm(j)
     const nc = nrm(j + 1)
-    for (const off of [-0.085, 0.085]) {
-      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j], Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1], Z[j + 1] + nc.z * off, 0.035, 0.05, RAIL_Y + 0.0, 0.03))
+    for (const off of [-0.085 * RAIL, 0.085 * RAIL]) {
+      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j], Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1], Z[j + 1] + nc.z * off, 0.035 * RAIL, 0.05 * RAIL, RAIL_Y + 0.0, 0.03))
     }
   }
   // minimal look: a plain bed with two thin rails, no individual sleepers
@@ -102,7 +103,7 @@ export function addTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: num
     const sx = e === 0 ? -1 : 1
     const ex = X[e] + TX[e] * sx * 0.12
     const ez = Z[e] + TZ[e] * sx * 0.12
-    b.buffers.push(matrixAt(ex, Y[e] + RAIL_Y + 0.17, ez, Math.atan2(-TZ[e], TX[e]), 0.12, 0.22, 0.4))
+    b.buffers.push(matrixAt(ex, Y[e] + RAIL_Y + 0.17 * RAIL, ez, Math.atan2(-TZ[e], TX[e]), 0.12 * RAIL, 0.22 * RAIL, 0.4 * RAIL))
   }
 }
 
@@ -153,8 +154,8 @@ function addStreetTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: numb
   for (let j = 0; j < n - 1; j++) {
     const na = { x: -TZ[j], z: TX[j] }
     const nc = { x: -TZ[j + 1], z: TX[j + 1] }
-    for (const off of [-0.085, 0.085]) {
-      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.035, 0.04, LAND_Y + 0.02, 0.03))
+    for (const off of [-0.085 * RAIL, 0.085 * RAIL]) {
+      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.035 * RAIL, 0.04 * RAIL, LAND_Y + 0.02, 0.03))
     }
   }
 }
@@ -164,10 +165,10 @@ function addRoad(b: Bufs, ln: LineNet) {
   for (let j = 0; j < ln.n - 1; j++) {
     const a = { x: ln.cx[j], z: ln.cz[j], y: ln.cy[j] + TRAM_DIP }
     const c = { x: ln.cx[j + 1], z: ln.cz[j + 1], y: ln.cy[j + 1] + TRAM_DIP }
-    b.roads.push(boxAlong3(a.x, a.y, a.z, c.x, c.y, c.z, 1.05, 0.05, LAND_Y - 0.01, 0.1))
+    b.roads.push(boxAlong3(a.x, a.y, a.z, c.x, c.y, c.z, 1.15 * RAIL, 0.05, LAND_Y - 0.01, 0.1))
     for (const sgn of [-1, 1]) {
-      const o = 0.55 * sgn
-      b.curbs.push(boxAlong3(a.x - ln.tz[j] * o, a.y, a.z + ln.tx[j] * o, c.x - ln.tz[j + 1] * o, c.y, c.z + ln.tx[j + 1] * o, 0.14, 0.08, LAND_Y - 0.01, 0.1))
+      const o = 0.6 * RAIL * sgn
+      b.curbs.push(boxAlong3(a.x - ln.tz[j] * o, a.y, a.z + ln.tx[j] * o, c.x - ln.tz[j + 1] * o, c.y, c.z + ln.tx[j + 1] * o, 0.14 * RAIL, 0.08, LAND_Y - 0.01, 0.1))
     }
   }
 }
@@ -216,10 +217,10 @@ export function addArches(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: 
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
     const q = pts[k + 1]
-    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25, 0.12, RAIL_Y - 0.12, 0.06))
+    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25 * RAIL, 0.12, RAIL_Y - 0.12, 0.06))
     for (const sgn of [-1, 1]) {
-      const a = sideOf(p, 0.6 * sgn)
-      const c = sideOf(q, 0.6 * sgn)
+      const a = sideOf(p, 0.6 * RAIL * sgn)
+      const c = sideOf(q, 0.6 * RAIL * sgn)
       b.curbs.push(boxAlong3(a.x, p.y, a.z, c.x, q.y, c.z, 0.06, 0.1, RAIL_Y - 0.02, 0.04))
     }
   }
@@ -259,10 +260,10 @@ export function addArches(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: 
 function addTunnel(b: Bufs, ln: LineNet) {
   for (let j = 0; j < ln.n - 1; j++) {
     if (ln.cy[j] > UG_COVER + 0.12 || ln.cy[j + 1] > UG_COVER + 0.12) continue
-    b.ceilings.push(boxAlong3(ln.cx[j], ln.cy[j], ln.cz[j], ln.cx[j + 1], ln.cy[j + 1], ln.cz[j + 1], 1.5, 0.1, RAIL_Y + 0.95, 0.06))
+    b.ceilings.push(boxAlong3(ln.cx[j], ln.cy[j], ln.cz[j], ln.cx[j + 1], ln.cy[j + 1], ln.cz[j + 1], 1.5 * RAIL, 0.1, RAIL_Y + 0.95 * RAIL, 0.06))
     for (const sgn of [-1, 1]) {
-      const o = 0.68 * sgn
-      b.walls.push(boxAlong3(ln.cx[j] - ln.tz[j] * o, ln.cy[j], ln.cz[j] + ln.tx[j] * o, ln.cx[j + 1] - ln.tz[j + 1] * o, ln.cy[j + 1], ln.cz[j + 1] + ln.tx[j + 1] * o, 0.1, 1.05, RAIL_Y - 0.1, 0.06))
+      const o = 0.68 * RAIL * sgn
+      b.walls.push(boxAlong3(ln.cx[j] - ln.tz[j] * o, ln.cy[j], ln.cz[j] + ln.tx[j] * o, ln.cx[j + 1] - ln.tz[j + 1] * o, ln.cy[j + 1], ln.cz[j + 1] + ln.tx[j + 1] * o, 0.1, 1.05 * RAIL, RAIL_Y - 0.1, 0.06))
     }
   }
 }
@@ -273,7 +274,7 @@ export function addDeck(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: nu
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
     const q = pts[k + 1]
-    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.1, 0.34, RAIL_Y - 0.46, 0.06))
+    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.1 * RAIL, 0.34, RAIL_Y - 0.46, 0.06))
     for (const sgn of [-1, 1]) {
       const a = sideOf(p, 0.6 * sgn)
       const c = sideOf(q, 0.6 * sgn)
@@ -297,6 +298,8 @@ export function addDeck(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: nu
 
 /** Retaining walls along both sides of the stretches that run below ground level. */
 function addTrenchWalls(b: Bufs, ln: LineNet) {
+  // a tram only sits a hair below its street: no retaining walls
+  if (ln.line.operator === 'tram') return
   const top = LAND_Y + 0.04
   for (let j = 0; j < ln.n - 1; j++) {
     const ya = LAND_Y + ln.cy[j] - 0.12
@@ -305,7 +308,7 @@ function addTrenchWalls(b: Bufs, ln: LineNet) {
     const h = top - y0
     if (h < 0.2 || ln.cy[j] <= UG_COVER || ln.cy[j + 1] <= UG_COVER) continue
     for (const sgn of [-1, 1]) {
-      const o = 0.95 * sgn
+      const o = 0.95 * RAIL * sgn
       b.walls.push(
         boxAlong3(ln.cx[j] - ln.tz[j] * o, 0, ln.cz[j] + ln.tx[j] * o, ln.cx[j + 1] - ln.tz[j + 1] * o, 0, ln.cz[j + 1] + ln.tx[j + 1] * o, 0.14, h, y0, 0.08),
       )

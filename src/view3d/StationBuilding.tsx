@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
+import type { ComponentProps } from 'react'
 import * as THREE from 'three'
+import { scaleLayout } from '../model/stationDesign'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import { LAND_Y, RAIL_Y } from './heights'
 import { addTrack, Boxes, boxAlong, emptyBufs } from './Tracks3D'
@@ -342,7 +344,7 @@ function Supports({ layout, lift, groundY, free }: { layout: StationLayout; lift
  * A station: platforms, tracks, roof and optional metro entrance. Local frame: x runs along the tracks,
  * z across them. Used in the world and in the 3D station editor.
  */
-export default function StationBuilding({
+function StationBody({
   design,
   layout,
   underground = false,
@@ -357,7 +359,10 @@ export default function StationBuilding({
   shell = null,
   curve = 0,
   annex = -1,
+  liftScale = 1,
 }: {
+  /** the lift is given in design units (world lift divided by this): thresholds in world units are divided by it too */
+  liftScale?: number
   /** side of the lateral axis for the reception building (see `StationGroup.annex`) */
   annex?: 1 | -1
   /** curvature of the platform axis (see `StationGroup.curv`); 0 = straight */
@@ -384,13 +389,15 @@ export default function StationBuilding({
 }) {
   const tracks = useMemo(() => stationTracks(layout, usedZ, noTracks), [layout, usedZ, noTracks])
   const pf = useMemo(() => platformBoxes(layout), [layout])
-  const furn = useMemo(() => platformFurniture(layout, lift <= UG_COVER ? 'open' : design.roof), [layout, design.roof, lift])
+  const ugCover = UG_COVER / liftScale
+  const eps = 0.15 / liftScale
+  const furn = useMemo(() => platformFurniture(layout, lift <= ugCover ? 'open' : design.roof), [layout, design.roof, lift, ugCover])
   const halfW = layout.halfWidth + 0.25
   const L = layout.length
   const ubahn = showUbahn ?? design.ubahn
-  const roof = lift <= UG_COVER || shell ? 'open' : design.roof
+  const roof = lift <= ugCover || shell ? 'open' : design.roof
 
-  const uEntrance = ubahn || lift <= UG_COVER ? (
+  const uEntrance = ubahn || lift <= ugCover ? (
 
         <group position={[L * 0.18, LAND_Y * 0.55, annex * (layout.halfWidth + 1.0)]} scale={0.45}>
           {/* stair entrance */}
@@ -416,10 +423,10 @@ export default function StationBuilding({
 
   const body = (
     <group>
-      {lift > 0.15 && <Supports layout={layout} lift={lift} groundY={groundY} free={pillarFree} />}
-      {lift < -0.15 && lift > UG_COVER && <PitWalls layout={layout} lift={lift} />}
-      {lift <= UG_COVER && <UndergroundShell layout={layout} lift={lift} />}
-      {lift <= UG_COVER && uEntrance}
+      {lift > eps && <Supports layout={layout} lift={lift} groundY={groundY} free={pillarFree} />}
+      {lift < -eps && lift > ugCover && <PitWalls layout={layout} lift={lift} />}
+      {lift <= ugCover && <UndergroundShell layout={layout} lift={lift} />}
+      {lift <= ugCover && uEntrance}
       <group position={[0, lift, 0]}>
       <Boxes items={tracks.ballast} color="#4a4d54" roughness={1} />
       <Boxes items={tracks.rails} color="#d6dde8" roughness={0.3} metalness={0.8} />
@@ -433,12 +440,12 @@ export default function StationBuilding({
       <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
       {entrance && <Entrance layout={layout} big={entrance === 'big'} annex={annex} />}
 
-      {shell && lift > UG_COVER && <StationShell look={shell} layout={layout} annex={annex} />}
+      {shell && lift > ugCover && <StationShell look={shell} layout={layout} annex={annex} />}
       {roof === 'canopy' && <Canopies layout={layout} />}
       {roof === 'glass' && <Vault halfW={halfW} length={L + 1.2} kind="glass" />}
       {roof === 'hall' && <Vault halfW={halfW} length={L + 1.2} kind="hall" />}
 
-      {lift > UG_COVER && uEntrance}
+      {lift > ugCover && uEntrance}
 
       {ubahn && underground && (
         <group position={[0, 0, 0]}>
@@ -468,4 +475,27 @@ export default function StationBuilding({
     </group>
   )
   return curve ? <Bend k={curve}>{body}</Bend> : body
+}
+
+/**
+ * A station. `layout` is in world units; when it was shrunk to the scale of the world (`layout.scale`), the whole station is
+ * built at design size and scaled down about the ground, so roofs, benches and platforms keep their proportions.
+ */
+export default function StationBuilding(props: ComponentProps<typeof StationBody>) {
+  const R = props.layout.scale ?? 1
+  const big = useMemo(() => (R === 1 ? props.layout : scaleLayout(props.layout, 1 / R)), [props.layout, R])
+  if (R === 1) return <StationBody {...props} />
+  const { lift = 0, groundY = LAND_Y, pillarFree } = props
+  return (
+    <group position={[0, LAND_Y * (1 - R), 0]} scale={R}>
+      <StationBody
+        {...props}
+        layout={big}
+        lift={lift / R}
+        groundY={LAND_Y + (groundY - LAND_Y) / R}
+        pillarFree={pillarFree && ((x, z) => pillarFree(x * R, z * R))}
+        liftScale={R}
+      />
+    </group>
+  )
 }

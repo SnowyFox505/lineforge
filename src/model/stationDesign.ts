@@ -72,6 +72,19 @@ export interface StationLayout {
   /** Half of the overall width */
   halfWidth: number
   length: number
+  /** 1 for the design size, smaller for a layout shrunk to the scale of the world (see `RAIL`) */
+  scale?: number
+}
+
+/** The same layout, every length multiplied by `k` */
+export function scaleLayout(l: StationLayout, k: number): StationLayout {
+  return {
+    tracks: l.tracks.map((t) => ({ ...t, z: t.z * k, anchor: t.anchor === null ? null : t.anchor * k })),
+    platforms: l.platforms.map((p) => ({ z0: p.z0 * k, z1: p.z1 * k })),
+    halfWidth: l.halfWidth * k,
+    length: l.length * k,
+    scale: (l.scale ?? 1) * k,
+  }
 }
 
 /** Distance of the two tracks of a line from its axis */
@@ -148,5 +161,5 @@ export function trackFor(layout: StationLayout, op: OperatorId, dir: 1 | -1): nu
   const pool = side.length ? side : layout.tracks
   const allowed = pool.filter((t) => t.ops.includes(op))
   const pick = (allowed.length ? allowed : pool).slice().sort((a, b) => Math.abs(a.z) - Math.abs(b.z))[0]
-  return pick ? pick.z : dir * TRACK_OFFSET
+  return pick ? pick.z : dir * TRACK_OFFSET * (layout.scale ?? 1)
 }

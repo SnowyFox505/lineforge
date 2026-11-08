@@ -1,10 +1,11 @@
+import { RAIL } from '../model/scale'
 import { WATER_THRESHOLD } from '../model/terrainField'
 
 export const LAND_Y = 0.5
 export const BED_Y = -1.4
 export const BASE_Y = -3.6
 /** Track top surface (ballast) sits just above the land */
-export const RAIL_Y = LAND_Y + 0.1
+export const RAIL_Y = LAND_Y + 0.1 * RAIL
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))

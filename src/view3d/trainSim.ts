@@ -1,3 +1,4 @@
+import { RAIL } from '../model/scale'
 import { carOffsets } from '../model/vehicles'
 import type { VehicleSpec } from '../model/vehicles'
 import { VEHICLES } from '../model/vehicles'
@@ -187,7 +188,7 @@ const BOGIE = 0.36
  * track: its heading is the line between them, so cars stay joined in tight curves instead of fanning out.
  */
 export function carPoses(tr: SimTrain): CarPose[] {
-  const offs = carOffsets(tr.spec)
+  const offs = carOffsets(tr.spec).map((o) => o * RAIL)
   const own = tr.dir > 0 ? 'f' : 'b'
   const at = (d: number) => {
     const p = posOn(tr.net, own, d)
@@ -205,7 +206,7 @@ export function carPoses(tr: SimTrain): CarPose[] {
   const sgn = tr.dir
   return offs.map((o, i) => {
     const d = tr.s + sgn * o
-    const half = tr.spec.lens[i] * BOGIE
+    const half = tr.spec.lens[i] * RAIL * BOGIE
     const f = at(d + sgn * half)
     const r = at(d - sgn * half)
     // front minus rear is already the direction of travel

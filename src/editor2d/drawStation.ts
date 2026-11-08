@@ -19,9 +19,15 @@ export function drawStation(
   ctx.translate(x, y)
   ctx.scale(k, k)
   ctx.lineJoin = 'round'
-  ctx.shadowColor = 'rgba(0,0,0,0.45)'
-  ctx.shadowBlur = r * 0.9
-  ctx.shadowOffsetY = r * 0.25
+  // a soft drop shadow made of two flat discs (a real blurred shadow is slow on phones)
+  ctx.fillStyle = 'rgba(0,0,0,0.16)'
+  ctx.beginPath()
+  ctx.arc(0, r * 0.3, r * 1.45, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'
+  ctx.beginPath()
+  ctx.arc(0, r * 0.25, r * 1.15, 0, Math.PI * 2)
+  ctx.fill()
 
   if (selected) {
     const acc = getAccent()

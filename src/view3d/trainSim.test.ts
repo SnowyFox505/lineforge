@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
 import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
+import { RAIL } from '../model/scale'
 import { buildNetwork3D, BUFFER_CLEAR, posOn } from './network3d'
 import { carPoses, Sim } from './trainSim'
 
@@ -47,8 +48,8 @@ describe('train operation', () => {
         for (let i = 0; i + 1 < poses.length; i++) {
           const a = poses[i]
           const b = poses[i + 1]
-          const la = tr.spec.lens[i] / 2
-          const lb = tr.spec.lens[i + 1] / 2
+          const la = (tr.spec.lens[i] * RAIL) / 2
+          const lb = (tr.spec.lens[i + 1] * RAIL) / 2
           // the rear end of one car and the front end of the next one meet at the coupling
           const gap = Math.hypot(a.x - a.tx * la - (b.x + b.tx * lb), a.z - a.tz * la - (b.z + b.tz * lb))
           worst = Math.max(worst, gap)
@@ -79,7 +80,7 @@ describe('train operation', () => {
           expect(best).toBeLessThan(tr.rev ? 1.6 : 0.2)
         }
         // the centre of the train never gets closer to a buffer than half its length + clearance
-        const half = (tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) / 2
+        const half = ((tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) * RAIL) / 2
         expect(tr.s - half).toBeGreaterThan(0.5)
         expect(tr.net.total - (tr.s + half)).toBeGreaterThan(0.5)
       }

@@ -1,3 +1,4 @@
+import { RAIL } from '../model/scale'
 import { RAIL_Y } from './heights'
 import { posOn } from './network3d'
 import type { Bridge, LineNet, Network3D } from './network3d'
@@ -13,11 +14,11 @@ function deckPlate(b: Bufs, ln: LineNet, d0: number, d1: number, thick: number, 
   for (let k = 0; k < pts.length - 1; k++) {
     const p = pts[k]
     const q = pts[k + 1]
-    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25, thick, RAIL_Y - 0.02 - thick, 0.06))
+    b.girders.push(boxAlong3(p.x, p.y, p.z, q.x, q.y, q.z, 1.25 * RAIL, thick, RAIL_Y - 0.02 - thick, 0.06))
     if (!parapet) continue
     for (const sgn of [-1, 1]) {
-      const a = sideOf(p, 0.6 * sgn)
-      const c = sideOf(q, 0.6 * sgn)
+      const a = sideOf(p, 0.6 * RAIL * sgn)
+      const c = sideOf(q, 0.6 * RAIL * sgn)
       b.curbs.push(boxAlong3(a.x, p.y, a.z, c.x, q.y, c.z, 0.05, 0.09, RAIL_Y - 0.02, 0.04))
     }
   }
@@ -32,7 +33,7 @@ function slimPiers(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number,
     const g = net.groundAt(p.x, p.z)
     const h = p.y + RAIL_Y - 0.3 - g
     if (h <= 0.2) continue
-    const spots = [-1, 1].map((s) => sideOf(p, 0.34 * s))
+    const spots = [-1, 1].map((s) => sideOf(p, 0.34 * RAIL * s))
     if (spots.some((s) => net.trackBelow(s.x, s.z, p.y, ln.line.id))) continue
     for (const s of spots) b.piers.push(matrixAt(s.x, g + h / 2 - 0.05, s.z, 0, 0.13, h + 0.1, 0.13))
   }
@@ -47,7 +48,7 @@ function addTruss(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) 
   for (const sgn of [-1, 1]) {
     const pts = Array.from({ length: n + 1 }, (_, k) => {
       const p = poseAt(ln, d0 + (len * k) / n)
-      const s = sideOf(p, 0.64 * sgn)
+      const s = sideOf(p, 0.64 * RAIL * sgn)
       return { x: s.x, z: s.z, y: p.y, tx: p.tx, tz: p.tz }
     })
     for (let k = 0; k < n; k++) {
@@ -64,8 +65,8 @@ function addTruss(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) 
   // cross bracing on top
   for (let k = 0; k <= n; k += 2) {
     const p = poseAt(ln, d0 + (len * k) / n)
-    const a = sideOf(p, 0.64)
-    const c = sideOf(p, -0.64)
+    const a = sideOf(p, 0.64 * RAIL)
+    const c = sideOf(p, -0.64 * RAIL)
     b.iron.push(boxAlong3(a.x, p.y, a.z, c.x, p.y, c.z, 0.04, 0.04, RAIL_Y + H, 0))
   }
   for (const pr of deckPiers(net, ln, d0, d1)) b.piers.push(matrixAt(pr.x, pr.ground + pr.h / 2 - 0.05, pr.z, pr.yaw, 0.2, pr.h + 0.1, 0.2))
@@ -79,7 +80,7 @@ function addCable(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) 
   const mid = poseAt(ln, d0 + len * 0.5)
   const g = net.groundAt(mid.x, mid.z)
   const top = mid.y + RAIL_Y + Math.min(2.2, 0.9 + len * 0.12)
-  const tops = [-1, 1].map((s) => ({ ...sideOf(mid, 0.78 * s), s }))
+  const tops = [-1, 1].map((s) => ({ ...sideOf(mid, 0.78 * RAIL * s), s }))
   for (const t of tops) {
     b.concrete.push(matrixAt(t.x, g + (top - g) / 2, t.z, 0, 0.17, top - g, 0.17))
     // cables fan out to both sides
@@ -88,7 +89,7 @@ function addCable(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) 
       for (const dir of [-1, 1]) {
         const d = d0 + len * 0.5 + dir * k * (len * 0.46) / cnt
         const p = poseAt(ln, d)
-        const a = sideOf(p, 0.52 * t.s)
+        const a = sideOf(p, 0.52 * RAIL * t.s)
         b.cables.push(boxAlong3(t.x, top - 0.1 - (k % 2) * 0.1, t.z, a.x, p.y + RAIL_Y, a.z, 0.018, 0.018, 0, 0))
       }
     }
@@ -110,7 +111,7 @@ function addTiedArch(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: numbe
     const rib = Array.from({ length: n + 1 }, (_, k) => {
       const t = k / n
       const p = poseAt(ln, d0 + len * t)
-      const s = sideOf(p, 0.66 * sgn)
+      const s = sideOf(p, 0.66 * RAIL * sgn)
       return { x: s.x, z: s.z, y: p.y + RAIL_Y + 0.05 + H * Math.sin(Math.PI * t), py: p.y }
     })
     for (let k = 0; k < n; k++) b.steel.push(boxAlong3(rib[k].x, rib[k].y, rib[k].z, rib[k + 1].x, rib[k + 1].y, rib[k + 1].z, 0.08, 0.09, 0, 0.03))
@@ -131,8 +132,8 @@ function addSlim(b: Bufs, net: Network3D, ln: LineNet, d0: number, d1: number) {
     const p = pts[k]
     const q = pts[k + 1]
     for (const sgn of [-1, 1]) {
-      const a = sideOf(p, 0.66 * sgn)
-      const c = sideOf(q, 0.66 * sgn)
+      const a = sideOf(p, 0.66 * RAIL * sgn)
+      const c = sideOf(q, 0.66 * RAIL * sgn)
       b.steel.push(boxAlong3(a.x, p.y, a.z, c.x, q.y, c.z, 0.025, 0.1, RAIL_Y + 0.07, 0.03)) // glass-like rail
     }
   }

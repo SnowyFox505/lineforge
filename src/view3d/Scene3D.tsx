@@ -1,6 +1,6 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { AnimatePresence } from 'motion/react'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
@@ -236,6 +236,9 @@ function Stations({ net }: { net: Network3D }) {
   )
 }
 
+/** A phone or tablet: fewer pixels and no multisampling, the GPU is the bottleneck there */
+const TOUCH_DEVICE = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+
 /** Initial camera: frame the network (or a patch of the map if empty), taking the screen aspect into account. */
 function useInitialCamera(doc: CityDoc) {
   return useMemo(() => {
@@ -290,7 +293,9 @@ export default function Scene3D() {
 
   return (
     <div className={`absolute inset-0 ${editId ? 'invisible' : ''}`} style={{ background: 'radial-gradient(ellipse at 50% 38%, #1a2a3a 0%, #0a1017 55%, #06080c 100%)' }}>
-      <Canvas frameloop={editId ? 'never' : 'always'} camera={{ position: cam.position, fov: 42, near: 0.5, far: 3000 }} gl={{ alpha: true, antialias: true }} dpr={[1, 2]}>
+      <Canvas frameloop={editId ? 'never' : 'always'} camera={{ position: cam.position, fov: 42, near: 0.5, far: 3000 }} gl={{ alpha: true, antialias: !TOUCH_DEVICE, powerPreference: 'high-performance' }} dpr={TOUCH_DEVICE ? [1, 1.5] : [1, 2]} performance={{ min: 0.55 }}>
+        {/* while the camera moves the picture is drawn at a lower resolution, and sharp again once it rests */}
+        <AdaptiveDpr />
         <hemisphereLight args={['#cfe2ff', '#1d3a30', 1.7]} />
         <directionalLight position={[doc.size * 0.6, doc.size * 0.9, doc.size * 0.35]} intensity={2.3} color="#fff0d9" />
         <directionalLight position={[-doc.size * 0.5, doc.size * 0.4, -doc.size * 0.6]} intensity={0.35} color="#7aa8ff" />
@@ -306,6 +311,7 @@ export default function Scene3D() {
         <FollowCam />
         <OrbitControls
           makeDefault
+          regress
           touches={TOUCHES}
           screenSpacePanning={false}
           enableDamping

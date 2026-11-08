@@ -1,5 +1,6 @@
 import { buildField, BRIDGE_THRESHOLD, makeSampler } from '../model/terrainField'
-import { layoutStation, resolveDesign, stationOperators, trackFor, TRACK_OFFSET } from '../model/stationDesign'
+import { RAIL } from '../model/scale'
+import { layoutStation, resolveDesign, scaleLayout, stationOperators, trackFor, TRACK_OFFSET } from '../model/stationDesign'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import type { CityDoc, Line, OperatorId, Station } from '../model/types'
 import { clusterByDirection, levelHeight, lineDirectionAtStation, meanDirection, LEVEL_STEP } from '../model/stationGroups'
@@ -13,11 +14,13 @@ import { groundHeight, LAND_Y } from './heights'
 
 export type { P }
 
-export { TRACK_OFFSET }
+/** Distance of the two tracks of a line from its axis, in world units */
+const TRACK_OFF = TRACK_OFFSET * RAIL
+export { TRACK_OFF as TRACK_OFFSET }
 /** Lane spacing in 3D: two tracks with ballast fit between neighbouring lines */
-export const LANE_GAP = 1.05
+export const LANE_GAP = 1.05 * RAIL
 /** Free track behind the last platform before the buffer stop */
-export const BUFFER_CLEAR = 1.2
+export const BUFFER_CLEAR = 1.2 * RAIL
 /** Length over which a track swings from the line axis onto its station track */
 export const TAPER = 5
 export const DEFAULT_CURVE = 3
@@ -33,7 +36,7 @@ export const RAMP_PER_LEVEL = 10
 /** Length of the run-up to a level `lift` above/below the ground: long, so lines are already on their way long before the station */
 export const rampFor = (lift: number) => 12 * Math.abs(lift) + 5
 /** Free space between the main station and the tram stop next to it */
-export const TRAM_GAP = 2.5
+export const TRAM_GAP = 2.5 * RAIL
 /** Lines whose directions differ by less than this share a platform group */
 const COS_GROUP = Math.cos((40 * Math.PI) / 180)
 
@@ -351,6 +354,21 @@ interface Coarse {
 
 const TRAM_STATION: Station = { id: 'tram-stop', name: '', x: 0, y: 0, type: 'standard', design: { tracks: 2, platform: 'side', length: 'short', roof: 'canopy', ubahn: false } }
 
+/** Sample index of a coarse line at arc length `d` */
+function indexAtCum(c: Coarse, d: number): number {
+  let lo = 0
+  let hi = c.cum.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (c.cum[mid] < d) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** A tram stop runs beside the main platforms only if its line runs about parallel to them (within 35 degrees) */
+const COS_BESIDE = Math.cos((35 * Math.PI) / 180)
+
 interface Entry {
   line: Line
   i: number
@@ -414,22 +432,26 @@ function overlapOf(a: Box2, b: Box2): { x: number; z: number; depth: number } | 
 
 /** How far the ends of a curved platform (with its roof or hall) swing out sideways from the tangent at its middle */
 function swing(g: Pick<StationGroup, 'curv' | 'layout'>): number {
-  const h = (g.layout.length + 1.6) / 2
+  const h = (g.layout.length + 1.6 * RAIL) / 2
   return (Math.abs(g.curv) * h * h) / 2
 }
 
 /** Shortest platform a crowded station is cut down to */
-const MIN_PLATFORM = 2.6
+const MIN_PLATFORM = 1.5
 /** Extra length of roofs and halls beyond the platforms, and extra width beside them */
-const FOOT_L = 0.8
-const FOOT_W = 0.5
+const FOOT_L = 0.8 * RAIL
+const FOOT_W = 0.5 * RAIL
 
 /**
  * Stations that stand close together would grow into each other (platforms, roofs, halls). Their platforms are
  * shortened until they clear each other; if they are too close even then, they are pushed apart a little.
  */
+function footBox(g: StationGroup, len: number): Box2 {
+  return { ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: len / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W + swing({ curv: g.curv, layout: { ...g.layout, length: len } }) }
+}
+
 export function separateStations(all: { id: string; g: StationGroup }[]): void {
-  const box = (g: StationGroup, len: number): Box2 => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: len / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W + swing({ curv: g.curv, layout: { ...g.layout, length: len } }) })
+  const box = footBox
   const pushed = new Map<StationGroup, number>()
   for (let pass = 0; pass < 5; pass++) {
     let changed = false
@@ -455,7 +477,7 @@ export function separateStations(all: { id: string; g: StationGroup }[]): void {
         // still touching at the shortest platforms: move them apart (at most 1.6 each)
         const hit = overlapOf(box(A.g, nA), box(B.g, nB))
         if (hit) {
-          const room = (g: StationGroup) => Math.max(0, 1.6 - (pushed.get(g) ?? 0))
+          const room = (g: StationGroup) => Math.max(0, 1.6 * RAIL - (pushed.get(g) ?? 0))
           const half = hit.depth / 2 + 0.05
           const mA = Math.min(half, room(A.g))
           const mB = Math.min(half, room(B.g))
@@ -475,7 +497,7 @@ export function separateStations(all: { id: string; g: StationGroup }[]): void {
 /** A platform's total turn (radians) below which it stays straight, and the sharpest a platform may be bent */
 const CURVE_MIN = 0.1
 const CURVE_MAX_TURN = 0.55
-const CURVE_MAX_K = 1 / 8
+const CURVE_MAX_K = 1 / (8 * RAIL)
 
 /**
  * A station on a bend gets a curved platform. The curvature is read off the tracks of its lines over the length
@@ -671,6 +693,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   // ---- pass B: platform groups of every station -------------------------------------------
   const groupsOf = new Map<string, StationGroup[]>()
   const membersOf = new Map<string, Map<number, Entry[]>>()
+  /** a tram stop that stands crosswise to its station moves along its own line: arc length from the station point */
+  const shiftOf = new Map<string, number>()
   const sidingPlan = new Map<string, Siding3[]>() // `${stationId}|${group}` -> sidings
   const entryOf = new Map<string, Entry>() // `${lineId}|${stationId}`
   const stationBase = new Map<string, { st: Station; design: ResolvedDesign; layout: StationLayout }>()
@@ -681,7 +705,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const allOps = stationOperators(doc, st.id)
     const baseDesign = resolveDesign(st, allOps)
     const minLen = (ops: OperatorId[]) => ops.reduce((m, op) => Math.max(m, trainLength(VEHICLES[op]) + 1.2), 0)
-    stationBase.set(st.id, { st, design: baseDesign, layout: layoutStation(baseDesign, minLen(allOps)) })
+    stationBase.set(st.id, { st, design: baseDesign, layout: scaleLayout(layoutStation(baseDesign, minLen(allOps)), RAIL) })
 
     const entries: Entry[] = []
     for (const line of lineList) {
@@ -782,10 +806,10 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       const ops = [...new Set(list.map((e) => e.line.operator))]
       if (g.kind === 'tram') {
         g.design = resolveDesign(TRAM_STATION, ['tram'])
-        g.layout = layoutStation(g.design, minLen(['tram']))
+        g.layout = scaleLayout(layoutStation(g.design, minLen(['tram'])), RAIL)
       } else {
         g.design = resolveDesign(st, ops, g.level)
-        g.layout = layoutStation(g.design, minLen(ops))
+        g.layout = scaleLayout(layoutStation(g.design, minLen(ops)), RAIL)
       }
     }
     // station tracks every line uses, and the unused ones that become sidings
@@ -830,6 +854,43 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     if (!main0 || !st) continue
     for (const g of gs) {
       if (g.kind !== 'tram') continue
+      const ml = membersOf.get(id)?.get(g.index) ?? []
+      // a tram that crosses the main platforms at a steep angle cannot run beside them: its stop moves along its own line until it clears the hall
+      if (Math.abs(g.ax * main0.ax + g.az * main0.az) < COS_BESIDE && ml.length) {
+        const c = coarse.get(ml[0].line.id)
+        if (c) {
+          const total = c.cum[c.pts.length - 1]
+          const mainBox = footBox(main0, main0.layout.length)
+          let best: { sh: number; idx: number } | null = null
+          for (let D = 0; D <= 18 && !best; D += 0.4) {
+            for (const dir of [1, -1]) {
+              const d = c.cum[ml[0].i] + dir * D
+              if (d < RUN_OUT + 0.5 || d > total - RUN_OUT - 0.5) continue
+              const idx = indexAtCum(c, d)
+              const flip = c.tx[idx] * g.ax + c.tz[idx] * g.az >= 0 ? 1 : -1
+              const cand: Box2 = { ox: c.pts[idx].x, oz: c.pts[idx].z, ax: c.tx[idx] * flip, az: c.tz[idx] * flip, halfL: g.layout.length / 2 + FOOT_L, halfW: g.layout.halfWidth + FOOT_W }
+              if (!overlapOf(mainBox, cand)) {
+                best = { sh: dir * D, idx }
+                break
+              }
+            }
+          }
+          if (best) {
+            const idx = best.idx
+            const flip = c.tx[idx] * g.ax + c.tz[idx] * g.az >= 0 ? 1 : -1
+            g.ox = c.pts[idx].x
+            g.oz = c.pts[idx].z
+            g.ax = c.tx[idx] * flip
+            g.az = c.tz[idx] * flip
+            g.angle = Math.atan2(-g.az, g.ax)
+            g.curv = 0
+            for (const e of ml) shiftOf.set(`${e.line.id}|${id}`, best.sh)
+            const v = -(g.ox - main0.ox) * main0.az + (g.oz - main0.oz) * main0.ax
+            main0.annex = v > 0 ? -1 : 1
+            continue
+          }
+        }
+      }
       // the tram stop goes on the side the tram comes from, so its line never has to cross the main platforms or hall
       const sx0 = st.x + 0.5 - half
       const sz0 = st.y + 0.5 - half
@@ -866,7 +927,9 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     for (const id of line.stations) {
       const st = doc.stations[id]
       if (!st || !groupsOf.has(id)) continue
-      const i = nearest(c, st.x + 0.5 - half, st.y + 0.5 - half, from)
+      let i = nearest(c, st.x + 0.5 - half, st.y + 0.5 - half, from)
+      const sh = shiftOf.get(`${line.id}|${id}`)
+      if (sh) i = Math.max(from, indexAtCum(c, c.cum[i] + sh))
       raw.push({ id, i })
       from = i
     }
@@ -1012,8 +1075,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const bx: number[] = []
     const bz: number[] = []
     for (let j = 0; j < m; j++) {
-      const f = trackAt(j, TRACK_OFFSET, (k) => info[k].zF)
-      const b = trackAt(j, -TRACK_OFFSET, (k) => info[k].zB)
+      const f = trackAt(j, TRACK_OFF, (k) => info[k].zF)
+      const b = trackAt(j, -TRACK_OFF, (k) => info[k].zB)
       fx.push(f.x)
       fz.push(f.z)
       bx.push(b.x)
@@ -1083,7 +1146,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         const Z: number[] = []
         const Y: number[] = []
         for (let j = ja; j <= jb; j++) {
-          const p = trackAt(j, sp.side === 'f' ? TRACK_OFFSET : -TRACK_OFFSET, (k) => (k === s.k ? sp.zt : 0))
+          const p = trackAt(j, sp.side === 'f' ? TRACK_OFF : -TRACK_OFF, (k) => (k === s.k ? sp.zt : 0))
           X.push(p.x)
           Z.push(p.z)
           Y.push(cy[j])
@@ -1174,7 +1237,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   const pits: { ox: number; oz: number; ax: number; az: number; halfL: number; halfW: number; y: number }[] = []
   for (const sn of Object.values(stations)) {
     for (const g of sn.groups) {
-      if (g.lift < -0.15 && g.lift > UG_COVER) pits.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 1.6, halfW: g.layout.halfWidth + 1.3, y: g.lift })
+      if (g.lift < -0.15 && g.lift > UG_COVER) pits.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 1.6 * RAIL, halfW: g.layout.halfWidth + 1.3 * RAIL, y: g.lift })
     }
   }
   const cell = 3
@@ -1244,7 +1307,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   // footprints (platforms + tracks) of every platform complex: nothing may stand on a lower one
   const footprints: { ox: number; oz: number; ax: number; az: number; halfL: number; halfW: number; lift: number }[] = []
   for (const sn of Object.values(stations)) {
-    for (const g of sn.groups) footprints.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 0.3, halfW: g.layout.halfWidth + 0.3, lift: g.lift })
+    for (const g of sn.groups) footprints.push({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 0.3 * RAIL, halfW: g.layout.halfWidth + 0.3 * RAIL, lift: g.lift })
   }
   const trackBelow = (x: number, z: number, yTop: number, ignoreLine?: string) => {
     for (const f of footprints) {

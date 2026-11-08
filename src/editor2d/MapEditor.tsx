@@ -10,7 +10,8 @@ import { drawPoi } from './drawPoi'
 import { useTheme, getAccent } from '../ui/theme'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
-import { buildTerrainPaths, drawTerrain } from './terrainRender'
+import { buildTerrainPaths } from './terrainRender'
+import { drawTerrainCached, newTerrainCache } from './terrainCache'
 
 const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'zoneErase'
 const BRUSH_TINT = {
@@ -76,6 +77,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const stationBorn = useRef(new Map<string, number>())
   const seeded = useRef(false)
   const raf = useRef(0)
+  const cacheRef = useRef(newTerrainCache())
+  const settle = useRef(0)
 
   const doc = useEditor((s) => s.doc)
   const selectedStationId = useEditor((s) => s.selectedStationId)
@@ -160,7 +163,14 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
     const v = view.current
     const { ox, oy, s } = v
-    drawTerrain(ctx, v, doc.size, terrainPaths, w, h, false, zoneGfx)
+    drawTerrainCached(ctx, v, doc.size, terrainPaths, w, h, zoneGfx, dpr, cacheRef.current, () => {
+      // a zoom changed the picture: draw it sharp once the gesture rests
+      window.clearTimeout(settle.current)
+      settle.current = window.setTimeout(() => {
+        cacheRef.current.force = true
+        requestAnimationFrame(draw)
+      }, 140)
+    })
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     drawZoneLabels(ctx, v, zoneGfx)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -207,14 +217,16 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       ctx.lineJoin = 'round'
       ctx.setLineDash(shown >= total - 1e-6 ? [] : [shown * s, 1e9])
       ctx.globalAlpha = tool === 'line' && activeLineId && activeLineId !== line.id ? 0.5 : 1
-      // soft coloured glow
-      ctx.save()
-      ctx.shadowColor = line.color
-      ctx.shadowBlur = w0 * 2.4
+      // soft coloured glow: two wide translucent strokes (a blurred shadow costs far too much on phones)
+      const ga = ctx.globalAlpha
       ctx.strokeStyle = line.color
-      ctx.lineWidth = w0
+      ctx.globalAlpha = ga * 0.12
+      ctx.lineWidth = w0 * 2.6
       ctx.stroke(path)
-      ctx.restore()
+      ctx.globalAlpha = ga * 0.2
+      ctx.lineWidth = w0 * 1.7
+      ctx.stroke(path)
+      ctx.globalAlpha = ga
       // dark casing
       ctx.strokeStyle = 'rgba(5,8,12,0.55)'
       ctx.lineWidth = w0 + 3

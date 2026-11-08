@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
 import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
+import { RAIL } from '../model/scale'
 import { LAND_Y } from './heights'
 import { LEVEL_BASE } from '../model/stationGroups'
 import { trainLength, VEHICLES } from '../model/vehicles'
@@ -62,7 +63,7 @@ describe('3D network geometry', () => {
     d = line(d, 'L', 'fernverkehr', ['a', 'b'])
     const net = buildNetwork3D(d)
     // a 'short' platform is shorter than the train: it grows to fit it
-    expect(net.stations.a.layout.length).toBeGreaterThanOrEqual(trainLength(VEHICLES.fernverkehr))
+    expect(net.stations.a.layout.length).toBeGreaterThanOrEqual(trainLength(VEHICLES.fernverkehr) * RAIL)
   })
 
   it('keeps curves smooth and lets every line run straight along the axis of its own platform group', () => {
@@ -232,7 +233,7 @@ describe('3D network geometry', () => {
     d = line(d, 'M', 'sbahn', ['c', 'e'])
     const net = buildNetwork3D(d)
     const gs = Object.values(net.stations).flatMap((s) => s.groups.map((g) => ({ id: s.st.id, g })))
-    const box = (g: (typeof gs)[number]['g']) => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 0.8, halfW: g.layout.halfWidth + 0.5 })
+    const box = (g: (typeof gs)[number]['g']) => ({ ox: g.ox, oz: g.oz, ax: g.ax, az: g.az, halfL: g.layout.length / 2 + 0.8 * RAIL, halfW: g.layout.halfWidth + 0.5 * RAIL })
     // two rectangles (platforms with their roofs) overlap unless some axis separates them
     const overlap = (p: ReturnType<typeof box>, q: ReturnType<typeof box>) =>
       [[p.ax, p.az], [-p.az, p.ax], [q.ax, q.az], [-q.az, q.ax]].every(([ux, uz]) => {
@@ -249,7 +250,7 @@ describe('3D network geometry', () => {
     }
     expect(pairs).toBeGreaterThan(0)
     // a platform is shortened, not dropped
-    for (const { g } of gs) expect(g.layout.length).toBeGreaterThanOrEqual(2.6 - 1e-6)
+    for (const { g } of gs) expect(g.layout.length).toBeGreaterThanOrEqual(1.5 - 1e-6)
   })
 
   it('bends a station that stands on a curve, and keeps the tracks on the platform', () => {
@@ -264,7 +265,7 @@ describe('3D network geometry', () => {
     expect(Math.abs(g.curv)).toBeGreaterThan(0)
     // never sharper than a realistic platform curve
     expect(Math.abs(g.curv * g.layout.length)).toBeLessThanOrEqual(0.55 + 1e-6)
-    expect(1 / Math.abs(g.curv)).toBeGreaterThanOrEqual(8 - 1e-6)
+    expect(1 / Math.abs(g.curv)).toBeGreaterThanOrEqual(8 * RAIL - 1e-6)
     const ln = net.lines[0]
     const stop = ln.stops.find((s) => s.stationId === 'b')!
     // along the whole platform both tracks stay at their lateral position on the curved platform axis

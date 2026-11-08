@@ -4,7 +4,8 @@ import type { MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '../store/editorStore'
 import { followState } from './follow'
-import { RAIL_Y } from './heights'
+import { RAIL } from '../model/scale'
+import { LAND_Y, RAIL_Y } from './heights'
 import type { Network3D } from './network3d'
 import { carPoses, Sim } from './trainSim'
 import { CarMesh } from './vehicles3d'
@@ -69,7 +70,9 @@ export default function Trains3D({ net, speedRef }: { net: Network3D; speedRef: 
                 ;(groups.current[ti] ??= [])[ci] = g
               }}
             >
-              <CarMesh spec={tr.spec} index={ci} color={tr.color} />
+              <group position={[0, LAND_Y * (1 - RAIL), 0]} scale={RAIL}>
+                <CarMesh spec={tr.spec} index={ci} color={tr.color} />
+              </group>
             </group>
           ))}
         </group>
