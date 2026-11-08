@@ -222,4 +222,29 @@ describe('3D network geometry', () => {
     // trams sit flush with the street, a little below a railway bed
     expect(t1.cy[Math.floor(t1.n / 4)]).toBeLessThan(s1.cy[Math.floor(s1.n / 4)])
   })
+  it('keeps the bends of a busy station smooth (no hairpins, no jumps between neighbouring platforms)', () => {
+    let d = city()
+    d = station(d, 'w', 30, 58)
+    d = station(d, 'h', 66, 60, undefined, 1)
+    d = station(d, 'o', 80, 58)
+    d = station(d, 'n', 66, 24)
+    d = station(d, 's', 66, 96)
+    d = station(d, 'e', 104, 60)
+    d = line(d, 'S1', 'sbahn', ['w', 'h', 'o', 'e'])
+    d = line(d, 'U2', 'ubahn', ['n', 'h', 's'])
+    d = line(d, 'RB', 'regional', ['n', 'h', 'o', 'e'])
+    const net = buildNetwork3D(d)
+    for (const ln of net.lines) {
+      let worst = 0
+      for (let j = 0; j + 4 < ln.n; j++) {
+        let t = Math.abs(Math.atan2(ln.tz[j + 4], ln.tx[j + 4]) - Math.atan2(ln.tz[j], ln.tx[j]))
+        if (t > Math.PI) t = 2 * Math.PI - t
+        worst = Math.max(worst, t)
+        // no sample jumps: neighbours stay about 0.4 apart
+        if (j > 0) expect(Math.hypot(ln.cx[j] - ln.cx[j - 1], ln.cz[j] - ln.cz[j - 1])).toBeLessThan(1.2)
+      }
+      // 1.2 rad over 1.6 units is a radius of about 1.3: tighter than any train could follow
+      expect(worst).toBeLessThan(1.2)
+    }
+  })
 })

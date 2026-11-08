@@ -222,6 +222,117 @@ function tangents(xs: number[], zs: number[]): { tx: number[]; tz: number[] } {
   return { tx, tz }
 }
 
+/** Largest allowed heading change over two samples on each side (about 1.6 units of track): radius of about 3 */
+const MAX_TURN = 0.55
+
+/** Solves the dense system A u = r (Gauss with partial pivoting); A is n x n, row-major. */
+function solveDense(A: Float64Array, r: Float64Array[], n: number): void {
+  for (let c = 0; c < n; c++) {
+    let piv = c
+    for (let i = c + 1; i < n; i++) if (Math.abs(A[i * n + c]) > Math.abs(A[piv * n + c])) piv = i
+    if (piv !== c) {
+      for (let k = 0; k < n; k++) {
+        const t = A[c * n + k]
+        A[c * n + k] = A[piv * n + k]
+        A[piv * n + k] = t
+      }
+      for (const v of r) {
+        const t = v[c]
+        v[c] = v[piv]
+        v[piv] = t
+      }
+    }
+    const d = A[c * n + c] || 1e-12
+    for (let i = c + 1; i < n; i++) {
+      const f = A[i * n + c] / d
+      if (f === 0) continue
+      for (let k = c; k < n; k++) A[i * n + k] -= f * A[c * n + k]
+      for (const v of r) v[i] -= f * v[c]
+    }
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    for (const v of r) {
+      let sum = v[i]
+      for (let k = i + 1; k < n; k++) sum -= A[i * n + k] * v[k]
+      v[i] = sum / (A[i * n + i] || 1e-12)
+    }
+  }
+}
+
+/**
+ * Makes sure no bend of the axis is tighter than MAX_TURN. Pinned samples (platforms, line ends) stay where they
+ * are. A stretch of free samples between them that bends too sharply is replaced by the smoothest curve (minimal
+ * bending energy, so it also keeps the direction at the platform ends) that stays as close as it can to the route.
+ */
+function relaxCurvature(xs: number[], zs: number[], pinned: boolean[]): void {
+  const n = xs.length
+  const K = 2
+  const turnAt = (j: number) => {
+    const ax = xs[j] - xs[j - K]
+    const az = zs[j] - zs[j - K]
+    const bx = xs[j + K] - xs[j]
+    const bz = zs[j + K] - zs[j]
+    const la = Math.hypot(ax, az)
+    const lb = Math.hypot(bx, bz)
+    if (la < 1e-6 || lb < 1e-6) return 0
+    return Math.acos(Math.min(1, Math.max(-1, (ax * bx + az * bz) / (la * lb))))
+  }
+  let j = 0
+  while (j < n) {
+    if (pinned[j]) {
+      j++
+      continue
+    }
+    const a = j
+    while (j < n && !pinned[j]) j++
+    const b = j - 1
+    // needs two fixed samples on each side to keep the direction
+    if (a < 2 || b > n - 3 || !pinned[a - 1] || !pinned[a - 2] || !pinned[b + 1] || !pinned[b + 2]) continue
+    let worst = 0
+    for (let q = Math.max(K, a - K); q <= Math.min(n - 1 - K, b + K); q++) worst = Math.max(worst, turnAt(q))
+    if (worst <= MAX_TURN) continue
+    const cnt = b - a + 1
+    if (cnt > 160) continue
+    const x0 = xs.slice(a, b + 1)
+    const z0 = zs.slice(a, b + 1)
+    // the more it has to bend, the less it sticks to the original route
+    for (const lambda of [0.02, 0.006, 0.002, 0.0005, 0.0001]) {
+      const A = new Float64Array(cnt * cnt)
+      const rx = new Float64Array(cnt)
+      const rz = new Float64Array(cnt)
+      for (let i = a - 1; i <= b + 1; i++) {
+        const idx = [i - 1, i, i + 1]
+        const c = [1, -2, 1]
+        for (let p = 0; p < 3; p++) {
+          const ip = idx[p]
+          if (ip < a || ip > b) continue
+          for (let q = 0; q < 3; q++) {
+            const iq = idx[q]
+            if (iq >= a && iq <= b) A[(ip - a) * cnt + (iq - a)] += c[p] * c[q]
+            else {
+              rx[ip - a] -= c[p] * c[q] * xs[iq]
+              rz[ip - a] -= c[p] * c[q] * zs[iq]
+            }
+          }
+        }
+      }
+      for (let i = 0; i < cnt; i++) {
+        A[i * cnt + i] += lambda
+        rx[i] += lambda * x0[i]
+        rz[i] += lambda * z0[i]
+      }
+      solveDense(A, [rx, rz], cnt)
+      for (let i = 0; i < cnt; i++) {
+        xs[a + i] = rx[i]
+        zs[a + i] = rz[i]
+      }
+      let w2 = 0
+      for (let q = Math.max(K, a - K); q <= Math.min(n - 1 - K, b + K); q++) w2 = Math.max(w2, turnAt(q))
+      if (w2 <= MAX_TURN) break
+    }
+  }
+}
+
 interface Coarse {
   pts: P[]
   cum: number[]
@@ -341,7 +452,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   const field = buildField(doc.terrain, doc.size)
   const sample = makeSampler(field, doc.size)
   const groundAt = (x: number, z: number) => groundHeight(sample(x + half, z + half))
-  const lanes = layoutLines(doc, LANE_GAP)
+  const lanes = layoutLines(doc, LANE_GAP, { smooth: 4 })
   const lineList = Object.values(doc.lines)
 
   // ---- pass A: smooth axis of every line, with generous run-out at both ends ---------------
@@ -584,15 +695,23 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     })
 
     // blend the axis onto the platform group's axis around every stop (weights by arc distance)
+    // Neighbouring stops overlap: their pull is mixed (partition of unity), so the axis never jumps from one platform
+    // axis to the next. `w` is the total pull, `dom` the stop with the strongest pull, `kap` every stop's share.
     const w = new Array<number>(m).fill(0)
     const dom = new Array<number>(m).fill(-1)
+    const kap: number[][] = []
     const cy = new Array<number>(m).fill(0)
     for (let j = 0; j < m; j++) {
+      const wsj: number[] = []
+      let best = 0
+      let sum = 0
       info.forEach((s, k) => {
         const dd = Math.abs(cum0[j] - cum0[s.i])
         const ws = smooth01(1 - Math.min(1, Math.max(0, (dd - s.half) / s.taper)))
-        if (ws > w[j]) {
-          w[j] = ws
+        wsj.push(ws)
+        sum += ws
+        if (ws > best) {
+          best = ws
           dom[j] = k
         }
         if (s.g.lift !== 0) {
@@ -601,38 +720,49 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           if (Math.abs(v) > Math.abs(cy[j])) cy[j] = v
         }
       })
+      const norm = Math.max(1, sum)
+      kap.push(wsj.map((v) => v / norm))
+      w[j] = Math.min(1, sum)
     }
     const cx: number[] = []
     const cz: number[] = []
     for (let j = 0; j < m; j++) {
-      if (w[j] > 0 && dom[j] >= 0) {
-        const s = info[dom[j]]
+      let x = px[j]
+      let z = pz[j]
+      info.forEach((s, k) => {
+        const f = kap[j][k]
+        if (f <= 0) return
         const along = (cum0[j] - cum0[s.i]) * s.sgn
-        const qx = s.g.ox + s.g.ax * along
-        const qz = s.g.oz + s.g.az * along
-        cx.push(px[j] + (qx - px[j]) * w[j])
-        cz.push(pz[j] + (qz - pz[j]) * w[j])
-      } else {
-        cx.push(px[j])
-        cz.push(pz[j])
-      }
+        x += (s.g.ox + s.g.ax * along - px[j]) * f
+        z += (s.g.oz + s.g.az * along - pz[j]) * f
+      })
+      cx.push(x)
+      cz.push(z)
     }
+    // no bend tighter than a train can follow: relax the axis everywhere except on the platforms and at the ends
+    relaxCurvature(
+      cx,
+      cz,
+      cx.map((_, j) => j < 3 || j > m - 4 || w[j] > 0.995),
+    )
     const ct = tangents(cx, cz)
     const cum: number[] = [0]
     for (let j = 1; j < m; j++) cum.push(cum[j - 1] + Math.hypot(cx[j] - cx[j - 1], cz[j] - cz[j - 1]))
 
     // a track's position: ±0.3 from the axis, swinging onto lateral position `zt` of its platform group
-    const trackAt = (j: number, base: number, zt: number) => {
+    const trackAt = (j: number, base: number, ztOf: (k: number) => number) => {
       const nx = -ct.tz[j]
       const nz = ct.tx[j]
-      let ox = nx * base
-      let oz = nz * base
-      if (w[j] > 0 && dom[j] >= 0) {
-        const s = info[dom[j]]
-        const k = w[j]
-        ox = ox * (1 - k) - s.g.az * zt * k
-        oz = oz * (1 - k) + s.g.ax * zt * k
-      }
+      const own = 1 - w[j]
+      let ox = nx * base * own
+      let oz = nz * base * own
+      info.forEach((s, k) => {
+        const f = kap[j][k]
+        if (f <= 0) return
+        const zt = ztOf(k)
+        ox -= s.g.az * zt * f
+        oz += s.g.ax * zt * f
+      })
       return { x: cx[j] + ox, z: cz[j] + oz }
     }
     const fx: number[] = []
@@ -640,9 +770,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const bx: number[] = []
     const bz: number[] = []
     for (let j = 0; j < m; j++) {
-      const s = dom[j] >= 0 ? info[dom[j]] : null
-      const f = trackAt(j, TRACK_OFFSET, s ? s.zF : 0)
-      const b = trackAt(j, -TRACK_OFFSET, s ? s.zB : 0)
+      const f = trackAt(j, TRACK_OFFSET, (k) => info[k].zF)
+      const b = trackAt(j, -TRACK_OFFSET, (k) => info[k].zB)
       fx.push(f.x)
       fz.push(f.z)
       bx.push(b.x)
@@ -712,7 +841,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         const Z: number[] = []
         const Y: number[] = []
         for (let j = ja; j <= jb; j++) {
-          const p = trackAt(j, sp.side === 'f' ? TRACK_OFFSET : -TRACK_OFFSET, dom[j] === s.k ? sp.zt : 0)
+          const p = trackAt(j, sp.side === 'f' ? TRACK_OFFSET : -TRACK_OFFSET, (k) => (k === s.k ? sp.zt : 0))
           X.push(p.x)
           Z.push(p.z)
           Y.push(cy[j])

@@ -133,4 +133,25 @@ describe('routing', () => {
     expect(fixed.lines.L.segs).toHaveLength(1)
     expect(fixed.lines.L.via).toHaveLength(2)
   })
+  it('never turns by more than 90° in one bend, also when the line has to double back at a station', () => {
+    let d = city()
+    // the line comes from the north, the next stop lies east, slightly north of the middle station
+    d = addStation(d, 'a', 40, 20)
+    d = addStation(d, 'b', 40, 60)
+    d = addStation(d, 'c', 70, 58)
+    d = addStation(d, 'e', 40, 100)
+    d = { ...d, lines: { L: { id: 'L', name: 'L', operator: 'regional', color: '#fff', stations: [], via: [], segs: [] } } }
+    for (const id of ['a', 'b', 'c', 'e']) d = appendStation(d, 'L', id)
+    const full = d.lines.L.segs!.reduce<Pt[]>((acc, seg) => (acc.length ? [...acc, ...seg.slice(1)] : [...seg]), [])
+    const lat = latticePoints(full)
+    let worst = 0
+    for (let i = 1; i < lat.length - 1; i++) {
+      const a = dirIndex(lat[i].x - lat[i - 1].x, lat[i].y - lat[i - 1].y)
+      const b = dirIndex(lat[i + 1].x - lat[i].x, lat[i + 1].y - lat[i].y)
+      let t = Math.abs(a - b)
+      t = Math.min(t, 8 - t)
+      worst = Math.max(worst, t)
+    }
+    expect(worst).toBeLessThanOrEqual(2)
+  })
 })

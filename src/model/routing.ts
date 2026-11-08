@@ -17,12 +17,20 @@ const DX = [1, 1, 0, -1, -1, -1, 0, 1]
 const DY = [0, 1, 1, 1, 0, -1, -1, -1]
 const SQ2 = Math.SQRT2
 
-/** Cost of changing direction by n * 45°. Reversing is not allowed. */
-const TURN = [0, 1.1, 3.6, 9, Infinity]
+/** Cost of changing direction by n * 45°. Nothing beyond 90° (no hairpins, a train would have to turn round): a U-turn is made of two 90° bends. */
+const TURN = [0, 1.1, 3.6, Infinity, Infinity]
 const turnCost = (a: number, b: number) => {
   let d = Math.abs(a - b)
   d = Math.min(d, 8 - d)
   return TURN[d]
+}
+
+/** Cost for arriving at a station in a direction that does not point towards the next stop (the next leg could not continue smoothly) */
+const HINT = [0, 1.5, 5, 14, 14]
+const hintCost = (arrive: number, want: number) => {
+  let d = Math.abs(arrive - want)
+  d = Math.min(d, 8 - d)
+  return HINT[d]
 }
 
 export interface RouteCtx {
@@ -45,6 +53,12 @@ export function dirIndex(dx: number, dy: number): number {
   const sy = Math.sign(dy)
   for (let i = 0; i < 8; i++) if (DX[i] === sx && DY[i] === sy) return i
   return 0
+}
+
+/** The octilinear direction closest to the bearing (dx, dy). */
+export function bearingDir(dx: number, dy: number): number {
+  const a = Math.atan2(dy, dx)
+  return ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8
 }
 
 /** Expand an octilinear polyline into unit lattice steps. */
@@ -167,7 +181,7 @@ export interface LegResult {
 }
 
 /** A* between two lattice points. `startDir` (0..7) is the direction the line arrives with, or null. */
-export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | null): LegResult {
+export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | null, exitHint: number | null = null): LegResult {
   if (from.x === to.x && from.y === to.y) return { pts: [from], endDir: startDir ?? 0 }
   const { size, terrain, occ, own, stations, occHeavy, occTram, ownTram } = ctx
   const foreign = ownTram ? occHeavy : occTram
@@ -230,6 +244,16 @@ export function routeLeg(ctx: RouteCtx, from: Pt, to: Pt, startDir: number | nul
       // trams run on streets, heavy rail on its own track bed: keep out of each other's corridors
       if (foreign[ci]) c += 3 * len
       if (stations[ci] && !(nx === to.x && ny === to.y)) c += 8
+      if (exitHint !== null && nx === to.x && ny === to.y) {
+        // arrive pointing the way the line goes on, and also come from that side a few cells before (no hook at the station)
+        c += hintCost(nd, exitHint)
+        let back = id
+        for (let q = 0; q < 3 && parent[back] >= 0; q++) back = parent[back]
+        const bc = back >> 3
+        const bx = (bc % W) + x0
+        const by = ((bc / W) | 0) + y0
+        if (bx !== nx || by !== ny) c += 0.8 * hintCost(bearingDir(nx - bx, ny - by), exitHint)
+      }
       const nid = sid(nx, ny, nd)
       if (closed[nid]) continue
       const ng = gc + c
@@ -306,9 +330,12 @@ export function routeSegment(doc: CityDoc, line: Line, k: number): Pt[] {
   const nodes: Pt[] = [{ x: A.x, y: A.y }, ...via, { x: B.x, y: B.y }]
   const ctx = buildCtx(doc, line.id, k)
   let dir = exitDir(line.segs?.[k - 1])
+  // where the line goes on after station B: the last leg should arrive pointing that way
+  const C = doc.stations[line.stations[k + 2]]
+  const hint = C && !(C.x === B.x && C.y === B.y) ? bearingDir(C.x - B.x, C.y - B.y) : null
   let result: Pt[] = []
   for (let i = 0; i < nodes.length - 1; i++) {
-    const leg = routeLeg(ctx, nodes[i], nodes[i + 1], dir)
+    const leg = routeLeg(ctx, nodes[i], nodes[i + 1], dir, i === nodes.length - 2 ? hint : null)
     dir = leg.endDir
     result = result.length ? simplify([...result, ...leg.pts.slice(1)]) : leg.pts
     // later legs of this segment should avoid what we just laid down
@@ -331,10 +358,10 @@ function shape(line: Line): Line {
   return { ...line, via, segs }
 }
 
-/** Recompute segment k and the one after it (for direction continuity). */
+/** Recompute segment k, the one before it (it now knows where the line goes on) and the one after it (direction continuity). */
 function rerouteAt(doc: CityDoc, lineId: string, k: number): CityDoc {
   let d = doc
-  for (const i of [k, k + 1]) {
+  for (const i of [k - 1, k, k + 1]) {
     const line = d.lines[lineId]
     if (!line || i < 0 || i >= line.stations.length - 1) continue
     const segs = [...(line.segs ?? [])]

@@ -27,7 +27,7 @@ const key = (a: Pt, b: Pt) =>
  * Lines that share a stretch of track run side by side, `gap` cells apart (bundling),
  * with a stable lane order, mitred at bends. Coordinates are lattice points; callers add 0.5 for the cell centre.
  */
-export function layoutLines(doc: CityDoc, gap: number): Record<string, Pt[]> {
+export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number } = {}): Record<string, Pt[]> {
   const lines = Object.values(doc.lines)
   const lattices: Record<string, Pt[]> = {}
   // heavy rail and trams are bundled separately: a tram runs on the street beside the railway, not on its tracks
@@ -84,6 +84,23 @@ export function layoutLines(doc: CityDoc, gap: number): Record<string, Pt[]> {
       // the lane order is defined in the canonical direction of the edge; flip it when we travel the other way
       const canonical = a.x < b.x || (a.x === b.x && a.y < b.y)
       off.push(canonical ? lane : -lane)
+    }
+    // 3D: a lane change is spread over several cells, not a sideways jump (trains cannot follow a jog)
+    const k = Math.round(opts.smooth ?? 0)
+    if (k > 0 && m > 1) {
+      const src = off.slice()
+      for (let i = 0; i < m; i++) {
+        let sum = 0
+        let wsum = 0
+        for (let d = -k; d <= k; d++) {
+          const j = i + d
+          if (j < 0 || j >= m) continue
+          const w = k + 1 - Math.abs(d)
+          sum += src[j] * w
+          wsum += w
+        }
+        off[i] = sum / wsum
+      }
     }
     const nrm = (i: number): Pt => ({ x: -dir[i].y, y: dir[i].x })
     const out: Pt[] = []
