@@ -1,34 +1,30 @@
 import { OPERATORS } from '../model/constants'
 import type { CityDoc, OperatorId, Pt } from '../model/types'
+import type { SimTrain } from '../view3d/trainSim'
 
 // ---------------------------------------------------------------------------
 // Trains on the 2D map
 //
-// A light simulation on the drawn lines (the bundled lane paths of the map): every train shuttles between the two
-// ends of its line, calls at every station and shows as a row of rectangles (one per car). The longer the real train,
-// the more and the longer cars: a tram is short, an ICE is long.
+// The trains are the ones of the world simulation (sim/world.ts), the same that drive in 3D. The map only reads their
+// state (which leg, how far along it) and puts them on the drawn lines (the bundled lane paths of the map): every train
+// shows as a row of rectangles, one per car. The longer the real train, the more and the longer cars.
 // ---------------------------------------------------------------------------
 
 interface TrainKind {
   cars: number
   /** length of one car in cells */
   car: number
-  /** cruising speed in cells per second */
-  speed: number
 }
 
 export const TRAIN_KINDS: Record<OperatorId, TrainKind> = {
-  tram: { cars: 2, car: 0.42, speed: 3.2 },
-  ubahn: { cars: 3, car: 0.5, speed: 5 },
-  sbahn: { cars: 4, car: 0.55, speed: 6 },
-  regional: { cars: 5, car: 0.6, speed: 8 },
-  fernverkehr: { cars: 6, car: 0.66, speed: 11 },
+  tram: { cars: 2, car: 0.42 },
+  ubahn: { cars: 3, car: 0.5 },
+  sbahn: { cars: 4, car: 0.55 },
+  regional: { cars: 5, car: 0.6 },
+  fernverkehr: { cars: 6, car: 0.66 },
 }
 
-const DWELL = 1.6
-const DWELL_TERMINAL = 2.6
 const GAP = 0.08
-const ease = (u: number) => u * u * (3 - 2 * u)
 
 /** A line as the trains see it: the path with running arc lengths and the arc length of every stop. */
 export interface RunPath {
@@ -38,17 +34,16 @@ export interface RunPath {
   stops: number[]
 }
 
-export interface Train {
+/** A train as the map shows it: between two stops of its line (`u` = how far along, 0 at `from`), heading `dir`. */
+export interface TrainView {
   id: string
   lineId: string
   op: OperatorId
   color: string
-  /** index into the back-and-forth list of legs, and what the train does on it */
-  leg: number
-  phase: 'dwell' | 'move'
-  /** dwell time left (seconds), or progress 0..1 of the leg */
-  t: number
-  duration: number
+  from: number
+  to: number
+  u: number
+  dir: 1 | -1
 }
 
 /** Arc length at every vertex of the path. */
@@ -94,93 +89,6 @@ export function buildRunPaths(doc: CityDoc, paths: Record<string, Pt[]>): Record
   return out
 }
 
-/** Legs of a round trip: out to the last stop and back again. */
-function legCount(stopCount: number) {
-  return Math.max(1, (stopCount - 1) * 2)
-}
-
-function legEnds(stopCount: number, leg: number): { from: number; to: number; dir: 1 | -1 } {
-  const n = stopCount - 1
-  const k = ((leg % (n * 2)) + n * 2) % (n * 2)
-  return k < n ? { from: k, to: k + 1, dir: 1 } : { from: 2 * n - k, to: 2 * n - k - 1, dir: -1 }
-}
-
-/** How many trains a line gets: longer lines are busier. */
-export function trainsOnLine(total: number): number {
-  return Math.min(3, 1 + Math.floor(total / 45))
-}
-
-export class TrainSim {
-  trains: Train[] = []
-  runs: Record<string, RunPath> = {}
-
-  /** Takes new paths (the network changed) and keeps every train that is still on a line where it was. */
-  setPaths(runs: Record<string, RunPath>, meta: Map<string, { op: OperatorId; color: string }>) {
-    this.runs = runs
-    const old = new Map(this.trains.map((t) => [t.id, t]))
-    const next: Train[] = []
-    let order = 0
-    for (const [lineId, run] of Object.entries(runs)) {
-      const line = meta.get(lineId)
-      if (!line) continue
-      const legs = legCount(run.stops.length)
-      const count = trainsOnLine(run.total)
-      for (let i = 0; i < count; i++) {
-        const id = `${lineId}#${i}`
-        const prev = old.get(id)
-        if (prev) {
-          prev.op = line.op
-          prev.color = line.color
-          prev.leg %= legs
-          next.push(prev)
-        } else {
-          next.push({
-            id,
-            lineId,
-            op: line.op,
-            color: line.color,
-            leg: Math.floor((i * legs) / count),
-            phase: 'dwell',
-            t: 0.4 + order++ * 0.9,
-            duration: 0,
-          })
-        }
-      }
-    }
-    this.trains = next
-  }
-
-  update(dt: number) {
-    for (const tr of this.trains) {
-      const run = this.runs[tr.lineId]
-      if (!run) continue
-      const stopCount = run.stops.length
-      const leg = legEnds(stopCount, tr.leg)
-      if (tr.phase === 'dwell') {
-        tr.t -= dt
-        if (tr.t > 0) continue
-        const dist = Math.abs(run.stops[leg.to] - run.stops[leg.from])
-        tr.duration = Math.max(1.6, dist / TRAIN_KINDS[tr.op].speed + 1.1)
-        tr.phase = 'move'
-        tr.t = 0
-        continue
-      }
-      tr.t += dt / tr.duration
-      if (tr.t >= 1) {
-        tr.leg = (tr.leg + 1) % legCount(stopCount)
-        tr.phase = 'dwell'
-        const next = legEnds(stopCount, tr.leg)
-        tr.t = next.dir !== leg.dir ? DWELL_TERMINAL : DWELL
-      }
-    }
-  }
-}
-
-/** Operator and colour of every line (what the trains need to know besides the path). */
-export function lineMetaOf(doc: CityDoc): Map<string, { op: OperatorId; color: string }> {
-  return new Map(Object.values(doc.lines).map((l) => [l.id, { op: l.operator, color: l.color }]))
-}
-
 /** Point and direction on a path at an arc length. */
 export function poseAt(run: RunPath, s: number): { x: number; y: number; tx: number; ty: number } {
   const { pts, cum, total } = run
@@ -217,14 +125,11 @@ export interface CarShape {
 }
 
 /** Where the cars of a train are (head first), given how many pixels one cell has. */
-export function carsOf(tr: Train, run: RunPath, scale: number): CarShape[] {
+export function carsOf(tr: TrainView, run: RunPath, scale: number): CarShape[] {
   const kind = TRAIN_KINDS[tr.op]
-  const stopCount = run.stops.length
-  const leg = legEnds(stopCount, tr.leg)
-  const a = run.stops[leg.from]
-  const b = run.stops[leg.to]
-  // dwelling, a train stands at the stop it arrived at (the end of the previous leg = start of this one)
-  const s0 = tr.phase === 'dwell' ? a : a + (b - a) * ease(Math.min(1, tr.t))
+  const a = run.stops[tr.from]
+  const b = run.stops[tr.to]
+  const s0 = a + (b - a) * tr.u
   // cars never get tiny: when zoomed out the train grows in cells so a car stays at least ~6 px long
   const grow = Math.max(1, 6 / (kind.car * scale))
   const car = kind.car * grow
@@ -235,9 +140,9 @@ export function carsOf(tr: Train, run: RunPath, scale: number): CarShape[] {
   const sc = total > half * 2 ? Math.min(total - half, Math.max(half, s0)) : total / 2
   const out: CarShape[] = []
   for (let i = 0; i < kind.cars; i++) {
-    const off = ((kind.cars - 1) / 2 - i) * pitch * leg.dir
+    const off = ((kind.cars - 1) / 2 - i) * pitch * tr.dir
     const p = poseAt(run, sc + off)
-    out.push({ x: p.x, y: p.y, tx: p.tx * leg.dir, ty: p.ty * leg.dir, len: car, head: i === 0 })
+    out.push({ x: p.x, y: p.y, tx: p.tx * tr.dir, ty: p.ty * tr.dir, len: car, head: i === 0 })
   }
   return out
 }
@@ -255,10 +160,36 @@ export function lighten(hex: string, amount: number): string {
   return `rgb(${mix((n >> 16) & 255)},${mix((n >> 8) & 255)},${mix(n & 255)})`
 }
 
-/** Paint all trains. `ox`/`oy`/`s` are the map view (pixels, pixels per cell). */
-export function drawTrains(ctx: CanvasRenderingContext2D, sim: TrainSim, ox: number, oy: number, s: number, w: number, h: number) {
+const ease = (u: number) => u * u * (3 - 2 * u)
+
+/** The trains of the world simulation as the map shows them. Trains whose line does not match the drawn one are left out. */
+export function viewsOf(sim: { trains: SimTrain[] }, runs: Record<string, RunPath>): TrainView[] {
+  const out: TrainView[] = []
   for (const tr of sim.trains) {
-    const run = sim.runs[tr.lineId]
+    const run = runs[tr.net.line.id]
+    const n = tr.net.stops.length
+    if (!run || run.stops.length !== n || n < 2) continue
+    const legs = tr.legs
+    const leg = legs[tr.leg % legs.length]
+    out.push({
+      id: tr.id,
+      lineId: tr.net.line.id,
+      op: tr.op,
+      color: tr.color,
+      from: leg.from,
+      to: leg.to,
+      // standing at a stop, a train is at the start of the leg it will drive next
+      u: tr.phase === 'dwell' ? 0 : ease(Math.min(1, tr.t)),
+      dir: tr.dir,
+    })
+  }
+  return out
+}
+
+/** Paint all trains. `ox`/`oy`/`s` are the map view (pixels, pixels per cell). */
+export function drawTrains(ctx: CanvasRenderingContext2D, trains: TrainView[], runs: Record<string, RunPath>, ox: number, oy: number, s: number, w: number, h: number) {
+  for (const tr of trains) {
+    const run = runs[tr.lineId]
     if (!run) continue
     const cars = carsOf(tr, run, s)
     const first = cars[0]

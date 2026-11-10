@@ -1,13 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import type { MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '../store/editorStore'
 import { followState } from './follow'
 import { RAIL } from '../model/scale'
 import { LAND_Y, RAIL_Y } from './heights'
 import type { Network3D } from './network3d'
-import { carPoses, Sim } from './trainSim'
+import { bindNet } from '../sim/world'
+import { carPoses } from './trainSim'
 import { CarMesh } from './vehicles3d'
 
 const qYaw = new THREE.Quaternion()
@@ -15,17 +15,17 @@ const qPitch = new THREE.Quaternion()
 const AXIS_Y = new THREE.Vector3(0, 1, 0)
 const AXIS_Z = new THREE.Vector3(0, 0, 1)
 
-/** All trains of the network, driving back and forth on their lines (see trainSim for the rules). */
-export default function Trains3D({ net, speedRef }: { net: Network3D; speedRef: MutableRefObject<number> }) {
-  const sim = useMemo(() => new Sim(net), [net])
-  if (import.meta.env.DEV) (window as unknown as { __sim: unknown }).__sim = sim
+/** All trains of the network, driving back and forth on their lines (see trainSim for the rules; the clock is the world's, see sim/world). */
+export default function Trains3D({ net }: { net: Network3D }) {
+  const cityId = useEditor((s) => s.doc.id)
+  // the world simulation runs outside this view (sim/WorldSim); here the trains are only put on the rails
+  const sim = useMemo(() => bindNet(net, cityId), [net, cityId])
   const groups = useRef<(THREE.Group | null)[][]>([])
   const select = useEditor((s) => s.setFollow)
   // a train's "at" / "to" is a platform track key: `${stationId}|${track}`
   const stationName = (key: string | null) => (key ? net.stations[key.split('|')[0]]?.st.name ?? '' : '')
 
-  useFrame((_, dt) => {
-    sim.update(Math.min(dt, 0.1) * speedRef.current)
+  useFrame(() => {
     sim.trains.forEach((tr, ti) => {
       const cars = groups.current[ti]
       if (!cars) return

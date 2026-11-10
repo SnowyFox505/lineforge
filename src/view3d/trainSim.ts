@@ -67,7 +67,10 @@ export class Sim {
   /** how often a train had to enter an occupied track after waiting too long (should stay at zero) */
   forced = 0
 
+  readonly net: Network3D
+
   constructor(net: Network3D, maxPerLine = 2) {
+    this.net = net
     let order = 0
     for (const ln of net.lines) {
       if (ln.stops.length < 2) continue
@@ -110,6 +113,44 @@ export class Sim {
         }
         // no free station track left on this line: this train is simply not in service
         if (tr.at) this.trains.push(tr)
+      }
+    }
+  }
+
+  /**
+   * The network was rebuilt (a line was drawn, a station changed): every train that still exists carries on where it was,
+   * so the world does not start over. A train is the same one when it has the same id and its line still has the same legs.
+   */
+  carryOver(old: Sim) {
+    const before = new Map(old.trains.map((t) => [t.id, t]))
+    for (const tr of this.trains) {
+      const o = before.get(tr.id)
+      if (!o || o.legs.length !== tr.legs.length) continue
+      if (tr.at && this.occ.get(tr.at) === tr.id) this.occ.delete(tr.at)
+      const n = tr.legs.length
+      tr.leg = o.leg % n
+      tr.phase = o.phase
+      tr.t = o.t
+      tr.duration = o.duration
+      tr.waited = 0
+      tr.rev = null
+      const stops = tr.net.stops
+      const leg = tr.legs[tr.leg]
+      if (o.phase === 'dwell') {
+        const prev = tr.legs[(tr.leg - 1 + n) % n]
+        const key = keyOf(stops[leg.from], prev.dir)
+        tr.at = key
+        tr.to = null
+        tr.dir = prev.dir
+        tr.s = stops[leg.from].d
+        if (!this.occ.has(key)) this.occ.set(key, tr.id)
+      } else {
+        const key = keyOf(stops[leg.to], leg.dir)
+        tr.at = null
+        tr.to = key
+        tr.dir = leg.dir
+        tr.s = stops[leg.from].d + (stops[leg.to].d - stops[leg.from].d) * ease(Math.min(1, tr.t))
+        if (!this.occ.has(key)) this.occ.set(key, tr.id)
       }
     }
   }

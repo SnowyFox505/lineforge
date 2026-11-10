@@ -8,6 +8,7 @@ import type { Tab } from '../store/editorStore'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import { spring } from './primitives'
+import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
 import ToolDock from './ToolDock'
 
@@ -121,6 +122,7 @@ export default function Editor() {
         </motion.div>
       </AnimatePresence>
 
+      <WorldSim />
       <TopBar onSettings={() => setSettings(true)} />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 px-3 pb-[calc(12px+var(--safe-bottom))]">

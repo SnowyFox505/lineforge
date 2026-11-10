@@ -1,7 +1,7 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { AnimatePresence } from 'motion/react'
 import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
 import { buildZoneGfx } from '../editor2d/zoneGfx'
@@ -17,7 +17,7 @@ import { LegPanel, LegPicker } from './LegTools'
 import StationBuilding from './StationBuilding'
 import type { EntranceSign } from './StationBuilding'
 import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
-import { buildNetwork3D } from './network3d'
+import { netFor, SPEEDS, world } from '../sim/world'
 import type { Network3D, StationGroup, StationNet } from './network3d'
 import Tracks3D from './Tracks3D'
 import FollowCam from './FollowCam'
@@ -271,23 +271,22 @@ function DevCam() {
   return null
 }
 
-const SPEEDS = [1, 2, 4]
-
 export default function Scene3D() {
   const doc = useEditor((s) => s.doc)
   const editId = useEditor((s) => s.editStationId)
   const cam = useInitialCamera(doc)
-  const net = useMemo(() => buildNetwork3D(doc), [doc])
+  const net = useMemo(() => netFor(doc), [doc])
   if (import.meta.env.DEV) (window as unknown as { __net: unknown }).__net = net
   const [auto, setAuto] = useState(false)
   const [see, setSee] = useState(false)
-  const [running, setRunning] = useState(true)
-  const [speedIdx, setSpeedIdx] = useState(0)
-  const speedRef = useRef(1)
+  // speed and pause belong to the world (they stay when you switch views)
+  const [running, setRunning] = useState(world.running)
+  const [speedIdx, setSpeedIdx] = useState(world.speedIdx)
   const followId = useEditor((s) => s.followId)
   const setFollow = useEditor((s) => s.setFollow)
   const stopAuto = useCallback(() => setAuto(false), [])
-  speedRef.current = running ? SPEEDS[speedIdx] : 0
+  world.running = running
+  world.speedIdx = speedIdx
 
   return (
     <div className={`absolute inset-0 ${editId ? 'invisible' : ''}`} style={{ background: 'radial-gradient(ellipse at 50% 38%, #1a2a3a 0%, #0a1017 55%, #06080c 100%)' }}>
@@ -303,7 +302,7 @@ export default function Scene3D() {
         <LegPicker net={net} see={see} />
         <Tracks3D net={net} />
         <Stations net={net} />
-        <Trains3D net={net} speedRef={speedRef} />
+        <Trains3D net={net} />
         <DevCam />
         <TouchRig onGesture={stopAuto} />
         <FollowCam />
