@@ -12,9 +12,11 @@ import Icon from '../ui/Icon'
 import { lookOf } from '../model/profiles'
 import Airports3D from './Airport3D'
 import Buildings3D from './Buildings3D'
+import Pois3D from './Pois3D'
 import Label3D from './Label3D'
 import { LegPanel, LegPicker } from './LegTools'
 import StationBuilding from './StationBuilding'
+import { labelHolder } from '../model/links'
 import type { EntranceSign } from './StationBuilding'
 import { BASE_Y, groundHeight, LAND_Y, WATER_Y } from './heights'
 import { netFor, SPEEDS, world } from '../sim/world'
@@ -183,12 +185,13 @@ function signFor(net: Network3D, lineIds: string[]): EntranceSign {
 
 function Stations({ net }: { net: Network3D }) {
   const setEdit = useEditor((s) => s.setEditStation)
+  const doc = useEditor((s) => s.doc)
   return (
     <>
       {Object.values(net.stations).map((sn) => {
         const { st } = sn
         const main = sn.groups.find((g) => g.kind === 'main') ?? sn.groups[0]
-        const tall = Math.max(0, ...sn.groups.map((g) => g.lift)) + (sn.design.roof === 'hall' ? 2.1 : sn.design.roof === 'glass' ? 1.9 : st.type === 'landmark' ? 2.2 : 1.5)
+        const tall = Math.max(0, ...sn.groups.map((g) => g.lift)) + (sn.design.roof === 'hall' ? 2.1 : sn.design.roof === 'glass' ? 1.9 : 1.5)
         const tap = (g: { layout: StationNet['layout'] }) => (
           <mesh
             position={[0, LAND_Y + 0.5, 0]}
@@ -212,23 +215,11 @@ function Stations({ net }: { net: Network3D }) {
             )}
             {sn.groups.map((g) => (
               <group key={g.index} position={[g.ox, 0, g.oz]} rotation={[0, g.angle, 0]}>
-                <StationBuilding design={g.design} layout={g.layout} curve={g.curv} annex={g.annex} halt={g.halt} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' && !g.halt ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} sign={signFor(net, g.lineIds)} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null} />
-                {g.index === main?.index && st.type === 'landmark' && (
-                  <group position={[0, 0, g.layout.halfWidth + 1.8]}>
-                    <mesh position={[0, LAND_Y + 0.7, 0]}>
-                      <boxGeometry args={[0.45, 1.4, 0.45]} />
-                      <meshStandardMaterial color="#ffbd3d" emissive="#ffbd3d" emissiveIntensity={0.25} />
-                    </mesh>
-                    <mesh position={[0, LAND_Y + 1.65, 0]}>
-                      <coneGeometry args={[0.42, 0.55, 4]} />
-                      <meshStandardMaterial color="#c26a12" />
-                    </mesh>
-                  </group>
-                )}
+                <StationBuilding design={g.design} layout={g.layout} curve={g.curv} annex={g.annex} halt={g.halt} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' && !g.halt ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} sign={signFor(net, g.lineIds)} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' || st.type === 'tramstop' ? null : 'small') : null} />
                 {tap(g)}
               </group>
             ))}
-            <Label3D text={st.type === 'landmark' && st.landmarkLabel ? st.landmarkLabel : st.name} position={[sn.x, tall + 0.9, sn.z]} />
+            {labelHolder(doc, st.id) === st.id && <Label3D text={st.name} position={[sn.x, tall + 0.9, sn.z]} />}
           </group>
         )
       })}
@@ -302,6 +293,7 @@ export default function Scene3D() {
         <LegPicker net={net} see={see} />
         <Tracks3D net={net} />
         <Stations net={net} />
+        <Pois3D net={net} />
         <Trains3D net={net} />
         <DevCam />
         <TouchRig onGesture={stopAuto} />

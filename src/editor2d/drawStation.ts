@@ -64,20 +64,14 @@ export function drawStation(
       ctx.shadowColor = 'transparent'
       ctx.stroke()
       break
-    case 'landmark': {
-      const d = r * 1.55
-      const g = ctx.createLinearGradient(0, -d, 0, d)
-      g.addColorStop(0, '#ffe27a')
-      g.addColorStop(1, '#ffa928')
-      ctx.fillStyle = g
+    case 'tramstop': {
+      // a small rounded square: the stop of a tram
+      const d = r * 1.05
+      ctx.fillStyle = '#fff'
       ctx.strokeStyle = ink
-      ctx.lineWidth = Math.max(1.5, r * 0.38)
+      ctx.lineWidth = Math.max(1.6, r * 0.42)
       ctx.beginPath()
-      ctx.moveTo(0, -d)
-      ctx.lineTo(d, 0)
-      ctx.lineTo(0, d)
-      ctx.lineTo(-d, 0)
-      ctx.closePath()
+      ctx.roundRect(-d, -d, d * 2, d * 2, d * 0.45)
       ctx.fill()
       ctx.shadowColor = 'transparent'
       ctx.stroke()

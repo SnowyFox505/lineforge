@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
+import { stopsAt } from '../model/stops'
+import { poiModel, poiRadius, poiStations, poisServedBy, POI_MODELS, POI_RADIUS_MAX, POI_RADIUS_MIN, stationsInReach } from '../model/poi'
 import type { OperatorId, PoiKind, StationType, ZoneKind } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import { groupOf } from '../store/editorStore'
@@ -43,6 +45,7 @@ const TOOLBOXES: Toolbox[] = [
     tools: [
       { id: 'line', label: 'Linie', icon: 'route' },
       { id: 'station', label: 'Station', icon: 'pin' },
+      { id: 'link', label: 'Verbinden', icon: 'link' },
     ],
   },
   {
@@ -103,7 +106,9 @@ function StationCard() {
   const update = useEditor((s) => s.updateStation)
   const remove = useEditor((s) => s.removeStation)
   const select = useEditor((s) => s.selectStation)
+  const doc = useEditor((s) => s.doc)
   if (!st) return null
+  const nearby = poisServedBy(doc, st)
   return (
     <motion.div
       key={st.id}
@@ -130,15 +135,40 @@ function StationCard() {
           </Chip>
         ))}
       </div>
-      {st.type === 'landmark' && (
-        <CommitInput
-          value={st.landmarkLabel ?? 'Wahrzeichen'}
-          onCommit={(landmarkLabel) => update(st.id, { landmarkLabel })}
-          className="mt-2 w-full !py-2"
-          placeholder="Bezeichnung, z. B. Bundestag"
-        />
+      {nearby.length > 0 && (
+        <p className="mt-2 text-xs text-white/55">
+          Ziel für {nearby.map((p) => `${POI_STYLE[p.kind].label} „${p.name}“`).join(', ')}
+        </p>
       )}
     </motion.div>
+  )
+}
+
+/** Link two stations (a tram stop next to a station) into one interchange without merging them. */
+function LinkPanel() {
+  const doc = useEditor((s) => s.doc)
+  const first = useEditor((s) => s.selectedStationId)
+  const toggle = useEditor((s) => s.toggleLink)
+  const links = doc.links ?? []
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-white/55">
+        {first && doc.stations[first]
+          ? `Tippe jetzt die Station an, die mit „${doc.stations[first].name}“ verbunden werden soll.`
+          : 'Tippe zwei Stationen nacheinander an, zum Beispiel eine Tram-Haltestelle neben einer Station. Sie bleiben getrennte Stationen, gelten aber als ein Umstieg und teilen sich den Namen. Nochmal verbinden löst die Verbindung.'}
+      </p>
+      {links.length > 0 && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {links.map(([a, b]) => (
+            <Chip key={`${a}-${b}`} onClick={() => toggle(a, b)}>
+              <Icon name="link" size={16} />
+              {doc.stations[a]?.name} ↔ {doc.stations[b]?.name}
+              <Icon name="close" size={14} />
+            </Chip>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -225,6 +255,40 @@ function LinePanel() {
               </button>
             </div>
             <ColorPicker value={active.color} onChange={(color) => updateLine(active.id, { color })} />
+            {active.stations.length >= 3 && (
+              <div className="border-t border-white/8 pt-3">
+                <div className="eyebrow mb-1">Hält an</div>
+                <p className="mb-2 text-xs leading-snug text-white/50">Tippe eine Station an, um sie auszulassen: Die Linie fährt dort auf einem Gleis ohne Bahnsteig durch.</p>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {active.stations.map((sid, i) => {
+                    const st = doc.stations[sid]
+                    if (!st) return null
+                    const end = i === 0 || i === active.stations.length - 1
+                    const stops = stopsAt(active, sid)
+                    return (
+                      <button
+                        key={`${sid}-${i}`}
+                        disabled={end}
+                        onClick={() => {
+                          const passes = new Set(active.passes ?? [])
+                          if (stops) passes.add(sid)
+                          else passes.delete(sid)
+                          updateLine(active.id, { passes: [...passes] })
+                        }}
+                        className={`flex shrink-0 items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition-all active:scale-95 disabled:opacity-60 ${
+                          stops ? 'border-accent/70 bg-accent/15 text-white' : 'border-white/8 bg-white/5 text-white/45 line-through'
+                        }`}
+                        aria-pressed={stops}
+                        title={end ? 'Endstationen halten immer' : stops ? 'Hält hier: tippen zum Durchfahren' : 'Fährt durch: tippen zum Halten'}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full border-2" style={{ borderColor: active.color, background: stops ? active.color : 'transparent' }} />
+                        {st.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 border-t border-white/8 pt-3">
               <p className="min-w-0 flex-1 text-xs leading-snug text-white/50">
                 {lineMode === 'draw'
@@ -333,11 +397,55 @@ function PoiPanel() {
           </div>
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
             {(Object.keys(POI_STYLE) as PoiKind[]).map((k) => (
-              <Chip key={k} active={poi.kind === k} onClick={() => updatePoi(poi.id, { kind: k })}>
+              <Chip key={k} active={poi.kind === k} onClick={() => updatePoi(poi.id, { kind: k, radius: undefined, model: undefined })}>
                 <span className="h-3 w-3 rounded-full" style={{ background: POI_STYLE[k].color }} />
                 {POI_STYLE[k].label}
               </Chip>
             ))}
+          </div>
+          <div>
+            <div className="eyebrow mb-1">Aussehen in 3D</div>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {POI_MODELS[poi.kind].map((m) => (
+                <Chip key={m.id} active={poiModel(poi) === m.id} onClick={() => updatePoi(poi.id, { model: m.id })}>
+                  {m.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="eyebrow">Einzugsgebiet · Radius</span>
+              <span className="text-sm font-bold tabular-nums">{poiRadius(poi)}</span>
+            </div>
+            <Slider value={poiRadius(poi)} min={POI_RADIUS_MIN} max={POI_RADIUS_MAX} onChange={(radius) => updatePoi(poi.id, { radius })} />
+            {(() => {
+              const inReach = stationsInReach(doc, poi)
+              const serving = new Set(poiStations(doc, poi).map((s) => s.id))
+              if (!inReach.length) return <p className="mt-1 text-xs text-white/50">Keine Station im Kreis. Setze eine Station hinein, damit die Leute hierher fahren.</p>
+              return (
+                <div className="mt-2">
+                  <div className="eyebrow mb-1">Hier steigen die Leute aus</div>
+                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                    {inReach.map((s) => (
+                      <Chip
+                        key={s.id}
+                        active={serving.has(s.id)}
+                        onClick={() => {
+                          const now = new Set(serving)
+                          if (now.has(s.id)) now.delete(s.id)
+                          else now.add(s.id)
+                          updatePoi(poi.id, { stations: [...now] })
+                        }}
+                      >
+                        {s.name}
+                      </Chip>
+                    ))}
+                  </div>
+                  <p className="text-xs text-white/50">Nur diese Stationen gelten als Ziel. Ohne Auswahl ist es die nächste Station: Wer zum Rathaus fährt, will nicht automatisch zum Zoo daneben.</p>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -403,6 +511,7 @@ export default function ToolDock() {
                   </div>
                 </div>
               )}
+              {tool === 'link' && <LinkPanel />}
               {tool === 'line' && <LinePanel />}
               {(tool === 'city' || tool === 'suburb' || tool === 'airport') && <ZonePanel kind={tool} />}
               {tool === 'zoneErase' && (

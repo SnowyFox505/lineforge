@@ -10,6 +10,8 @@ import { placeLabels } from './labels'
 import type { LabelRect } from './labels'
 import { layoutLines } from './layout'
 import { schematize } from './schematic'
+import { stopsAt } from '../model/stops'
+import { labelHolder } from '../model/links'
 
 const TARGET_W = 500 // px the longer side of the network is scaled to
 const MIN_U = 10
@@ -61,8 +63,8 @@ function markerRadius(type: StationType) {
       return 19
     case 'airport':
       return 17
-    case 'landmark':
-      return 13
+    case 'tramstop':
+      return 7
     default:
       return 8
   }
@@ -72,16 +74,8 @@ function Symbol({ type, x, y, ink, fill }: { type: StationType; x: number; y: nu
   switch (type) {
     case 'interchange':
       return <circle cx={x} cy={y} r={11} fill={fill} stroke={ink} strokeWidth={4.5} />
-    case 'landmark':
-      return (
-        <polygon
-          points={`${x},${y - 12} ${x + 12},${y} ${x},${y + 12} ${x - 12},${y}`}
-          fill="url(#gold)"
-          stroke={ink}
-          strokeWidth={3}
-          strokeLinejoin="round"
-        />
-      )
+    case 'tramstop':
+      return <rect x={x - 6.5} y={y - 6.5} width={13} height={13} rx={3.5} fill={fill} stroke={ink} strokeWidth={3.5} />
     case 'hauptbahnhof':
       return (
         <g>
@@ -337,7 +331,7 @@ export default function PlanView() {
       const c = { x: px(st.x), y: py(st.y) }
       const hits: { q: { x: number; y: number }; tx: number; ty: number }[] = []
       for (const { line, pts } of lines) {
-        if (!line.stations.includes(st.id) || pts.length < 2) continue
+        if (!stopsAt(line, st.id) || pts.length < 2) continue
         let best = Infinity
         let hit: (typeof hits)[number] | null = null
         for (let i = 0; i + 1 < pts.length; i++) {
@@ -357,7 +351,7 @@ export default function PlanView() {
         }
         if (hit) hits.push(hit)
       }
-      if (!hits.length || types[st.id] === 'hauptbahnhof' || types[st.id] === 'airport' || types[st.id] === 'landmark') continue
+      if (!hits.length || types[st.id] === 'hauptbahnhof' || types[st.id] === 'airport') continue
       // all lines must run the same way through the station (either direction)
       const ref = hits[0]
       if (hits.some((h) => Math.abs(h.tx * ref.tx + h.ty * ref.ty) < 0.94)) continue
@@ -410,9 +404,9 @@ export default function PlanView() {
       }
     }
     const labels = placeLabels(
-      stations.map((st) => ({
+      stations.filter((st) => labelHolder(pd, st.id) === st.id).map((st) => ({
         stationId: st.id,
-        text: st.type === 'landmark' && st.landmarkLabel ? st.landmarkLabel : st.name,
+        text: st.name,
         cx: px(st.x),
         cy: py(st.y),
         radius: markerRadius(types[st.id]),
@@ -564,6 +558,23 @@ export default function PlanView() {
                 })}
               </g>
             ))}
+
+            {/* Linked stations (a tram stop next to a station): a short walkway between them */}
+            {(doc.links ?? []).map(([la, lb]) => {
+              const A = plan.stations.find((s) => s.id === la)
+              const B = plan.stations.find((s) => s.id === lb)
+              if (!A || !B) return null
+              const x1 = plan.px(A.x)
+              const y1 = plan.py(A.y)
+              const x2 = plan.px(B.x)
+              const y2 = plan.py(B.y)
+              return (
+                <g key={`${la}-${lb}`} strokeLinecap="round">
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={T.casing} strokeWidth={9} />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={T.ink} strokeWidth={4.5} strokeDasharray="1 7" />
+                </g>
+              )
+            })}
 
             {/* Stations */}
             {plan.stations.map((st, idx) => {

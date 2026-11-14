@@ -1,3 +1,4 @@
+import { stopsAt } from './stops'
 import type { BridgeStyle, CityDoc, Line, Station, StationLook, TrackProfile } from './types'
 
 /** Height of an embankment / viaduct above the ground */
@@ -20,9 +21,10 @@ export function legProfile(line: Line, k: number, doc?: CityDoc): TrackProfile {
   if (line.operator === 'ubahn') return 'tunnel'
   // a leg that starts or ends at an underground station dives into a tunnel by default
   if (doc) {
+    // (a station the line only runs through does not pull it down)
     const a = doc.stations[line.stations[k]]
     const b = doc.stations[line.stations[k + 1]]
-    if ((a && isUndergroundStation(doc, a)) || (b && isUndergroundStation(doc, b))) return 'tunnel'
+    if ((a && stopsAt(line, a.id) && isUndergroundStation(doc, a)) || (b && stopsAt(line, b.id) && isUndergroundStation(doc, b))) return 'tunnel'
   }
   return 'ground'
 }
@@ -37,7 +39,7 @@ export function legBridge(line: Line, k: number): BridgeStyle {
  */
 export function isUndergroundStation(doc: CityDoc, st: Station): boolean {
   if (st.underground !== undefined) return st.underground
-  const lines = Object.values(doc.lines).filter((l) => l.stations.includes(st.id))
+  const lines = Object.values(doc.lines).filter((l) => stopsAt(l, st.id))
   if (!lines.length) return false
   return st.type === 'airport' || lines.every((l) => l.operator === 'ubahn')
 }
@@ -88,8 +90,6 @@ export function lookOf(st: Station): StationLook {
       return 'glas'
     case 'airport':
       return 'modern'
-    case 'landmark':
-      return 'gruenderzeit'
     default:
       return 'landhalt'
   }

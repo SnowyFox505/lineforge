@@ -7,6 +7,7 @@ import type { CityDoc } from '../model/types'
 import { WATER } from '../model/types'
 import { Boxes } from './Tracks3D'
 import { UG_COVER } from '../model/profiles'
+import { poiModel, POI_FOOTPRINT } from '../model/poi'
 import type { Network3D } from './network3d'
 
 const m4 = new THREE.Matrix4()
@@ -58,6 +59,8 @@ function blockedCells(doc: CityDoc, net: Network3D): Uint8Array {
     }
     if (sn.groups.some((g) => g.lift > UG_COVER) || !sn.groups.length) mark(sn.x, sn.z, 4)
   }
+  // the models of the points of interest
+  for (const p of doc.pois ?? []) mark(p.x + 0.5 - half, p.y + 0.5 - half, POI_FOOTPRINT[poiModel(p)])
   return blocked
 }
 

@@ -1,3 +1,4 @@
+import { linkedIds } from '../model/links'
 import type { CityDoc, StationType } from '../model/types'
 
 /** Airplane silhouette in a -1..1 box, nose pointing up. Shared by canvas and SVG renderers. */
@@ -43,7 +44,14 @@ export function effectiveTypes(doc: CityDoc): Record<string, StationType> {
   }
   const out: Record<string, StationType> = {}
   for (const st of Object.values(doc.stations)) {
-    out[st.id] = st.type === 'standard' && (count[st.id] ?? 0) >= 2 ? 'interchange' : st.type
+    // a linked stop counts the lines of everything it is linked to
+    let n = count[st.id] ?? 0
+    if (doc.links?.length) {
+      const lines = new Set<string>()
+      for (const id of linkedIds(doc, st.id)) for (const l of Object.values(doc.lines)) if (l.stations.includes(id)) lines.add(l.id)
+      n = Math.max(n, lines.size)
+    }
+    out[st.id] = st.type === 'standard' && n >= 2 ? 'interchange' : st.type
   }
   return out
 }

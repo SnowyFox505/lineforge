@@ -1,4 +1,5 @@
 import { OPERATORS } from '../model/constants'
+import { stopIds } from '../model/stops'
 import type { CityDoc, OperatorId, Pt } from '../model/types'
 import type { SimTrain } from '../view3d/trainSim'
 
@@ -78,7 +79,7 @@ export function buildRunPaths(doc: CityDoc, paths: Record<string, Pt[]>): Record
   for (const line of Object.values(doc.lines)) {
     const pts = paths[line.id]
     if (!pts || pts.length < 2) continue
-    const sts = line.stations.map((id) => doc.stations[id]).filter(Boolean)
+    const sts = stopIds(line).map((id) => doc.stations[id]).filter(Boolean)
     if (sts.length < 2) continue
     const cum = cumulative(pts)
     const total = cum[cum.length - 1]

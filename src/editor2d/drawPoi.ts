@@ -7,6 +7,22 @@ export const POI_STYLE: Record<PoiKind, { label: string; color: string; hint: st
   attraction: { label: 'Attraktion', color: '#3db8ff', hint: 'Museum, Park, Messe oder ein anderes beliebtes Ziel.' },
 }
 
+/** The catchment of a point of interest: a soft disc with a dashed rim (like the brush), stronger while the point is selected. */
+export function drawPoiReach(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, selected: boolean) {
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(x, y, radius, 0, Math.PI * 2)
+  ctx.globalAlpha = selected ? 0.2 : 0.09
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.globalAlpha = selected ? 0.9 : 0.4
+  ctx.strokeStyle = color
+  ctx.lineWidth = selected ? 2.5 : 1.5
+  ctx.setLineDash([7, 6])
+  ctx.stroke()
+  ctx.restore()
+}
+
 /** Map marker of a point of interest. r is the base radius in px. */
 export function drawPoi(ctx: CanvasRenderingContext2D, kind: PoiKind, x: number, y: number, r: number, selected: boolean, label?: string) {
   const color = POI_STYLE[kind].color

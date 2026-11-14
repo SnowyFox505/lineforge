@@ -1,6 +1,7 @@
 import { buildField, BRIDGE_THRESHOLD, makeSampler } from '../model/terrainField'
 import { RAIL, railOf, TRAM } from '../model/scale'
-import { layoutStation, resolveDesign, scaleLayout, stationOperators, trackFor, TRACK_OFFSET } from '../model/stationDesign'
+import { bypassFor, layoutStation, resolveDesign, scaleLayout, stationOperators, trackFor, TRACK_OFFSET } from '../model/stationDesign'
+import { passesThrough, stopsAt } from '../model/stops'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import type { CityDoc, Line, OperatorId, Station } from '../model/types'
 import { clusterByDirection, levelHeight, lineDirectionAtStation, meanDirection, LEVEL_STEP } from '../model/stationGroups'
@@ -108,7 +109,10 @@ export interface LineNet {
   /** 1 on the open line, falling to 0 on a station's platforms (how free the tracks are to move sideways) */
   free: number[]
   total: number
+  /** the stations the line stops at (in order) */
   stops: Stop[]
+  /** the stations it runs through without stopping, on the bypass tracks beside the platforms */
+  through: Stop[]
   bridges: Bridge[]
   legs: LegRange[]
   sidings: Siding[]
@@ -141,7 +145,10 @@ export interface StationGroup {
   layout: StationLayout
   /** lateral positions that lines already use with their own tracks */
   usedZ: number[]
+  /** lines that stop at this platform complex */
   lineIds: string[]
+  /** lines that run through on its bypass tracks without stopping */
+  passIds: string[]
 }
 
 export interface StationNet {
@@ -380,6 +387,8 @@ const COS_BESIDE = Math.cos((35 * Math.PI) / 180)
 
 interface Entry {
   line: Line
+  /** the line runs through this station without stopping */
+  pass?: boolean
   i: number
   tx: number
   tz: number
@@ -709,7 +718,7 @@ export function separateCrossings(lines: LineNet[]) {
       else grid.set(k, [{ li, j }])
     }
   })
-  const inZone = (ln: LineNet, d: number) => ln.stops.some((s) => Math.abs(d - s.d) < s.half + s.taper + 3)
+  const inZone = (ln: LineNet, d: number) => ln.stops.some((s) => Math.abs(d - s.d) < s.half + s.taper + 3) || ln.through.some((s) => Math.abs(d - s.d) < s.half + s.taper + 3)
   /** Do the two lines run side by side (close and parallel) within about 10 units of these samples? Then they part or join here. */
   const runBeside = (la: LineNet, j: number, lb: LineNet, k: number) => {
     for (let p = -25; p <= 25; p += 2) {
@@ -861,9 +870,10 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const baseDesign = tramsOnly ? resolveDesign(TRAM_STATION, allOps) : resolveDesign(st, allOps)
     stationBase.set(st.id, { st, design: baseDesign, layout: scaleLayout(layoutStation(baseDesign, minLen(allOps)), railOf(tramsOnly ? 'tram' : 'sbahn')) })
 
-    const entries: Entry[] = []
+    const everyEntry: Entry[] = []
     for (const line of lineList) {
-      if (!line.stations.includes(st.id) || entries.some((e) => e.line.id === line.id)) continue
+      const passing = passesThrough(line, st.id)
+      if ((!stopsAt(line, st.id) && !passing) || everyEntry.some((e) => e.line.id === line.id)) continue
       const c = coarse.get(line.id)
       if (!c) continue
       const i = nearest(c, sx, sz, 0)
@@ -875,8 +885,11 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       const cl = Math.hypot(cdx, cdz) || 1
       cdx /= cl
       cdz /= cl
-      entries.push({ line, i, tx: cdx, tz: cdz, sgn: 1, zF: 0, zB: 0 })
+      everyEntry.push({ line, pass: passing, i, tx: cdx, tz: cdz, sgn: 1, zF: 0, zB: 0 })
     }
+    const entries = everyEntry.filter((e) => !e.pass)
+    // lines that run through (no platform): they are put on a bypass track of the group they run parallel to, further below
+    const passEntries = everyEntry.filter((e) => e.pass)
     if (!entries.length) continue
 
     const mains = entries.filter((e) => e.line.operator !== 'tram')
@@ -937,6 +950,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         layout: stationBase.get(st.id)!.layout,
         usedZ: [],
         lineIds: list.map((e) => e.line.id),
+        passIds: [],
       }
       groups.push(g)
       members.set(g.index, list)
@@ -962,6 +976,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           layout: stationBase.get(st.id)!.layout,
           usedZ: [],
           lineIds: [],
+          passIds: [],
         }
         groups.push(g)
         members.set(g.index, [])
@@ -970,16 +985,37 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       members.get(g.index)!.push(e)
     }
 
+    // Lines that run through without stopping take a bypass track beside the platforms of the group they run parallel to.
+    // A metro line only runs through underground: where the station has no underground platforms it stays below the station.
+    const passOf = new Map<number, Entry[]>()
+    for (const e of passEntries) {
+      const metro = e.line.operator === 'ubahn'
+      const fits = groups.filter((g) => (metro ? g.lift <= UG_COVER : g.lift > UG_COVER))
+      if (!fits.length) continue
+      const dir = lineDirectionAtStation(doc, e.line, st.id)
+      if (dir) {
+        e.tx = dir.x
+        e.tz = dir.z
+      }
+      let best = fits[0]
+      for (const g of fits) if (Math.abs(e.tx * g.ax + e.tz * g.az) > Math.abs(e.tx * best.ax + e.tz * best.az) + 1e-6) best = g
+      best.passIds.push(e.line.id)
+      const list = passOf.get(best.index)
+      if (list) list.push(e)
+      else passOf.set(best.index, [e])
+    }
+
     // design and layout of every group (spread operators over its own tracks)
     for (const g of groups) {
       const list = members.get(g.index)!
       const ops = [...new Set(list.map((e) => e.line.operator))]
+      const bypass = passOf.has(g.index)
       if (g.kind === 'tram') {
         g.design = resolveDesign(TRAM_STATION, ['tram'])
-        g.layout = scaleLayout(layoutStation(g.design, minLen(['tram'])), TRAM)
+        g.layout = scaleLayout(layoutStation(g.design, minLen(['tram']), bypass), TRAM)
       } else {
         g.design = g.halt ? resolveDesign(TRAM_STATION, ops, g.level) : resolveDesign(st, ops, g.level)
-        g.layout = scaleLayout(layoutStation(g.design, minLen(ops)), railOf(g.halt ? 'tram' : 'sbahn'))
+        g.layout = scaleLayout(layoutStation(g.design, minLen(ops), bypass), railOf(g.halt ? 'tram' : 'sbahn'))
       }
     }
     // station tracks every line uses, and the unused ones that become sidings
@@ -990,6 +1026,14 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         e.sgn = dot >= 0 ? 1 : -1
         e.zF = trackFor(g.layout, e.line.operator, e.sgn)
         e.zB = trackFor(g.layout, e.line.operator, e.sgn > 0 ? -1 : 1)
+        g.usedZ.push(e.zF, e.zB)
+        entryOf.set(`${e.line.id}|${st.id}`, e)
+      }
+      for (const e of passOf.get(g.index) ?? []) {
+        const dot = e.tx * g.ax + e.tz * g.az
+        e.sgn = dot >= 0 ? 1 : -1
+        e.zF = bypassFor(g.layout, e.sgn)
+        e.zB = bypassFor(g.layout, e.sgn > 0 ? -1 : 1)
         g.usedZ.push(e.zF, e.zB)
         entryOf.set(`${e.line.id}|${st.id}`, e)
       }
@@ -1096,7 +1140,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     let from = 0
     for (const id of line.stations) {
       const st = doc.stations[id]
-      if (!st || !groupsOf.has(id)) continue
+      if (!st || !groupsOf.has(id) || !entryOf.has(`${line.id}|${id}`)) continue
       let i = nearest(c, st.x + 0.5 - half, st.y + 0.5 - half, from)
       const sh = shiftOf.get(`${line.id}|${id}`)
       if (sh) i = Math.max(from, indexAtCum(c, c.cum[i] + sh))
@@ -1107,7 +1151,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
 
     const lenOf = (id: string) => {
       const e = entryOf.get(`${line.id}|${id}`)!
-      const g = groupsOf.get(id)!.find((x) => x.lineIds.includes(line.id))!
+      const g = groupsOf.get(id)!.find((x) => x.lineIds.includes(line.id) || x.passIds.includes(line.id))!
       return { e, g, L: g.layout.length }
     }
     // cut the run-out so the buffer stops sit just behind the terminal platforms
@@ -1142,13 +1186,14 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       if (raw.slice(0, k).some((q) => q.id === r.id)) {
         const d2 = pt.tx[idx] * g.ax + pt.tz[idx] * g.az
         sgn = d2 >= 0 ? 1 : -1
-        zF = trackFor(g.layout, line.operator, sgn)
-        zB = trackFor(g.layout, line.operator, sgn > 0 ? -1 : 1)
+        zF = g.passIds.includes(line.id) ? bypassFor(g.layout, sgn) : trackFor(g.layout, line.operator, sgn)
+        zB = g.passIds.includes(line.id) ? bypassFor(g.layout, sgn > 0 ? -1 : 1) : trackFor(g.layout, line.operator, sgn > 0 ? -1 : 1)
       }
       return {
         id: r.id,
         k,
         i: idx,
+        pass: g.passIds.includes(line.id),
         g,
         sgn,
         zF,
@@ -1354,7 +1399,9 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       return { ...r, leg, style: legBridge(line, leg) }
     })
 
-    const stops: Stop[] = info.map((s) => ({ stationId: s.id, group: s.g.index, d: cum[s.i], zF: s.zF, zB: s.zB, half: s.half, taper: s.taper, lift: s.g.lift }))
+    const stopOf = (s: (typeof info)[number]): Stop => ({ stationId: s.id, group: s.g.index, d: cum[s.i], zF: s.zF, zB: s.zB, half: s.half, taper: s.taper, lift: s.g.lift })
+    const stops: Stop[] = info.filter((s) => !s.pass).map(stopOf)
+    const through: Stop[] = info.filter((s) => s.pass).map(stopOf)
 
     lines.push({
       line,
@@ -1377,6 +1424,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       free: w.map((v) => 1 - v),
       total: cum[m - 1],
       stops,
+      through,
       bridges: bridges.filter((b) => b.d1 - b.d0 >= 1.2),
       legs: legRanges,
       sidings,

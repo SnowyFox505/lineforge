@@ -7,7 +7,7 @@ import { effectiveTypes } from '../plan/glyphs'
 import { layoutLines } from '../plan/layout'
 import { useEditor } from '../store/editorStore'
 import type { Tool } from '../store/editorStore'
-import { drawPoi } from './drawPoi'
+import { drawPoi, drawPoiReach, POI_STYLE } from './drawPoi'
 import { useTheme, getAccent } from '../ui/theme'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
@@ -15,6 +15,8 @@ import { buildTerrainPaths } from './terrainRender'
 import { drawTerrainCached, newTerrainCache } from './terrainCache'
 import TrainLayer from './TrainLayer'
 import { useDockFade } from '../ui/dockFade'
+import { poiRadius, poiStations } from '../model/poi'
+import { labelHolder } from '../model/links'
 
 const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'zoneErase'
 const BRUSH_TINT = {
@@ -396,6 +398,30 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
     // --- Stations ------------------------------------------------------------
     const r = Math.max(5, Math.min(14, s * 0.5))
+    // linked stations (a tram stop next to a station): a dashed walkway between them
+    for (const [la, lb] of doc.links ?? []) {
+      const A = doc.stations[la]
+      const B = doc.stations[lb]
+      if (!A || !B) continue
+      const ax = ox + (A.x + 0.5) * s
+      const ay = oy + (A.y + 0.5) * s
+      const bx = ox + (B.x + 0.5) * s
+      const by = oy + (B.y + 0.5) * s
+      if (Math.max(ax, bx) < -20 || Math.min(ax, bx) > w + 20 || Math.max(ay, by) < -20 || Math.min(ay, by) > h + 20) continue
+      ctx.save()
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(ax, ay)
+      ctx.lineTo(bx, by)
+      ctx.strokeStyle = 'rgba(6,10,14,0.85)'
+      ctx.lineWidth = Math.max(4, r * 0.8)
+      ctx.stroke()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = Math.max(2, r * 0.4)
+      ctx.setLineDash([Math.max(3, r * 0.5), Math.max(4, r * 0.7)])
+      ctx.stroke()
+      ctx.restore()
+    }
     const labelRects: { x: number; y: number; w: number; h: number }[] = []
     for (const st of Object.values(doc.stations)) {
       let born = stationBorn.current.get(st.id)
@@ -419,8 +445,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         ctx.stroke()
       }
       drawStation(ctx, types[st.id] ?? st.type, px, py, r, st.id === selectedStationId, k)
-      if (s >= 3 && k > 0.8) {
-        const label = st.type === 'landmark' && st.landmarkLabel ? st.landmarkLabel : st.name
+      if (s >= 3 && k > 0.8 && labelHolder(doc, st.id) === st.id) {
+        const label = st.name
         const fs = Math.round(Math.min(15, Math.max(11, 9 + s * 0.4)))
         ctx.font = `600 ${fs}px 'Space Grotesk Variable', system-ui, sans-serif`
         const tw = ctx.measureText(label).width
@@ -443,6 +469,28 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     seeded.current = true
 
     // --- Points of interest ----------------------------------------------------
+    // the catchment of each one: stations inside it are where people travel from
+    for (const poi of doc.pois ?? []) {
+      const px = ox + (poi.x + 0.5) * s
+      const py = oy + (poi.y + 0.5) * s
+      const rr = poiRadius(poi) * s
+      if (px + rr < 0 || py + rr < 0 || px - rr > w || py - rr > h) continue
+      drawPoiReach(ctx, POI_STYLE[poi.kind].color, px, py, rr, poi.id === selectedPoiId)
+      // a thin dotted line to the stations that serve it
+      ctx.save()
+      ctx.strokeStyle = POI_STYLE[poi.kind].color
+      ctx.globalAlpha = poi.id === selectedPoiId ? 0.9 : 0.5
+      ctx.lineWidth = 1.6
+      ctx.setLineDash([2, 5])
+      ctx.lineCap = 'round'
+      for (const st of poiStations(doc, poi)) {
+        ctx.beginPath()
+        ctx.moveTo(px, py)
+        ctx.lineTo(ox + (st.x + 0.5) * s, oy + (st.y + 0.5) * s)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
     for (const poi of doc.pois ?? []) {
       const px = ox + (poi.x + 0.5) * s
       const py = oy + (poi.y + 0.5) * s
@@ -641,6 +689,16 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       return
     }
     const hit = hitStation(p)
+    if (st.tool === 'link') {
+      // first a station, then the one to link it with (a linked pair is unlinked again the same way)
+      const first = st.selectedStationId
+      if (!hit) st.selectStation(null)
+      else if (first && first !== hit) {
+        st.toggleLink(first, hit)
+        st.selectStation(null)
+      } else st.selectStation(hit)
+      return
+    }
     if (st.tool === 'station') {
       if (hit) st.selectStation(hit)
       else {
@@ -681,10 +739,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   // leaving the map (another tab) must not leave the menu faded out
   useEffect(() => () => useDockFade.getState().setDrawing(false), [])
 
-  /** a finger or pen began to draw: the bottom menu fades out until it lifts (a mouse makes it fade with its distance instead) */
-  const fadeMenu = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'mouse') useDockFade.getState().setDrawing(true)
-  }
+  /** drawing began: the bottom menu fades out until the finger / mouse button lifts */
+  const fadeMenu = () => useDockFade.getState().setDrawing(true)
 
   const onPointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -713,7 +769,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       else zoneId.current = useEditor.getState().beginZonePaint()
       g.kind = 'paint'
       strokeStart.current = performance.now()
-      fadeMenu(e)
+      fadeMenu()
       paintAt(toCell(p))
     } else if (t === 'pan') {
       g.kind = 'pan'
@@ -776,7 +832,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
           st.checkpoint()
           d.moved = true
           st.selectWaypoint({ lineId: d.lineId, k: d.k, j: d.j })
-          fadeMenu(e)
+          fadeMenu()
         }
         const c = toLattice(p)
         if (inMap(c)) st.moveWaypoint(d.lineId, d.k, d.j, c)
@@ -785,7 +841,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       const sk = stroke.current
       if (!sk.moved && Math.hypot(p.x - g.startX, p.y - g.startY) > 8) {
         sk.moved = true
-        fadeMenu(e)
+        fadeMenu()
       }
       if (sk.moved) {
         const c = toLattice(p)
@@ -799,7 +855,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         if (!d.moved) {
           st.checkpoint()
           d.moved = true
-          fadeMenu(e)
+          fadeMenu()
         }
         const c = toLattice(p)
         const x = Math.round(c.x)

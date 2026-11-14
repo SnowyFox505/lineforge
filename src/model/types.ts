@@ -2,7 +2,7 @@ export type GameMode = 'normal' | 'creative'
 
 export type OperatorId = 'sbahn' | 'ubahn' | 'tram' | 'regional' | 'fernverkehr'
 
-export type StationType = 'standard' | 'interchange' | 'landmark' | 'hauptbahnhof' | 'airport'
+export type StationType = 'standard' | 'interchange' | 'tramstop' | 'hauptbahnhof' | 'airport'
 
 /** Terrain cell values */
 export const LAND = 0
@@ -53,8 +53,6 @@ export interface Station {
   x: number
   y: number
   type: StationType
-  /** Optional label for landmark stations, e.g. "Bundestag" */
-  landmarkLabel?: string
   /** Design of the lowest level (and of the whole station when it has only one) */
   design?: StationDesign
   /** How many platform levels the station has (1..3). Lines are spread over them by direction. */
@@ -88,6 +86,8 @@ export interface Line {
   curve?: number
   /** Settings per leg: legs[i] is the stretch from stations[i] to stations[i+1] */
   legs?: Record<number, LegSettings>
+  /** Stations on the route this line runs through without stopping (on bypass tracks, no platform) */
+  passes?: string[]
 }
 
 /** Kinds of areas that can be painted on the map to show where the city, its suburbs and the airport are. */
@@ -110,6 +110,12 @@ export interface Poi {
   name: string
   x: number
   y: number
+  /** Catchment radius in cells: people go there from stations inside it (default per kind, see model/poi.ts) */
+  radius?: number
+  /** The stations (inside the catchment) that people use to get here. Without a choice it is the nearest station in reach. */
+  stations?: string[]
+  /** Look of the 3D model (see POI_MODELS in model/poi.ts); defaults to the first one of its kind */
+  model?: 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower'
 }
 
 export interface CityDoc {
@@ -126,6 +132,10 @@ export interface CityDoc {
   zoneGrid?: Uint16Array
   zones?: Zone[]
   pois?: Poi[]
+  /** Pairs of stations that are linked as one interchange (a tram stop next to a station): they stay separate stations but share a name */
+  links?: [string, string][]
+  /** Game time (minutes, see sim/clock) when the city was last saved */
+  clock?: number
   /** Version of the line geometry: 1 = `via` holds the control points of free curves (see model/geo.ts) */
   geoV?: number
 }

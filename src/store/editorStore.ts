@@ -5,6 +5,8 @@ import { createCity, newId } from '../model/factory'
 import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
+import { migrateLandmarks } from '../model/migrate'
+import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { applyStroke, moveStationTo, splitLegAt } from '../model/lineEdit'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
 import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
@@ -14,7 +16,7 @@ setAutoFreeze(false)
 
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
-export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi'
+export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi'
 /** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
 export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
@@ -27,6 +29,7 @@ export function groupOf(tool: Tool): ToolGroup {
       return 'terra'
     case 'line':
     case 'station':
+    case 'link':
       return 'infra'
     case 'city':
     case 'suburb':
@@ -120,6 +123,8 @@ interface EditorState {
   addStation: (x: number, y: number) => string | null
   updateStation: (id: string, patch: Partial<Omit<Station, 'id'>>) => void
   removeStation: (id: string) => void
+  /** link two stations as one interchange (or unlink them again) */
+  toggleLink: (a: string, b: string) => void
   addLine: (operator: OperatorId) => string
   updateLine: (id: string, patch: Partial<Omit<Line, 'id'>>) => void
   removeLine: (id: string) => void
@@ -183,7 +188,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(healHooks(withRoutes(doc))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -204,7 +209,7 @@ export const useEditor = create<EditorState>((set, get) => {
       }),
 
     loadDoc: (doc) =>
-      set({ doc: migrateGeo(healHooks(withRoutes(doc))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
     resizeMap: (newSize) => {
       const old = get().doc.size
       if (newSize <= old) return
@@ -398,11 +403,18 @@ export const useEditor = create<EditorState>((set, get) => {
       )
       return id
     },
-    updateStation: (id, patch) =>
-      mutate((d) => {
-        if (d.stations[id]) Object.assign(d.stations[id], patch)
-      }),
-    removeStation: (id) => commit(removeStationEverywhere(get().doc, id), { selectedStationId: null, editStationId: null }),
+    updateStation: (id, patch) => {
+      const { doc } = get()
+      if (!doc.stations[id]) return
+      let next = produce(doc, (d) => {
+        Object.assign(d.stations[id], patch)
+      })
+      // linked stations share their name
+      if (patch.name !== undefined) next = renameLinked(next, id, patch.name)
+      commit(next)
+    },
+    removeStation: (id) => commit(dropLinks(removeStationEverywhere(get().doc, id), id), { selectedStationId: null, editStationId: null }),
+    toggleLink: (a, b) => commit(toggleLink(get().doc, a, b)),
 
     addLine: (operator) => {
       const id = newId()

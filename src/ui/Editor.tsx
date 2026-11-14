@@ -96,8 +96,13 @@ function TabPill() {
  * The tool dock at the bottom (the tab pill below it stays). While a tool is picked on the map it gets out of the way of what is drawn beneath it:
  * - with a mouse it fades the closer the cursor comes (and lets clicks through to the map, buttons excepted),
  * - on a touch screen it fades while a finger draws and comes back when the finger lifts.
+ * Whatever is drawn hides it at once. After the dock is used or something is selected (a station, a line) it stays fully
+ * visible for HOLD_MS, so the buttons can be reached, until the next stroke.
  * The opacity is written straight to the element: a re-render per mouse move would be far too much.
  */
+/** How long the dock stays visible after it was used */
+const HOLD_MS = 5000
+
 function FadingDock({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const tab = useEditor((s) => s.tab)
@@ -106,11 +111,15 @@ function FadingDock({ children }: { children: React.ReactNode }) {
   const active = tab === 'map' && tool !== 'pan'
   /** opacity from the mouse distance (1 = far away or no mouse) */
   const near = useRef(1)
+  /** until when (performance.now) the dock stays fully visible after it was used */
+  const holdUntil = useRef(0)
+  const holdTimer = useRef<number | undefined>(undefined)
 
   const apply = useCallback(() => {
     const el = ref.current
     if (!el) return
-    const o = useDockFade.getState().drawing ? 0 : near.current
+    const held = performance.now() < holdUntil.current
+    const o = useDockFade.getState().drawing ? 0 : held ? 1 : near.current
     el.style.opacity = String(o)
     // faded menu: the map beneath takes the clicks (only the buttons and sliders stay clickable)
     el.classList.toggle('dock-through', o < 0.8)
@@ -148,7 +157,35 @@ function FadingDock({ children }: { children: React.ReactNode }) {
     }
   }, [active, apply])
 
-  useEffect(apply, [drawing, apply])
+  useEffect(() => {
+    if (drawing) holdUntil.current = 0 // a new stroke: the menu is gone at once
+    apply()
+  }, [drawing, apply])
+
+  // the menu stays for a few seconds after it was used or after something was picked on the map
+  useEffect(() => {
+    const el = ref.current
+    const hold = () => {
+      if (useDockFade.getState().drawing) return
+      holdUntil.current = performance.now() + HOLD_MS
+      window.clearTimeout(holdTimer.current)
+      holdTimer.current = window.setTimeout(apply, HOLD_MS + 30)
+      apply()
+    }
+    el?.addEventListener('pointerdown', hold)
+    el?.addEventListener('input', hold)
+    el?.addEventListener('keydown', hold)
+    const unsub = useEditor.subscribe((s, p) => {
+      if (s.selectedStationId !== p.selectedStationId || s.activeLineId !== p.activeLineId || s.selectedPoiId !== p.selectedPoiId || s.selectedWaypoint !== p.selectedWaypoint || s.tool !== p.tool || s.lineMode !== p.lineMode) hold()
+    })
+    return () => {
+      el?.removeEventListener('pointerdown', hold)
+      el?.removeEventListener('input', hold)
+      el?.removeEventListener('keydown', hold)
+      unsub()
+      window.clearTimeout(holdTimer.current)
+    }
+  }, [apply])
 
   return (
     <div ref={ref} className="dock-fade">

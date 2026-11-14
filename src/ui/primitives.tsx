@@ -186,15 +186,7 @@ export function StationGlyph({ type, size = 30 }: { type: StationType; size?: nu
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
       {type === 'standard' && <circle cx={c} cy={c} r={size * 0.2} fill="#fff" stroke="#0b0f15" strokeWidth={size * 0.09} />}
       {type === 'interchange' && <circle cx={c} cy={c} r={size * 0.3} fill="#fff" stroke="#0b0f15" strokeWidth={size * 0.13} />}
-      {type === 'landmark' && (
-        <polygon
-          points={`${c},${c - size * 0.36} ${c + size * 0.36},${c} ${c},${c + size * 0.36} ${c - size * 0.36},${c}`}
-          fill="#ffbd3d"
-          stroke="#0b0f15"
-          strokeWidth={size * 0.08}
-          strokeLinejoin="round"
-        />
-      )}
+      {type === 'tramstop' && <rect x={c - size * 0.2} y={c - size * 0.2} width={size * 0.4} height={size * 0.4} rx={size * 0.1} fill="#fff" stroke="#0b0f15" strokeWidth={size * 0.09} />}
       {type === 'hauptbahnhof' && (
         <g>
           <rect x={c - size * 0.4} y={c - size * 0.3} width={size * 0.8} height={size * 0.6} rx={size * 0.14} fill="#2c4fe0" stroke="#fff" strokeWidth={size * 0.07} />

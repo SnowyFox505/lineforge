@@ -36,6 +36,24 @@ describe('station design', () => {
     expect(l.platforms[1].z0).toBeGreaterThan(TRACK_OFFSET)
   })
 
+  it('gives the inner tracks of a side-platform station a platform between them', () => {
+    for (const n of [3, 4, 5, 6]) {
+      const l = layoutStation(resolveDesign(st('standard', { tracks: n, platform: 'side' }), ['sbahn']))
+      expect(l.tracks).toHaveLength(n)
+      const zs = l.tracks.map((t) => t.z).sort((a, b) => a - b)
+      // every track has a platform within reach on at least one side
+      for (const z of zs) {
+        const touches = l.platforms.some((p) => (p.z0 > z && p.z0 - z < 0.4) || (p.z1 < z && z - p.z1 < 0.4))
+        expect(touches, `track at ${z} of ${n}`).toBe(true)
+      }
+    }
+    // four tracks: a platform on each outer side plus one in the middle
+    const four = layoutStation(resolveDesign(st('standard', { tracks: 4, platform: 'side' }), ['sbahn']))
+    expect(four.platforms).toHaveLength(3)
+    const mid = four.platforms.find((p) => p.z0 < 0 && p.z1 > 0)!
+    expect(mid).toBeDefined()
+  })
+
   it('sends a train to a track that allows its operator, on its own side', () => {
     const l = layoutStation(resolveDesign(st('standard', { tracks: 4, platform: 'island', trackOps: [['sbahn'], ['ubahn'], ['ubahn'], ['sbahn']] }), ['sbahn', 'ubahn']))
     const fwd = trackFor(l, 'ubahn', 1)

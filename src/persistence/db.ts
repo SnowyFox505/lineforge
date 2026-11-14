@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { gameTime } from '../sim/clock'
 import type { CityDoc } from '../model/types'
 
 /** Cities saved on this device belong to an owner: 'guest' (no account) or the user id of a signed-in account. */
@@ -57,7 +58,9 @@ export interface CityRow {
   doc: CityDoc
 }
 
-export async function saveCity(doc: CityDoc): Promise<void> {
+export async function saveCity(input: CityDoc): Promise<void> {
+  // the game time keeps running outside of the document: it is written into what is saved
+  const doc = input.id === gameTime.cityId ? { ...input, clock: Math.round(gameTime.minutes) } : input
   const updatedAt = Date.now()
   await db.cities.put({ id: doc.id, name: doc.name, updatedAt, owner, doc })
   saveHook?.(doc, updatedAt, owner)
@@ -115,7 +118,8 @@ export async function clearOwner(forOwner: string): Promise<void> {
 // --- JSON export / import (terrain as plain array) ---
 
 export function exportCityJson(doc: CityDoc): string {
-  return JSON.stringify({ ...doc, terrain: Array.from(doc.terrain), zoneGrid: doc.zoneGrid ? Array.from(doc.zoneGrid) : undefined })
+  const clock = doc.id === gameTime.cityId ? Math.round(gameTime.minutes) : doc.clock
+  return JSON.stringify({ ...doc, clock, terrain: Array.from(doc.terrain), zoneGrid: doc.zoneGrid ? Array.from(doc.zoneGrid) : undefined })
 }
 
 /** A city from a file gets a new id (so an import never overwrites a city); the cloud keeps the id with `keepId`. */
@@ -135,6 +139,8 @@ export function importCityJson(text: string, keepId = false): CityDoc {
     zones: Array.isArray(raw.zones) ? raw.zones : [],
     zoneGrid: Array.isArray(raw.zoneGrid) && raw.zoneGrid.length === raw.size ** 2 ? Uint16Array.from(raw.zoneGrid) : new Uint16Array(raw.size ** 2),
     pois: Array.isArray(raw.pois) ? raw.pois : [],
+    links: Array.isArray(raw.links) ? raw.links : undefined,
+    clock: typeof raw.clock === 'number' ? raw.clock : undefined,
     geoV: typeof raw.geoV === 'number' ? raw.geoV : undefined,
   }
 }

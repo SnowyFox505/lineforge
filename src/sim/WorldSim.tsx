@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useEditor } from '../store/editorStore'
+import { startGameTime } from './clock'
 import { bindNet, netFor, tickWorld, world } from './world'
 
 /**
@@ -21,7 +22,7 @@ export default function WorldSim() {
   }, [doc, tab, netDoc.id])
 
   useEffect(() => {
-    bindNet(netFor(netDoc), netDoc.id)
+    bindNet(netFor(netDoc), netDoc.id, netDoc.clock)
   }, [netDoc])
 
   useEffect(() => {
@@ -36,6 +37,8 @@ export default function WorldSim() {
     return () => {
       cancelAnimationFrame(raf)
       world.sim = null // closing the city ends its world
+      world.cityId = ''
+      startGameTime('')
     }
   }, [])
 

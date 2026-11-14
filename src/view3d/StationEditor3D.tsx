@@ -18,6 +18,7 @@ import StationBuilding from './StationBuilding'
 import type { EntranceSign } from './StationBuilding'
 import { TrainStatic } from './vehicles3d'
 import { trainLength, VEHICLES } from '../model/vehicles'
+import { stopsAt } from '../model/stops'
 
 const OP_COLOR: Record<OperatorId, string> = {
   sbahn: '#27c46b',
@@ -107,7 +108,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** Which lines the station's levels will carry (same rule the 3D network uses). */
 function levelAssignment(doc: CityDoc, id: string, count: number) {
-  const lines = Object.values(doc.lines).filter((l) => l.stations.includes(id) && l.operator !== 'tram')
+  const lines = Object.values(doc.lines).filter((l) => stopsAt(l, id) && l.operator !== 'tram')
   const labels = clusterByDirection(lines.map((l) => lineDirectionAtStation(doc, l, id) ?? { x: 1, z: 0 }), count)
   const k = labels.length ? Math.max(...labels) + 1 : 0
   return Array.from({ length: k }, (_, i) => {
@@ -304,7 +305,7 @@ export default function StationEditor3D() {
   const colors = useMemo(() => {
     const out: Partial<Record<OperatorId, string>> = {}
     if (!id) return out
-    for (const l of Object.values(doc.lines)) if (l.stations.includes(id) && !out[l.operator]) out[l.operator] = l.color
+    for (const l of Object.values(doc.lines)) if (stopsAt(l, id) && !out[l.operator]) out[l.operator] = l.color
     return out
   }, [doc, id])
 

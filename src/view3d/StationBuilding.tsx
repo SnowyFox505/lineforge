@@ -166,7 +166,7 @@ function platformDetails(layout: StationLayout, design: ResolvedDesign, roof: Re
   })
   if (wireHi >= wireLo && roof === 'open') for (const tz of trackZs) wires.push(at(0, PF_TOP + 0.9, tz, layout.length + 3, 0.012, 0.012))
   // footbridge with stair shafts over an island platform
-  if (design.platform === 'island' && layout.platforms.length && layout.length > 5 && (roof === 'open' || roof === 'canopy')) {
+  if ((design.platform === 'island' || layout.platforms.length > 2) && layout.platforms.length && layout.length > 5 && (roof === 'open' || roof === 'canopy')) {
     const zLo = Math.min(...layout.platforms.map((p) => p.z0)) - 0.25
     const zHi = Math.max(...layout.platforms.map((p) => p.z1)) + 0.25
     const xb = -h * 0.62

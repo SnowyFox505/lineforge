@@ -1,3 +1,4 @@
+import { stopsAt } from './stops'
 import type { CityDoc, OperatorId, PlatformLength, PlatformStyle, RoofType, Station, StationDesign, StationType } from './types'
 
 export const PLATFORM_LENGTH: Record<PlatformLength, number> = { short: 4.5, medium: 6.5, long: 9 }
@@ -13,7 +14,7 @@ export const ROOF_LABEL: Record<RoofType, string> = {
 const DEFAULTS: Record<StationType, { tracks: number; platform: PlatformStyle; length: PlatformLength; roof: RoofType; ubahn: boolean }> = {
   standard: { tracks: 2, platform: 'side', length: 'short', roof: 'open', ubahn: false },
   interchange: { tracks: 4, platform: 'island', length: 'medium', roof: 'canopy', ubahn: true },
-  landmark: { tracks: 2, platform: 'island', length: 'medium', roof: 'canopy', ubahn: false },
+  tramstop: { tracks: 2, platform: 'side', length: 'short', roof: 'open', ubahn: false },
   hauptbahnhof: { tracks: 6, platform: 'island', length: 'long', roof: 'hall', ubahn: true },
   airport: { tracks: 4, platform: 'island', length: 'long', roof: 'glass', ubahn: true },
 }
@@ -29,10 +30,10 @@ export interface ResolvedDesign {
   trackOps: OperatorId[][]
 }
 
-/** Operators of all lines that stop at a station. */
+/** Operators of all lines that stop at a station (lines that only run through do not count). */
 export function stationOperators(doc: CityDoc, stationId: string): OperatorId[] {
   const set = new Set<OperatorId>()
-  for (const l of Object.values(doc.lines)) if (l.stations.includes(stationId)) set.add(l.operator)
+  for (const l of Object.values(doc.lines)) if (stopsAt(l, stationId)) set.add(l.operator)
   return [...set]
 }
 
@@ -67,7 +68,14 @@ export function resolveDesign(st: Station, ops: OperatorId[], level = 0): Resolv
 
 export interface StationLayout {
   /** Lateral position (world units across the track direction) and the operators allowed on it */
-  tracks: { z: number; ops: OperatorId[]; /** where the through-route enters this track (±0.3) or null for a stub */ anchor: number | null }[]
+  tracks: {
+    z: number
+    ops: OperatorId[]
+    /** where the through-route enters this track (±0.3) or null for a stub */
+    anchor: number | null
+    /** a track beside the platforms that trains run through on without stopping */
+    bypass?: boolean
+  }[]
   platforms: { z0: number; z1: number }[]
   /** Half of the overall width */
   halfWidth: number
@@ -94,6 +102,8 @@ const ISLAND = 1.2 // spacing of two tracks that share an island platform
 const SIDE_W = 0.55 // width of a side platform
 /** Distance from the track axis to the platform edge (ballast + clearance for the train body) */
 const EDGE = 0.24
+/** Distance of a bypass track from the outermost track or platform edge */
+const BYPASS_GAP = 0.5
 
 /** Lateral positions of the tracks (centred on the route axis) and the island platforms between them. */
 export function trackPositions(n: number, style: PlatformStyle): { zs: number[]; platforms: { z0: number; z1: number }[] } {
@@ -116,8 +126,30 @@ export function trackPositions(n: number, style: PlatformStyle): { zs: number[];
       }
     }
   } else {
-    // side platforms: tracks side by side, platforms only outside the outermost tracks
-    for (let i = 0; i < n; i++) zs.push(i === 0 ? 0 : i === 1 ? 2 * TRACK_OFFSET : 2 * TRACK_OFFSET + (i - 1) * GAP)
+    if (n <= 2) {
+      // side platforms: tracks side by side, platforms only outside the outermost tracks (see layoutStation)
+      for (let i = 0; i < n; i++) zs.push(i === 0 ? 0 : 2 * TRACK_OFFSET)
+    } else {
+      // The outer tracks get a platform outside of them (layoutStation). The tracks in between would have none: they are
+      // paired up and get an island platform between each pair; a single one left over shares one with the outer track.
+      zs.push(0)
+      const inner = n - 2
+      let z = GAP
+      for (let i = 0; i < inner; ) {
+        if (i + 1 < inner) {
+          zs.push(z, z + ISLAND)
+          platforms.push({ z0: z + EDGE, z1: z + ISLAND - EDGE })
+          z += ISLAND + GAP
+          i += 2
+        } else {
+          zs.push(z)
+          platforms.push({ z0: z + EDGE, z1: z + ISLAND - EDGE })
+          z += ISLAND
+          i += 1
+        }
+      }
+      zs.push(z)
+    }
   }
   const mid = (Math.min(...zs) + Math.max(...zs)) / 2
   return { zs: zs.map((z) => z - mid), platforms: platforms.map((p) => ({ z0: p.z0 - mid, z1: p.z1 - mid })) }
@@ -127,7 +159,7 @@ export function trackPositions(n: number, style: PlatformStyle): { zs: number[];
  * Lateral layout of a station: track positions, platforms between/next to them and which tracks the
  * route double-track (at ±0.3) connects to.
  */
-export function layoutStation(d: ResolvedDesign, minLength = 0): StationLayout {
+export function layoutStation(d: ResolvedDesign, minLength = 0, bypass = false): StationLayout {
   const { zs: tracksZ, platforms: pf } = trackPositions(d.tracks, d.platform)
   if (d.platform === 'side') {
     const lo = Math.min(...tracksZ)
@@ -146,8 +178,15 @@ export function layoutStation(d: ResolvedDesign, minLength = 0): StationLayout {
   if (!neg && pos) anchors.set(pos.i, 0)
 
   const all = [...tracksZ, ...pf.flatMap((p) => [p.z0, p.z1])]
+  const tracks: StationLayout['tracks'] = tracksZ.map((z, i) => ({ z, ops: d.trackOps[i] ?? [], anchor: anchors.get(i) ?? null }))
+  if (bypass) {
+    // trains that do not stop run past the platforms on a track of their own on each side
+    const out = Math.max(...all.map(Math.abs)) + BYPASS_GAP
+    tracks.push({ z: -out, ops: [], anchor: null, bypass: true }, { z: out, ops: [], anchor: null, bypass: true })
+    all.push(-out, out)
+  }
   return {
-    tracks: tracksZ.map((z, i) => ({ z, ops: d.trackOps[i] ?? [], anchor: anchors.get(i) ?? null })),
+    tracks,
     platforms: pf,
     halfWidth: Math.max(Math.abs(Math.min(...all)), Math.abs(Math.max(...all))),
     // long trains need long platforms: grow the platform instead of letting the train overhang
@@ -155,10 +194,18 @@ export function layoutStation(d: ResolvedDesign, minLength = 0): StationLayout {
   }
 }
 
+/** Track (lateral z) of a train that runs through without stopping: the bypass track on its side (dir = +1 forward lane, -1 return lane). */
+export function bypassFor(layout: StationLayout, dir: 1 | -1): number {
+  const by = layout.tracks.filter((t) => t.bypass)
+  const pick = by.find((t) => (dir > 0 ? t.z > 0 : t.z < 0))
+  return pick ? pick.z : dir * TRACK_OFFSET * (layout.scale ?? 1)
+}
+
 /** Track (lateral z) a train of an operator uses at a station. dir = +1 forward lane, -1 return lane. */
 export function trackFor(layout: StationLayout, op: OperatorId, dir: 1 | -1): number {
-  const side = layout.tracks.filter((t) => (dir > 0 ? t.z >= -0.01 : t.z <= 0.01))
-  const pool = side.length ? side : layout.tracks
+  const stopping = layout.tracks.filter((t) => !t.bypass)
+  const side = stopping.filter((t) => (dir > 0 ? t.z >= -0.01 : t.z <= 0.01))
+  const pool = side.length ? side : stopping
   const allowed = pool.filter((t) => t.ops.includes(op))
   const pick = (allowed.length ? allowed : pool).slice().sort((a, b) => Math.abs(a.z) - Math.abs(b.z))[0]
   return pick ? pick.z : dir * TRACK_OFFSET * (layout.scale ?? 1)

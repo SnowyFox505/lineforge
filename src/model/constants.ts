@@ -25,7 +25,7 @@ export const OPERATORS: Record<
 export const STATION_TYPES: Record<StationType, { label: string; hint: string }> = {
   standard: { label: 'Haltestelle', hint: 'Normaler Halt' },
   interchange: { label: 'Umsteigen', hint: 'Großer Umsteigeplatz' },
-  landmark: { label: 'Wahrzeichen', hint: 'Nahe etwas Wichtigem' },
+  tramstop: { label: 'Tram-Haltestelle', hint: 'Kleine Haltestelle der Straßenbahn' },
   hauptbahnhof: { label: 'Hauptbahnhof', hint: 'Zentraler Knoten' },
   airport: { label: 'Flughafen', hint: 'Anbindung an die Welt' },
 }
