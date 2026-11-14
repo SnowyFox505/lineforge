@@ -14,6 +14,7 @@ import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
 import { buildTerrainPaths } from './terrainRender'
 import { drawTerrainCached, newTerrainCache } from './terrainCache'
 import TrainLayer from './TrainLayer'
+import { useDockFade } from '../ui/dockFade'
 
 const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'zoneErase'
 const BRUSH_TINT = {
@@ -677,6 +678,14 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     }
   }
 
+  // leaving the map (another tab) must not leave the menu faded out
+  useEffect(() => () => useDockFade.getState().setDrawing(false), [])
+
+  /** a finger or pen began to draw: the bottom menu fades out until it lifts (a mouse makes it fade with its distance instead) */
+  const fadeMenu = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse') useDockFade.getState().setDrawing(true)
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = local(e)
@@ -692,6 +701,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       const [a, b] = [...pointers.current.values()]
       g.kind = 'pinch'
       g.lastDist = Math.hypot(a.x - b.x, a.y - b.y)
+      useDockFade.getState().setDrawing(false)
       return
     }
     g.startX = p.x
@@ -703,6 +713,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       else zoneId.current = useEditor.getState().beginZonePaint()
       g.kind = 'paint'
       strokeStart.current = performance.now()
+      fadeMenu(e)
       paintAt(toCell(p))
     } else if (t === 'pan') {
       g.kind = 'pan'
@@ -765,13 +776,17 @@ export default function MapEditor({ insets }: { insets: Insets }) {
           st.checkpoint()
           d.moved = true
           st.selectWaypoint({ lineId: d.lineId, k: d.k, j: d.j })
+          fadeMenu(e)
         }
         const c = toLattice(p)
         if (inMap(c)) st.moveWaypoint(d.lineId, d.k, d.j, c)
       }
     } else if (g.kind === 'draw' && stroke.current) {
       const sk = stroke.current
-      if (!sk.moved && Math.hypot(p.x - g.startX, p.y - g.startY) > 8) sk.moved = true
+      if (!sk.moved && Math.hypot(p.x - g.startX, p.y - g.startY) > 8) {
+        sk.moved = true
+        fadeMenu(e)
+      }
       if (sk.moved) {
         const c = toLattice(p)
         const last = sk.pts[sk.pts.length - 1]
@@ -784,6 +799,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         if (!d.moved) {
           st.checkpoint()
           d.moved = true
+          fadeMenu(e)
         }
         const c = toLattice(p)
         const x = Math.round(c.x)
@@ -800,6 +816,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     const p = local(e)
     const g = gesture.current
     pointers.current.delete(e.pointerId)
+    useDockFade.getState().setDrawing(false)
     if (e.pointerType !== 'mouse') hover.current = null
     if (g.kind === 'tap' && Math.hypot(p.x - g.startX, p.y - g.startY) <= 8) handleTap(p)
     if (g.kind === 'wp') {

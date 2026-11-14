@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import MapEditor from '../editor2d/MapEditor'
 import { saveCity } from '../persistence/db'
 import PlanView from '../plan/PlanView'
 import { useEditor } from '../store/editorStore'
 import type { Tab } from '../store/editorStore'
+import { distToRect, fadeOpacity, useDockFade } from './dockFade'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import { spring } from './primitives'
@@ -91,6 +92,71 @@ function TabPill() {
   )
 }
 
+/**
+ * The tool dock at the bottom (the tab pill below it stays). While a tool is picked on the map it gets out of the way of what is drawn beneath it:
+ * - with a mouse it fades the closer the cursor comes (and lets clicks through to the map, buttons excepted),
+ * - on a touch screen it fades while a finger draws and comes back when the finger lifts.
+ * The opacity is written straight to the element: a re-render per mouse move would be far too much.
+ */
+function FadingDock({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const tab = useEditor((s) => s.tab)
+  const tool = useEditor((s) => s.tool)
+  const drawing = useDockFade((s) => s.drawing)
+  const active = tab === 'map' && tool !== 'pan'
+  /** opacity from the mouse distance (1 = far away or no mouse) */
+  const near = useRef(1)
+
+  const apply = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    const o = useDockFade.getState().drawing ? 0 : near.current
+    el.style.opacity = String(o)
+    // faded menu: the map beneath takes the clicks (only the buttons and sliders stay clickable)
+    el.classList.toggle('dock-through', o < 0.8)
+    el.classList.toggle('dock-hidden', useDockFade.getState().drawing)
+  }, [])
+
+  useEffect(() => {
+    if (!active) {
+      near.current = 1
+      apply()
+      return
+    }
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || !ref.current) return
+      let d = Infinity
+      // distance to the dock itself, not the empty space around it
+      for (const c of Array.from(ref.current.children)) {
+        const r = c.getBoundingClientRect()
+        if (r.width > 0 && r.height > 0) d = Math.min(d, distToRect(e.clientX, e.clientY, r))
+      }
+      near.current = fadeOpacity(d)
+      apply()
+    }
+    const onLeave = () => {
+      near.current = 1
+      apply()
+    }
+    window.addEventListener('pointermove', onMove)
+    document.documentElement.addEventListener('mouseleave', onLeave)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      document.documentElement.removeEventListener('mouseleave', onLeave)
+      near.current = 1
+      apply()
+    }
+  }, [active, apply])
+
+  useEffect(apply, [drawing, apply])
+
+  return (
+    <div ref={ref} className="dock-fade">
+      {children}
+    </div>
+  )
+}
+
 export default function Editor() {
   const tab = useEditor((s) => s.tab)
   const editId = useEditor((s) => s.editStationId)
@@ -126,7 +192,11 @@ export default function Editor() {
       <TopBar onSettings={() => setSettings(true)} />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 px-3 pb-[calc(12px+var(--safe-bottom))]">
-        {tab === 'map' && <ToolDock />}
+        {tab === 'map' && (
+          <FadingDock>
+            <ToolDock />
+          </FadingDock>
+        )}
         <TabPill />
       </div>
 

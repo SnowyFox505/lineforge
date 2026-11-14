@@ -296,3 +296,21 @@ input[type='range'].hue-slider::-moz-range-progress {
 input[type='range'].hue-slider::-webkit-slider-thumb {
   margin-top: -5px;
 }
+
+/* Bottom menu of the editor: fades out of the way while something is drawn beneath it (see BottomBar in ui/Editor.tsx) */
+.dock-fade {
+  transition: opacity 0.22s ease;
+}
+/* faded: the map beneath takes the clicks, only buttons and sliders stay clickable */
+.dock-fade.dock-through .pointer-events-auto {
+  pointer-events: none;
+}
+.dock-fade.dock-through button,
+.dock-fade.dock-through input {
+  pointer-events: auto !important;
+}
+/* a finger is drawing: nothing of the menu may catch it */
+.dock-fade.dock-hidden,
+.dock-fade.dock-hidden * {
+  pointer-events: none !important;
+}
