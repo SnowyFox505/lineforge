@@ -1,6 +1,7 @@
 import { newId } from './factory'
 import { legCurve, lineCurve, nearestOnCurve, nearestStation, pullEnd, smoothStroke, snapToCurves, strokeControlPoints, curveLength } from './geo'
 import { rerouteAt, shape, withLine } from './routing'
+import { followsStreets, streetFoot, streetViaPoints } from './streetNet'
 import { LAND } from './types'
 import type { CityDoc, Line, Pt, Station, StationType } from './types'
 
@@ -101,9 +102,12 @@ export function applyStroke(doc: CityDoc, lineId: string, raw: Pt[], opts: Strok
   // the two ends: an existing station, or a new one on dry land
   const stationsOut = { ...doc.stations }
   const created: string[] = []
+  // a tram stroke along streets: new stops sit on the street, not beside it
+  const onStreets = line.operator === 'tram' && followsStreets(doc, dense)
   const place = (existing: string | null, at: Pt): Station | null => {
     if (existing) return stationsOut[existing]
-    const cell = nearestFreeLand({ ...doc, stations: stationsOut }, at)
+    const foot = onStreets ? streetFoot(doc, at, 3) : null
+    const cell = nearestFreeLand({ ...doc, stations: stationsOut }, foot ?? at)
     if (!cell) return null
     const st = newStation({ ...doc, stations: stationsOut }, cell, opts.stationType ?? 'standard')
     stationsOut[st.id] = st
@@ -118,7 +122,8 @@ export function applyStroke(doc: CityDoc, lineId: string, raw: Pt[], opts: Strok
 
   // the stroke in the order of the line (a drawn-towards-the-line stroke is turned around)
   const path = plan.reverse ? [...dense].reverse() : dense
-  const ctrl = strokeControlPoints(path)
+  // a tram stroke that runs along streets follows them; one that leaves the streets (or lies outside the towns) stays as drawn
+  const ctrl = (onStreets ? streetViaPoints(doc, plan.reverse ? b : a, plan.reverse ? a : b, { guide: path }) : null) ?? strokeControlPoints(path)
 
   let next: Line
   switch (plan.mode) {

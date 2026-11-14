@@ -45,7 +45,7 @@ function blockedCells(doc: CityDoc, net: Network3D): Uint8Array {
     }
   }
   for (const ln of net.lines) {
-    for (let i = 0; i < ln.n; i += 2) if (ln.cy[i] > UG_COVER + 0.1) mark(ln.cx[i], ln.cz[i], ln.line.operator === 'tram' ? 1.4 : 2)
+    for (let i = 0; i < ln.n; i += 2) if (ln.cy[i] > UG_COVER + 0.1) mark(ln.cx[i], ln.cz[i], ln.line.operator === 'tram' ? 1 : 2)
   }
   for (const sn of Object.values(net.stations)) {
     for (const g of sn.groups) {

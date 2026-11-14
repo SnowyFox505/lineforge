@@ -29,7 +29,7 @@ export function renderThumb(canvas: HTMLCanvasElement, doc: CityDoc, cssW: numbe
   drawTerrain(ctx, view, doc.size, buildTerrainPaths(doc.terrain, doc.size), cssW, cssH, false, buildZoneGfx(doc))
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  const paths = layoutLines(doc, 0.2, { source: 'geo' })
+  const paths = layoutLines(doc, 0.2, { source: 'geo', smooth: 10 })
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const line of Object.values(doc.lines)) {

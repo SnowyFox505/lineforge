@@ -212,7 +212,7 @@ function Stations({ net }: { net: Network3D }) {
             )}
             {sn.groups.map((g) => (
               <group key={g.index} position={[g.ox, 0, g.oz]} rotation={[0, g.angle, 0]}>
-                <StationBuilding design={g.design} layout={g.layout} curve={g.curv} annex={g.annex} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} sign={signFor(net, g.lineIds)} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null} />
+                <StationBuilding design={g.design} layout={g.layout} curve={g.curv} annex={g.annex} halt={g.halt} noTracks lift={g.lift} groundY={groundUnder(net, g)} pillarFree={(lx, lz) => !net.trackBelow(g.ox + g.ax * lx - g.az * lz, g.oz + g.az * lx + g.ax * lz, g.lift)} shell={g.kind === 'main' && !g.halt ? lookOf(st) : null} showUbahn={g === main && g.design.ubahn} sign={signFor(net, g.lineIds)} entrance={g === main && g.kind !== 'tram' && g.lift === 0 ? (st.type === 'hauptbahnhof' || st.type === 'interchange' ? 'big' : st.type === 'standard' ? null : 'small') : null} />
                 {g.index === main?.index && st.type === 'landmark' && (
                   <group position={[0, 0, g.layout.halfWidth + 1.8]}>
                     <mesh position={[0, LAND_Y + 0.7, 0]}>

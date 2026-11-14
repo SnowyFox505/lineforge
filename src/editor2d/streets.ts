@@ -169,41 +169,39 @@ export interface StreetPaths {
   avenues: Path2D
 }
 
-const pathCache = new Map<string, StreetPaths>()
+/** A street piece in cell space: x0, y0, x1, y1 */
+export type StreetSeg = [number, number, number, number]
+export interface PatchSegs {
+  patch: Patch
+  major: StreetSeg[]
+  minor: StreetSeg[]
+  fine: StreetSeg[]
+}
 
-/** The streets as paths in cell space. Minor streets and alleys have dead ends so blocks look organic. */
-export function streetPaths(kind: UrbanKind, size: number): StreetPaths {
+const segCache = new Map<string, PatchSegs[]>()
+
+/**
+ * The streets as plain line pieces in cell space (not yet clipped to the neighbourhood). Minor streets and alleys have
+ * dead ends so blocks look organic. The 2D map draws these, the trams route over them.
+ */
+export function streetSegments(kind: UrbanKind, size: number): PatchSegs[] {
   const key = `${kind}|${size}`
-  const hit = pathCache.get(key)
+  const hit = segCache.get(key)
   if (hit) return hit
   const patches = streetPatches(kind, size)
   const r = rng(CONFIG[kind].seed * 77 + size)
-  const out: PatchPaths[] = []
+  const out: PatchSegs[] = []
   for (const p of patches) {
     // skip neighbourhoods far outside the map
     if (p.cx < -40 || p.cy < -40 || p.cx > size + 40 || p.cy > size + 40) continue
-    const clip = new Path2D()
-    const outline = new Path2D()
-    p.cell.forEach(([x, y], i) => {
-      if (i === 0) {
-        clip.moveTo(x, y)
-        outline.moveTo(x, y)
-      } else {
-        clip.lineTo(x, y)
-        outline.lineTo(x, y)
-      }
-    })
-    clip.closePath()
-    outline.closePath()
-    const major = new Path2D()
-    const minor = new Path2D()
-    const fine = new Path2D()
+    const major: StreetSeg[] = []
+    const minor: StreetSeg[] = []
+    const fine: StreetSeg[] = []
     const ext = CONFIG[kind].spacing * 1.3
-    const seg = (path: Path2D, fixed: number, a: number, b: number, alongU: boolean) => {
+    const seg = (list: StreetSeg[], fixed: number, a: number, b: number, alongU: boolean) => {
       const s = alongU ? patchToCell(p, a, fixed) : patchToCell(p, fixed, a)
       const e = alongU ? patchToCell(p, b, fixed) : patchToCell(p, fixed, b)
-      path.moveTo(s[0], s[1])
-      path.lineTo(e[0], e[1])
+      list.push([s[0], s[1], e[0], e[1]])
     }
     const draw = (pos: number[], isMajor: boolean[], alongU: boolean) => {
       for (let i = 0; i < pos.length; i++) {
@@ -230,7 +228,43 @@ export function streetPaths(kind: UrbanKind, size: number): StreetPaths {
     }
     draw(p.vs, p.majorV, true)
     draw(p.us, p.majorU, false)
-    out.push({ clip, major, minor, fine, outline })
+    out.push({ patch: p, major, minor, fine })
+  }
+  segCache.set(key, out)
+  return out
+}
+
+const pathCache = new Map<string, StreetPaths>()
+
+/** The streets as paths in cell space. */
+export function streetPaths(kind: UrbanKind, size: number): StreetPaths {
+  const key = `${kind}|${size}`
+  const hit = pathCache.get(key)
+  if (hit) return hit
+  const out: PatchPaths[] = []
+  for (const { patch: p, major: ma, minor: mi, fine: fi } of streetSegments(kind, size)) {
+    const clip = new Path2D()
+    const outline = new Path2D()
+    p.cell.forEach(([x, y], i) => {
+      if (i === 0) {
+        clip.moveTo(x, y)
+        outline.moveTo(x, y)
+      } else {
+        clip.lineTo(x, y)
+        outline.lineTo(x, y)
+      }
+    })
+    clip.closePath()
+    outline.closePath()
+    const build = (list: StreetSeg[]) => {
+      const path = new Path2D()
+      for (const [x0, y0, x1, y1] of list) {
+        path.moveTo(x0, y0)
+        path.lineTo(x1, y1)
+      }
+      return path
+    }
+    out.push({ clip, major: build(ma), minor: build(mi), fine: build(fi), outline })
   }
   const av = avenuesOf(size)
   const avenues = new Path2D()

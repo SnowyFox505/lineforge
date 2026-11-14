@@ -15,8 +15,8 @@ import { xrayCompile } from './xray'
 
 export const PF_TOP = RAIL_Y + 0.1
 
-export type EntranceSign = 'U' | 'S' | 'Bf'
-const SIGN_COLOR: Record<EntranceSign, string> = { U: '#0b4fa8', S: '#1a8a3d', Bf: '#a31a21' }
+export type EntranceSign = 'U' | 'S' | 'Bf' | 'H'
+const SIGN_COLOR: Record<EntranceSign, string> = { U: '#0b4fa8', S: '#1a8a3d', Bf: '#a31a21', H: '#1f8a3a' }
 const signTextures = new Map<EntranceSign, THREE.CanvasTexture>()
 /** Sign above the entrance of a station: U for the metro, S for the S-Bahn, Bf for other trains. */
 function signTexture(sign: EntranceSign) {
@@ -27,7 +27,7 @@ function signTexture(sign: EntranceSign) {
   const g = c.getContext('2d')!
   g.fillStyle = SIGN_COLOR[sign]
   g.fillRect(0, 0, 128, 128)
-  g.fillStyle = '#fff'
+  g.fillStyle = sign === 'H' ? '#ffd400' : '#fff'
   g.font = `700 ${sign === 'Bf' ? 72 : 96}px 'Space Grotesk Variable', system-ui, sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
@@ -107,6 +107,81 @@ function platformBoxes(layout: StationLayout) {
   return { body, edge }
 }
 
+
+/**
+ * More of a station than platforms and a roof: tactile strips along the platform edge, departure displays with a clock,
+ * bins, overhead-line masts, and for an island platform a footbridge with a stair shaft at both ends (local frame).
+ */
+function platformDetails(layout: StationLayout, design: ResolvedDesign, roof: ResolvedDesign['roof']) {
+  const strips: THREE.Matrix4[] = []
+  const posts: THREE.Matrix4[] = []
+  const screens: THREE.Matrix4[] = []
+  const clocks: THREE.Matrix4[] = []
+  const bins: THREE.Matrix4[] = []
+  const arms: THREE.Matrix4[] = []
+  const wires: THREE.Matrix4[] = []
+  const deck: THREE.Matrix4[] = []
+  const shafts: THREE.Matrix4[] = []
+  const rails: THREE.Matrix4[] = []
+  const lights: THREE.Matrix4[] = []
+  const h = layout.length / 2
+  const trackZs = layout.tracks.map((t) => t.z)
+  const nearTrack = (z: number) => trackZs.some((tz) => Math.abs(tz - z) < 0.45)
+  let wireLo = Infinity
+  let wireHi = -Infinity
+  layout.platforms.forEach((p, pi) => {
+    const w = p.z1 - p.z0
+    if (w < 0.3) return
+    const zc = (p.z0 + p.z1) / 2
+    // tactile guidance strip beside the yellow edge, on the sides that face a track
+    for (const [z, inward] of [[p.z0, 1], [p.z1, -1]] as [number, number][]) {
+      if (!nearTrack(z - inward * 0.25)) continue
+      strips.push(boxAlong({ x: -h, z: z + inward * 0.17 }, { x: h, z: z + inward * 0.17 }, 0.1, 0.012, PF_TOP, 0))
+    }
+    // departure display on a post with a clock above, bins
+    const zs = Math.abs(zc) < 0.01 ? zc : zc
+    for (const sx of [-0.55, 0.55]) {
+      const x = h * sx
+      posts.push(at(x, PF_TOP + 0.24, zs, 0.022, 0.48, 0.022))
+      screens.push(at(x, PF_TOP + 0.4, zs, 0.04, 0.13, 0.3))
+      clocks.push(at(x, PF_TOP + 0.52, zs, 0.04, 0.09, 0.09))
+    }
+    for (const x of [-h + 1.2, h - 1.2, 0]) {
+      if (Math.abs(x) < 0.01 && layout.length < 6) continue
+      bins.push(at(x, PF_TOP + 0.065, zc + (w > 0.6 ? w * 0.3 : 0), 0.09, 0.13, 0.09))
+    }
+    // overhead line masts: one per platform, an arm over each track beside it
+    const outer = w > 1.4 ? zc : zc
+    for (let x = -h + 0.6; x <= h - 0.4 && roof === 'open'; x += 3.3) {
+      posts.push(at(x, PF_TOP + 0.5, outer, 0.026, 1.0, 0.026))
+      for (const tz of trackZs) {
+        if (Math.abs(tz - outer) > w / 2 + 0.6) continue
+        const zm = (outer + tz) / 2
+        arms.push(at(x, PF_TOP + 0.95, zm, 0.02, 0.02, Math.abs(tz - outer) + 0.02))
+        wireLo = Math.min(wireLo, tz)
+        wireHi = Math.max(wireHi, tz)
+      }
+    }
+    void pi
+  })
+  if (wireHi >= wireLo && roof === 'open') for (const tz of trackZs) wires.push(at(0, PF_TOP + 0.9, tz, layout.length + 3, 0.012, 0.012))
+  // footbridge with stair shafts over an island platform
+  if (design.platform === 'island' && layout.platforms.length && layout.length > 5 && (roof === 'open' || roof === 'canopy')) {
+    const zLo = Math.min(...layout.platforms.map((p) => p.z0)) - 0.25
+    const zHi = Math.max(...layout.platforms.map((p) => p.z1)) + 0.25
+    const xb = -h * 0.62
+    const top = PF_TOP + 0.98
+    deck.push(at(xb, top, (zLo + zHi) / 2, 0.3, 0.04, zHi - zLo))
+    for (const z of [zLo, zHi]) rails.push(at(xb, top + 0.09, z, 0.3, 0.16, 0.012))
+    lights.push(at(xb, top - 0.025, (zLo + zHi) / 2, 0.06, 0.012, zHi - zLo - 0.1))
+    for (const p of layout.platforms) {
+      const pw = p.z1 - p.z0
+      if (pw < 0.6) continue
+      shafts.push(at(xb, PF_TOP + 0.49, (p.z0 + p.z1) / 2, 0.34, 0.98, pw * 0.7))
+    }
+  }
+  return { strips, posts, screens, clocks, bins, arms, wires, deck, shafts, rails, lights }
+}
 
 const fm = new THREE.Matrix4()
 const fp = new THREE.Vector3()
@@ -257,6 +332,23 @@ function Canopies({ layout }: { layout: StationLayout }) {
               <boxGeometry args={[L - 0.05, 0.02, w + 0.26]} />
               <meshStandardMaterial color="#2e6cd6" roughness={0.5} />
             </mesh>
+            {/* skylight strip on the roof, lamps and a cross beam under it */}
+            <mesh position={[0, PF_TOP + 0.806, 0]}>
+              <boxGeometry args={[L * 0.7, 0.012, Math.max(0.1, w * 0.35)]} />
+              <meshStandardMaterial color="#bfe3f7" roughness={0.2} metalness={0.2} />
+            </mesh>
+            {[-0.33, 0, 0.33].map((f) => (
+              <mesh key={f} position={[L * f, PF_TOP + 0.735, 0]}>
+                <boxGeometry args={[0.2, 0.012, Math.max(0.1, w * 0.4)]} />
+                <meshStandardMaterial color="#fff7d6" emissive="#fff0b0" emissiveIntensity={0.9} />
+              </mesh>
+            ))}
+            {[-1, 1].map((sx) => (
+              <mesh key={sx} position={[(sx * (L - 0.05)) / 2, PF_TOP + 0.74, 0]}>
+                <boxGeometry args={[0.03, 0.05, w + 0.2]} />
+                <meshStandardMaterial color="#cdd4de" metalness={0.5} roughness={0.5} />
+              </mesh>
+            ))}
             {posts.map((x) => (
               <mesh key={x} position={[x, PF_TOP + 0.38, 0]}>
                 <cylinderGeometry args={[0.03, 0.03, 0.76, 8]} />
@@ -266,6 +358,60 @@ function Canopies({ layout }: { layout: StationLayout }) {
           </group>
         )
       })}
+    </group>
+  )
+}
+
+/**
+ * A tram stop in the street: a kerb-high platform beside the track, a small shelter with a glass back wall and a bench,
+ * a stop sign on a pole and a ticket machine. Nothing like the halls and roofs of a railway station.
+ */
+function TramHalt({ layout }: { layout: StationLayout }) {
+  const L = layout.length
+  const items = useMemo(() => {
+    const posts: THREE.Matrix4[] = []
+    const roofs: THREE.Matrix4[] = []
+    const glass: THREE.Matrix4[] = []
+    const wood: THREE.Matrix4[] = []
+    const steel: THREE.Matrix4[] = []
+    const machines: THREE.Matrix4[] = []
+    const signs: { x: number; y: number; z: number; yaw: number }[] = []
+    for (const p of layout.platforms) {
+      const w = p.z1 - p.z0
+      if (w < 0.3) continue
+      const zc = (p.z0 + p.z1) / 2
+      // the outer edge is the one away from the tracks
+      const out = zc >= 0 ? 1 : -1
+      const zOut = zc + out * (w / 2 - 0.1)
+      const x0 = -L * 0.12
+      // shelter: roof on two posts, glass back wall, bench inside
+      roofs.push(at(x0, PF_TOP + 0.52, zOut - out * 0.03, 1.3, 0.035, 0.34))
+      for (const dx of [-0.6, 0.6]) posts.push(at(x0 + dx, PF_TOP + 0.26, zOut + out * 0.12, 0.025, 0.52, 0.025))
+      glass.push(at(x0, PF_TOP + 0.27, zOut + out * 0.14, 1.2, 0.46, 0.012))
+      wood.push(at(x0, PF_TOP + 0.1, zOut - out * 0.02, 0.9, 0.03, 0.12))
+      // stop sign pole near the end of the platform, where the cars stop
+      const xs = L * 0.34
+      steel.push(at(xs, PF_TOP + 0.4, zOut, 0.022, 0.8, 0.022))
+      signs.push({ x: xs, y: PF_TOP + 0.84, z: zOut, yaw: Math.PI / 2 })
+      // ticket machine
+      machines.push(at(-L * 0.38, PF_TOP + 0.17, zOut, 0.12, 0.34, 0.1))
+    }
+    return { posts, roofs, glass, wood, steel, machines, signs }
+  }, [layout, L])
+  return (
+    <group>
+      <Boxes items={items.roofs} color="#e7ebf1" roughness={0.6} />
+      <Boxes items={items.posts} color="#cdd4de" roughness={0.5} metalness={0.5} />
+      <Boxes items={items.steel} color="#c3cad4" roughness={0.5} metalness={0.5} />
+      <Boxes items={items.glass} color="#8fc6e6" roughness={0.1} metalness={0.2} opacity={0.55} />
+      <Boxes items={items.wood} color="#7a5a3c" roughness={0.9} />
+      <Boxes items={items.machines} color="#2e6cd6" roughness={0.6} emissive={0.15} />
+      {items.signs.map((sg, i) => (
+        <mesh key={i} position={[sg.x, sg.y, sg.z]} rotation={[0, sg.yaw, 0]}>
+          <boxGeometry args={[0.3, 0.3, 0.02]} />
+          <meshStandardMaterial map={signTexture('H')} emissive={SIGN_COLOR.H} emissiveIntensity={0.3} />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -358,12 +504,15 @@ function StationBody({
   sign = 'U',
   entrance = null,
   shell = null,
+  halt = false,
   curve = 0,
   annex = -1,
   liftScale = 1,
 }: {
   /** the lift is given in design units (world lift divided by this): thresholds in world units are divided by it too */
   liftScale?: number
+  /** a plain tram halt (see `StationGroup.halt`): shelter and sign instead of roofs, halls and buildings */
+  halt?: boolean
   /** side of the lateral axis for the reception building (see `StationGroup.annex`) */
   annex?: 1 | -1
   /** curvature of the platform axis (see `StationGroup.curv`); 0 = straight */
@@ -392,11 +541,12 @@ function StationBody({
   const pf = useMemo(() => platformBoxes(layout), [layout])
   const ugCover = UG_COVER / liftScale
   const eps = 0.15 / liftScale
-  const furn = useMemo(() => platformFurniture(layout, lift <= ugCover ? 'open' : design.roof), [layout, design.roof, lift, ugCover])
+  const furn = useMemo(() => (halt ? { posts: [], heads: [], wood: [], backs: [], boards: [] } : platformFurniture(layout, lift <= ugCover ? 'open' : design.roof)), [layout, design.roof, lift, ugCover, halt])
   const halfW = layout.halfWidth + 0.25
   const L = layout.length
-  const ubahn = showUbahn ?? design.ubahn
-  const roof = lift <= ugCover || shell ? 'open' : design.roof
+  const ubahn = !halt && (showUbahn ?? design.ubahn)
+  const roof = halt || lift <= ugCover || shell ? 'open' : design.roof
+  const details = useMemo(() => (halt || shell || lift <= ugCover ? null : platformDetails(layout, design, roof)), [layout, design, halt, shell, lift, ugCover, roof])
 
   const uEntrance = ubahn || lift <= ugCover ? (
 
@@ -439,7 +589,23 @@ function StationBody({
       <Boxes items={furn.wood} color="#7a5a3c" roughness={0.9} />
       <Boxes items={furn.backs} color="#6a4d33" roughness={0.9} />
       <Boxes items={furn.boards} color="#2e6cd6" roughness={0.6} emissive={0.15} />
-      {entrance && <Entrance layout={layout} big={entrance === 'big'} annex={annex} />}
+      {halt && <TramHalt layout={layout} />}
+      {details && (
+        <>
+          <Boxes items={details.strips} color="#7c848f" roughness={0.95} />
+          <Boxes items={details.posts} color="#c3cad4" roughness={0.5} metalness={0.5} />
+          <Boxes items={details.arms} color="#aab2bd" roughness={0.5} metalness={0.5} />
+          <Boxes items={details.wires} color="#3b4048" roughness={0.6} />
+          <Boxes items={details.screens} color="#10151c" roughness={0.4} emissive={0.6} />
+          <Boxes items={details.clocks} color="#f4f6f9" roughness={0.5} emissive={0.4} />
+          <Boxes items={details.bins} color="#3d6b4f" roughness={0.8} />
+          <Boxes items={details.deck} color="#b0b8c3" roughness={0.9} />
+          <Boxes items={details.shafts} color="#c9d0da" roughness={0.85} />
+          <Boxes items={details.rails} color="#8fc6e6" roughness={0.1} metalness={0.2} opacity={0.55} />
+          <Boxes items={details.lights} color="#fff7d6" roughness={0.5} emissive={0.9} />
+        </>
+      )}
+      {entrance && !halt && <Entrance layout={layout} big={entrance === 'big'} annex={annex} />}
 
       {shell && lift > ugCover && <StationShell look={shell} layout={layout} annex={annex} />}
       {roof === 'canopy' && <Canopies layout={layout} />}
@@ -491,8 +657,15 @@ export default function StationBuilding(props: ComponentProps<typeof StationBody
       for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
         if (m.userData.xr || !((m as THREE.MeshStandardMaterial).isMeshStandardMaterial)) continue
         m.userData.xr = true
-        m.onBeforeCompile = xrayCompile
-        m.customProgramCacheKey = () => 'lf-xray'
+        // keep what is already hooked into the material (the bend of a curved station): the roofs and halls are plain
+        // materials, and replacing their hook left them straight above the curved platforms
+        const before = m.onBeforeCompile
+        const key = m.customProgramCacheKey?.bind(m)
+        m.onBeforeCompile = (shader, renderer) => {
+          before?.call(m, shader, renderer)
+          xrayCompile(shader)
+        }
+        m.customProgramCacheKey = () => `${key ? key() : ''}|lf-xray`
         m.needsUpdate = true
       }
     })

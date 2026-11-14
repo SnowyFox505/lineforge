@@ -231,6 +231,12 @@ function drawAirport(ctx: CanvasRenderingContext2D, zones: ZoneGfx, s: number) {
     }
     ctx.stroke()
     if (l.apron) {
+      // the taxiway runs on to the apron at both ends
+      for (const sg of [-1, 1]) {
+        ctx.moveTo(sg * l.apron.u1 * 0.85, l.taxiV)
+        ctx.lineTo(sg * l.apron.u1 * 0.85, l.apron.v0)
+      }
+      ctx.stroke()
       ctx.fillStyle = 'rgba(126,134,146,0.92)'
       rect(l.apron)
     }
@@ -255,6 +261,10 @@ function drawAirport(ctx: CanvasRenderingContext2D, zones: ZoneGfx, s: number) {
     ctx.fillStyle = 'rgba(176,184,196,0.95)'
     for (const p of l.piers) rect(p)
     for (const hg of l.hangars) rect(hg)
+    ctx.fillStyle = 'rgba(120,128,140,0.55)'
+    for (const pk of l.parking) rect(pk)
+    ctx.fillStyle = 'rgba(176,184,196,0.95)'
+    for (const g of l.garages) rect(g)
     if (l.terminal) {
       ctx.fillStyle = '#e4e9f0'
       rect(l.terminal)

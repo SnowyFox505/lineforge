@@ -72,6 +72,26 @@ describe('track profiles', () => {
     expect(atStation).toBeLessThanOrEqual(UG_COVER)
   })
 
+  it('keeps a metro line underground at a station that surface lines serve too', () => {
+    // the metro ends at b, where an S-Bahn calls at ground level; a tram stops there as well
+    let d = city('sbahn')
+    d = { ...d, lines: { ...d.lines, U: { id: 'U', name: 'U', operator: 'ubahn', color: '#00f', stations: [], via: [], segs: [] } } }
+    d = appendStation(appendStation(d, 'U', 'a'), 'U', 'b')
+    const net = buildNetwork3D(d)
+    const lifts = net.stations.b.groups.map((g) => ({ ids: g.lineIds, lift: g.lift }))
+    expect(lifts.find((g) => g.ids.includes('L'))!.lift).toBe(0)
+    expect(lifts.find((g) => g.ids.includes('U'))!.lift).toBeLessThanOrEqual(UG_COVER)
+    // the first group (the station's main one) is the surface one
+    expect(net.stations.b.groups[0].lineIds).toContain('L')
+    // the metro track stays under the ground right up to the end
+    const u = net.lines.find((l) => l.line.id === 'U')!
+    expect(Math.max(...u.cy)).toBeLessThanOrEqual(UG_COVER)
+    // a station the user set to the surface by hand is left alone
+    const hand = { ...d, stations: { ...d.stations, b: { ...d.stations.b, underground: false } } }
+    const net2 = buildNetwork3D(hand)
+    expect(net2.stations.b.groups.length).toBe(1)
+  })
+
   it('puts airports underground by default', () => {
     const base = city('sbahn')
     const d: CityDoc = { ...base, stations: { ...base.stations, c: { ...base.stations.c, type: 'airport' } } }

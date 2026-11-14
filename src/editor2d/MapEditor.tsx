@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
-import { OPERATORS } from '../model/constants'
+import { lineWidthPx } from './trains2d'
 import { nearestLeg } from '../model/lineEdit'
 import { findBridges, makeSampler } from '../model/terrainField'
 import { WATER } from '../model/types'
@@ -112,7 +112,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const terrainPaths = useMemo(() => buildTerrainPaths(deferredTerrain, doc.size), [deferredTerrain, doc.size])
   const deferredZones = useDeferredValue(doc.zoneGrid)
   const zoneGfx = useMemo(() => buildZoneGfx({ ...doc, zoneGrid: deferredZones }), [deferredZones, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
-  const linePaths = useMemo(() => layoutLines(doc, 0.82, { source: 'geo' }), [doc.lines, doc.stations]) // eslint-disable-line react-hooks/exhaustive-deps
+  const linePaths = useMemo(() => layoutLines(doc, 0.82, { source: 'geo', smooth: 10 }), [doc.lines, doc.stations]) // eslint-disable-line react-hooks/exhaustive-deps
   const types = useMemo(() => effectiveTypes(doc), [doc])
   const bridges = useMemo(() => {
     const sample = makeSampler(terrainPaths.field, doc.size)
@@ -230,7 +230,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       if (p < 1) animating = true
       if (shown <= 0.001) continue
 
-      const w0 = Math.min(22, Math.max(3, (OPERATORS[line.operator].width / 10) * s))
+      const w0 = lineWidthPx(line.operator, s)
       const path = new Path2D()
       pts.forEach((pt, i) => {
         const px = ox + (pt.x + 0.5) * s

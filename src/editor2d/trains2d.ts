@@ -147,8 +147,9 @@ export function carsOf(tr: TrainView, run: RunPath, scale: number): CarShape[] {
   return out
 }
 
+/** Width of a line on the map; a tram runs inside its street and is slimmer, about as wide as a main street */
 export function lineWidthPx(op: OperatorId, scale: number) {
-  return Math.min(22, Math.max(3, (OPERATORS[op].width / 10) * scale))
+  return Math.min(22, Math.max(3, (OPERATORS[op].width / 10) * scale * (op === 'tram' ? 0.6 : 1)))
 }
 
 /** Mix a #rrggbb colour towards white. */

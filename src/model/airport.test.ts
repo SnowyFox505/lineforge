@@ -65,4 +65,46 @@ describe('airport layout', () => {
     const c = airportToCell(l, 5, 2)
     expect(c).toEqual({ x: l.cx - 2, y: l.cy + 5 })
   })
+
+  it('grows with the room: more runways, a longer terminal with more piers, more hangars, a car park', () => {
+    const sizes = [{ x1: 22, y1: 14 }, { x1: 34, y1: 16 }, { x1: 60, y1: 30 }, { x1: 110, y1: 54 }]
+    const ls = sizes.map((s) => airportLayout({ x0: 0, y0: 0, ...s }))
+    const piers = ls.map((l) => l.piers.length)
+    const hangars = ls.map((l) => l.hangars.length)
+    for (let i = 1; i < ls.length; i++) {
+      expect(ls[i].runways.length).toBeGreaterThanOrEqual(ls[i - 1].runways.length)
+      expect(piers[i]).toBeGreaterThanOrEqual(piers[i - 1])
+      expect(hangars[i]).toBeGreaterThanOrEqual(hangars[i - 1])
+    }
+    const huge = ls[3]
+    expect(huge.runways).toHaveLength(4)
+    expect(huge.piers.length).toBeGreaterThanOrEqual(4)
+    expect(huge.hangars.length).toBeGreaterThanOrEqual(4)
+    expect(huge.parking.length).toBeGreaterThan(0)
+    expect(huge.garages.length).toBeGreaterThan(0)
+    expect(huge.stands.length).toBeGreaterThan(ls[1].stands.length)
+    // the runway does not just stretch with the area
+    expect(huge.runwayLength).toBeLessThanOrEqual(34)
+  })
+
+  it('keeps everything of a huge airport inside its area and the runways clear of the apron', () => {
+    const l = airportLayout({ x0: 0, y0: 0, x1: 110, y1: 54 })
+    const half = l.short / 2
+    for (const r of [l.apron!, l.terminal!, ...l.piers, ...l.hangars, ...l.parking, ...l.garages]) {
+      expect(r.v0).toBeGreaterThanOrEqual(-half - 1e-6)
+      expect(r.v1).toBeLessThanOrEqual(half + 1e-6)
+      expect(r.u0).toBeGreaterThanOrEqual(-l.long / 2 - 1e-6)
+      expect(r.u1).toBeLessThanOrEqual(l.long / 2 + 1e-6)
+    }
+    for (const r of l.runways) {
+      expect(Math.abs(r.v) + r.w / 2).toBeLessThanOrEqual(half)
+      expect(r.v + r.w / 2).toBeLessThan(l.apron!.v0)
+    }
+    for (const s of l.stands) {
+      expect(s.u).toBeGreaterThan(l.apron!.u0)
+      expect(s.u).toBeLessThan(l.apron!.u1)
+    }
+    expect(l.taxiV).toBeLessThan(l.apron!.v0)
+    expect(l.taxiV).toBeGreaterThan(Math.max(...l.runways.map((r) => r.v + r.w / 2)))
+  })
 })

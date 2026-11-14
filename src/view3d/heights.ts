@@ -4,6 +4,8 @@ import { WATER_THRESHOLD } from '../model/terrainField'
 export const LAND_Y = 0.5
 export const BED_Y = -1.4
 export const BASE_Y = -3.6
+/** Top of the asphalt of a tram street: the rails lie flush in it and the cars stand on them */
+export const TRAM_ROAD_TOP = LAND_Y + 0.04
 /** Track top surface (ballast) sits just above the land */
 export const RAIL_Y = LAND_Y + 0.1 * RAIL
 

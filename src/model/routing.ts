@@ -1,5 +1,7 @@
 import { octilinearPath } from '../plan/octilinear'
 import { legCurve, nearestOnCurve, pointsFromRoute, routeHints } from './geo'
+import { Heap } from './heap'
+import { streetFoot, streetViaPoints } from './streetNet'
 import { WATER } from './types'
 import type { CityDoc, Line, Pt } from './types'
 
@@ -126,54 +128,6 @@ export function buildCtx(doc: CityDoc, ownLineId: string | null, skipSeg = -1): 
     })
   }
   return { size, terrain: doc.terrain, occ, own, stations, occHeavy, occTram, ownTram: ownLineId ? doc.lines[ownLineId]?.operator === 'tram' : false }
-}
-
-// ---- binary heap ----------------------------------------------------------
-class Heap {
-  private f: number[] = []
-  private id: number[] = []
-  get size() {
-    return this.f.length
-  }
-  push(f: number, id: number) {
-    const F = this.f
-    const I = this.id
-    let i = F.length
-    F.push(f)
-    I.push(id)
-    while (i > 0) {
-      const p = (i - 1) >> 1
-      if (F[p] <= f) break
-      F[i] = F[p]
-      I[i] = I[p]
-      i = p
-    }
-    F[i] = f
-    I[i] = id
-  }
-  pop(): number {
-    const F = this.f
-    const I = this.id
-    const top = I[0]
-    const lf = F.pop()!
-    const li = I.pop()!
-    const n = F.length
-    if (n > 0) {
-      let i = 0
-      for (;;) {
-        let c = 2 * i + 1
-        if (c >= n) break
-        if (c + 1 < n && F[c + 1] < F[c]) c++
-        if (F[c] >= lf) break
-        F[i] = F[c]
-        I[i] = I[c]
-        i = c
-      }
-      F[i] = lf
-      I[i] = li
-    }
-    return top
-  }
 }
 
 export interface LegResult {
@@ -378,17 +332,46 @@ export function rerouteAt(doc: CityDoc, lineId: string, k: number): CityDoc {
     if (!line || i < 0 || i >= line.stations.length - 1) continue
     const segs = [...(line.segs ?? [])]
     segs[i] = routeSegment(d, line, i)
-    d = withLine(d, withCurvePoints({ ...line, segs }, i))
+    d = withLine(d, withCurvePoints(d, { ...line, segs }, i))
   }
   return d
 }
 
-/** A leg that has only a machine route (no control points yet) gets its curve from that route. */
-function withCurvePoints(line: Line, k: number): Line {
+/**
+ * The control points another line of the same kind (tram with tram, railway with railway) already has between the same
+ * two stations. Lines that run between the same stops take the same way, so they share their rails and the bundling puts
+ * them on one corridor instead of two routes a few cells apart.
+ */
+function sharedVia(doc: CityDoc, line: Line, k: number): Pt[] | null {
+  const a = line.stations[k]
+  const b = line.stations[k + 1]
+  if (!a || !b) return null
+  const tram = line.operator === 'tram'
+  for (const o of Object.values(doc.lines)) {
+    if (o.id === line.id || (o.operator === 'tram') !== tram) continue
+    for (let j = 0; j < o.stations.length - 1; j++) {
+      const v = o.via?.[j]
+      if (!v?.length) continue
+      if (o.stations[j] === a && o.stations[j + 1] === b) return v.map((p) => ({ ...p }))
+      if (o.stations[j] === b && o.stations[j + 1] === a) return v.map((p) => ({ ...p })).reverse()
+    }
+  }
+  return null
+}
+
+/**
+ * A leg that has only a machine route (no control points yet) takes the way another line of its kind already runs between
+ * the same stations; otherwise it gets its curve from that route. A tram leg follows the streets of the city instead;
+ * where there are none (outside the towns) it takes the grid route like any other line.
+ */
+function withCurvePoints(doc: CityDoc, line: Line, k: number): Line {
   const seg = line.segs?.[k]
   if ((line.via?.[k] ?? []).length || !seg || seg.length < 2) return line
   const via = [...(line.via ?? [])]
-  via[k] = pointsFromRoute(seg, line.curve ?? 3)
+  const A = doc.stations[line.stations[k]]
+  const B = doc.stations[line.stations[k + 1]]
+  const onStreets = line.operator === 'tram' && A && B ? streetViaPoints(doc, A, B) : null
+  via[k] = sharedVia(doc, line, k) ?? onStreets ?? pointsFromRoute(seg, line.curve ?? 3)
   return { ...line, via }
 }
 
@@ -411,7 +394,7 @@ export function withRoutes(doc: CityDoc): CityDoc {
       if (line.segs?.[k]) continue
       const segs = [...(line.segs ?? [])]
       segs[k] = routeSegment(d, line, k)
-      d = withLine(d, withCurvePoints({ ...line, segs }, k))
+      d = withLine(d, withCurvePoints(d, { ...line, segs }, k))
     }
   }
   return d
@@ -474,9 +457,39 @@ export function healHooks(doc: CityDoc): CityDoc {
   return d
 }
 
-export function appendStation(doc: CityDoc, lineId: string, stationId: string): CityDoc {
-  const base = doc.lines[lineId]
-  if (!base || !doc.stations[stationId]) return doc
+/**
+ * A stop that no line serves yet and that joins a tram line moves onto the nearest street (the cell whose centre is
+ * closest to it). Stops that other lines use stay where they are.
+ */
+function onStreet(doc: CityDoc, line: Line, stationId: string): CityDoc {
+  const st = doc.stations[stationId]
+  if (line.operator !== 'tram' || !st) return doc
+  if (Object.values(doc.lines).some((l) => l.stations.includes(stationId))) return doc
+  const foot = streetFoot(doc, { x: st.x, y: st.y }, 3)
+  if (!foot) return doc
+  let best: Pt | null = null
+  let bd = Infinity
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = Math.round(foot.x) + dx
+      const y = Math.round(foot.y) + dy
+      if (x < 0 || y < 0 || x >= doc.size || y >= doc.size || doc.terrain[y * doc.size + x] === WATER) continue
+      if (Object.values(doc.stations).some((o) => o.id !== stationId && o.x === x && o.y === y)) continue
+      const d = Math.hypot(x - foot.x, y - foot.y)
+      if (d < bd) {
+        bd = d
+        best = { x, y }
+      }
+    }
+  }
+  if (!best || (best.x === st.x && best.y === st.y)) return doc
+  return { ...doc, stations: { ...doc.stations, [stationId]: { ...st, x: best.x, y: best.y } } }
+}
+
+export function appendStation(input: CityDoc, lineId: string, stationId: string): CityDoc {
+  const base = input.lines[lineId]
+  if (!base || !input.stations[stationId]) return input
+  const doc = onStreet(input, base, stationId)
   if (base.stations[base.stations.length - 1] === stationId) return doc
   const line = shape(base)
   const n = line.stations.length

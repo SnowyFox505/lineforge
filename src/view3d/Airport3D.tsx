@@ -63,11 +63,12 @@ function Plane({ scale = 1 }: { scale?: number }) {
   )
 }
 
-/** A plane that takes off again and again from the first runway. */
-function Departure({ l }: { l: AirportLayout }) {
+/** A plane that takes off again and again from its runway. */
+function Departure({ l, runway }: { l: AirportLayout; runway: number }) {
   const ref = useRef<THREE.Group>(null)
-  const t0 = useMemo(() => Math.random() * 10, [])
-  const v = l.runways[0].v
+  // every runway has its own plane, out of step with the others
+  const t0 = useMemo(() => runway * 7.3 + Math.random() * 6, [runway])
+  const v = l.runways[runway].v
   const L = l.runwayLength
   useFrame(({ clock }) => {
     const g = ref.current
@@ -90,9 +91,9 @@ function Departure({ l }: { l: AirportLayout }) {
   )
 }
 
-function Tower({ u, v }: { u: number; v: number }) {
+function Tower({ u, v, k = 1 }: { u: number; v: number; k?: number }) {
   return (
-    <group position={[u, 0, v]}>
+    <group position={[u, 0, v]} scale={k}>
       <mesh position={[0, 1.7, 0]}>
         <cylinderGeometry args={[0.2, 0.28, 3.4, 12]} />
         <meshStandardMaterial color="#d3d9e0" roughness={0.8} />
@@ -130,12 +131,74 @@ function Hangar({ r }: { r: Rect }) {
   )
 }
 
+/** A car park: an asphalt slab with parking bays and a few cars. */
+function CarPark({ r }: { r: Rect }) {
+  const cars = useMemo(() => {
+    const out: THREE.Matrix4[] = []
+    const bays: THREE.Matrix4[] = []
+    const w = r.u1 - r.u0
+    const d = r.v1 - r.v0
+    for (let u = r.u0 + 0.3; u < r.u1 - 0.2; u += 0.42) {
+      bays.push(matrixAt(u, 0.052, mid(r.v0, r.v1), 0, 0.012, 0.012, d - 0.2))
+      for (const row of [0.27, 0.73]) {
+        if (((u * 7.3 + row * 3.1) * 100) % 3 < 1.1) continue
+        out.push(matrixAt(u + 0.2, 0.09, r.v0 + d * row, 0, 0.28, 0.07, 0.15))
+      }
+    }
+    void w
+    return { cars: out, bays }
+  }, [r])
+  return (
+    <group>
+      <Slab r={r} h={0.045} color="#6d747e" />
+      <Boxes items={cars.bays} color="#e9edf2" roughness={0.8} />
+      <Boxes items={cars.cars} color="#b04a4a" roughness={0.5} />
+    </group>
+  )
+}
+
+/** A multi-storey garage with open floors. */
+function Garage({ r }: { r: Rect }) {
+  const w = r.u1 - r.u0
+  const d = r.v1 - r.v0
+  const floors = 4
+  const fh = 0.26
+  return (
+    <group position={[mid(r.u0, r.u1), 0, mid(r.v0, r.v1)]}>
+      {Array.from({ length: floors }, (_, i) => (
+        <group key={i}>
+          <mesh position={[0, 0.05 + i * fh, 0]}>
+            <boxGeometry args={[w, 0.05, d]} />
+            <meshStandardMaterial color="#c3c9d1" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.05 + i * fh + 0.08, d / 2 - 0.02]}>
+            <boxGeometry args={[w, 0.1, 0.04]} />
+            <meshStandardMaterial color="#8d95a0" roughness={0.8} />
+          </mesh>
+        </group>
+      ))}
+      {[-0.5, 0.5].flatMap((fu) => [-0.5, 0.5].map((fv) => (
+        <mesh key={`${fu}${fv}`} position={[fu * (w - 0.1), (floors * fh) / 2, fv * (d - 0.1)]}>
+          <boxGeometry args={[0.08, floors * fh, 0.08]} />
+          <meshStandardMaterial color="#9aa2ad" roughness={0.8} />
+        </mesh>
+      )))}
+      <mesh position={[0, 0.05 + floors * fh, 0]}>
+        <boxGeometry args={[w + 0.06, 0.05, d + 0.06]} />
+        <meshStandardMaterial color="#9aa2ad" roughness={0.7} />
+      </mesh>
+    </group>
+  )
+}
+
 function Airport({ l, base }: { l: AirportLayout; base: number }) {
   const markings = useMemo(() => {
     const m: THREE.Matrix4[] = []
     for (const r of l.runways) {
       const n = Math.max(2, Math.floor(l.runwayLength / 1.1))
       for (let i = 0; i < n; i++) m.push(matrixAt(-l.runwayLength / 2 + 0.8 + ((l.runwayLength - 1.6) * (i + 0.5)) / n, 0.047, r.v, 0, 0.5, 0.012, 0.06))
+      // edge lights along both sides
+      for (let x = -l.runwayLength / 2 + 0.4; x < l.runwayLength / 2; x += 1.4) for (const sz of [-1, 1]) m.push(matrixAt(x, 0.05, r.v + sz * (r.w / 2 - 0.04), 0, 0.06, 0.02, 0.05))
       // threshold stripes at both ends
       for (const sgn of [-1, 1]) {
         for (let k = -2; k <= 2; k++) m.push(matrixAt(sgn * (l.runwayLength / 2 - 0.5), 0.047, r.v + k * (r.w / 6), 0, 0.36, 0.012, r.w / 14))
@@ -156,6 +219,10 @@ function Airport({ l, base }: { l: AirportLayout; base: number }) {
           <Slab key={`${f}${i}`} r={{ u0: l.runwayLength * f - l.taxiW / 2, u1: l.runwayLength * f + l.taxiW / 2, v0: Math.min(r.v, l.taxiV), v1: Math.max(r.v, l.taxiV) }} h={0.036} color={TAXI} />
         )),
       )}
+      {l.apron &&
+        [-1, 1].map((sg) => (
+          <Slab key={sg} r={{ u0: sg * l.apron!.u1 * 0.85 - l.taxiW / 2, u1: sg * l.apron!.u1 * 0.85 + l.taxiW / 2, v0: l.taxiV, v1: l.apron!.v0 }} h={0.036} color={TAXI} />
+        ))}
       <Boxes items={markings} color="#f1f4f8" roughness={0.7} />
       {l.apron && <Slab r={l.apron} h={0.05} color={APRON} />}
 
@@ -183,7 +250,13 @@ function Airport({ l, base }: { l: AirportLayout; base: number }) {
           ))}
         </group>
       )}
-      {l.tower && <Tower u={l.tower.u} v={l.tower.v} />}
+      {l.tower && <Tower u={l.tower.u} v={l.tower.v} k={l.towerScale} />}
+      {l.parking.map((p, i) => (
+        <CarPark key={i} r={p} />
+      ))}
+      {l.garages.map((g, i) => (
+        <Garage key={i} r={g} />
+      ))}
       {l.hangars.map((h, i) => (
         <Hangar key={i} r={h} />
       ))}
@@ -192,7 +265,9 @@ function Airport({ l, base }: { l: AirportLayout; base: number }) {
           <Plane scale={0.78} />
         </group>
       ))}
-      <Departure l={l} />
+      {l.runways.map((_, i) => (
+        <Departure key={i} l={l} runway={i} />
+      ))}
     </group>
   )
 }

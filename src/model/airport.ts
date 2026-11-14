@@ -40,7 +40,16 @@ export interface AirportLayout {
   hangars: Rect[]
   /** parking positions for planes, nose towards the terminal */
   stands: { u: number; v: number }[]
+  /** car parks and multi-storey garages on the landside of the terminal */
+  parking: Rect[]
+  garages: Rect[]
+  /** the tower of a big airport is taller */
+  towerScale: number
 }
+
+/** Longest runway (cells) and most parallel runways: a bigger area gets more of everything else instead */
+const MAX_RUNWAY = 34
+const MAX_RUNWAYS = 4
 
 /**
  * Bounding boxes of all airport areas of a city. Only the biggest connected piece of an area counts:
@@ -90,17 +99,21 @@ export function airportBoxes(doc: CityDoc): AirportBox[] {
   return out
 }
 
-/** Layout for an area of the given bounds. Small areas only get a runway; bigger ones a terminal, apron and tower. */
+/**
+ * Layout for an area of the given bounds. Everything grows with the room it gets: a small area only gets a runway, a
+ * bigger one a terminal, apron and tower, a large one up to four parallel runways, a long terminal with many piers,
+ * rows of hangars and cargo sheds, a car park and a garage on the landside. Runways stay at a sensible length: the room
+ * a huge area has beyond that goes to the terminal and the buildings, not to a runway many times longer than the rest.
+ */
 export function airportLayout(b: Pick<AirportBox, 'x0' | 'y0' | 'x1' | 'y1'>): AirportLayout {
   const w = b.x1 - b.x0
   const h = b.y1 - b.y0
   const horiz = w >= h
   const long = horiz ? w : h
   const short = horiz ? h : w
-  const runwayLength = long * 0.9
-  const rw = Math.min(1.3, Math.max(0.5, short * 0.1))
+  const runwayLength = Math.min(long * 0.9, MAX_RUNWAY)
+  const rw = short > 20 ? Math.min(1.6, short * 0.07) : Math.min(1.3, Math.max(0.5, short * 0.1))
   const big = short >= 11 && long >= 14
-  const two = short >= 15 && long >= 22
   const base: AirportLayout = {
     cx: (b.x0 + b.x1) / 2,
     cy: (b.y0 + b.y1) / 2,
@@ -117,37 +130,62 @@ export function airportLayout(b: Pick<AirportBox, 'x0' | 'y0' | 'x1' | 'y1'>): A
     tower: null,
     hangars: [],
     stands: [],
+    parking: [],
+    garages: [],
+    towerScale: 1,
   }
   if (!big) {
     base.runways = [{ v: short > 8 ? -short * 0.18 : 0, w: rw }]
     return base
   }
-  base.runways = two ? [{ v: -short * 0.34, w: rw }, { v: -short * 0.14, w: rw }] : [{ v: -short * 0.22, w: rw }]
-  base.taxiV = short * 0.03
-  const aD = Math.min(0.22 * short, 4)
-  const aV0 = short * 0.14
-  const apron: Rect = { u0: -long * 0.16, u1: long * 0.16, v0: aV0, v1: aV0 + aD }
   const half = short / 2
-  const tDepth = Math.min(1.7, Math.max(1.1, short * 0.1))
-  const tc = Math.min(half - tDepth / 2 - 0.4, apron.v1 + 0.9 + tDepth / 2)
-  const tHalfLen = Math.min(0.2 * long, 7)
+  // parallel runways side by side, as many as fit into the band on the runway side
+  const spacing = Math.max(2.6, rw * 2.2)
+  const n = Math.max(1, Math.min(MAX_RUNWAYS, Math.floor((short * 0.5) / spacing)))
+  if (n === 1) base.runways = [{ v: -short * 0.22, w: rw }]
+  else {
+    const vc = -short * 0.26
+    base.runways = Array.from({ length: n }, (_, i) => ({ v: vc + (i - (n - 1) / 2) * spacing, w: rw }))
+  }
+  const runwayEdge = Math.max(...base.runways.map((r) => r.v + r.w / 2))
+  // the landside (car park, garage) behind the terminal, only when there is room for it
+  const landside = short >= 20 ? Math.min(0.14 * short, 6) : 0
+  const tDepth = Math.min(3, Math.max(1.1, short * 0.1))
+  const aV0 = Math.max(short * 0.14, runwayEdge + 1.2)
+  const aD = Math.max(1.5, Math.min(0.22 * short, 8, half - landside - tDepth - 1.3 - aV0))
+  const apronHalf = Math.min(0.16 * long, 13)
+  const apron: Rect = { u0: -apronHalf, u1: apronHalf, v0: aV0, v1: aV0 + aD }
+  base.taxiV = Math.min((runwayEdge + aV0) / 2, short * 0.03 + (n > 1 ? 0.5 : 0))
+  const tc = Math.min(half - landside - tDepth / 2 - 0.4, apron.v1 + 0.9 + tDepth / 2)
+  const tHalfLen = Math.min(0.2 * long, 16)
   const terminal: Rect = { u0: -tHalfLen, u1: tHalfLen, v0: tc - tDepth / 2, v1: tc + tDepth / 2 }
   base.apron = apron
   base.terminal = terminal
-  // two piers reach from the terminal across the apron
-  for (const f of [-0.55, 0.55]) {
-    const u = f * tHalfLen
+  // jet bridges from the terminal across the apron, one more for every few cells of terminal
+  const np = Math.max(2, Math.min(7, Math.round(tHalfLen / 3.2)))
+  for (let k = 0; k < np; k++) {
+    const u = tHalfLen * 0.55 * ((2 * k) / (np - 1) - 1)
     base.piers.push({ u0: u - 0.22, u1: u + 0.22, v0: apron.v0 + 0.5, v1: terminal.v0 })
   }
   base.tower = { u: tHalfLen + 1.7, v: tc }
-  // hangars next to the tower, as far as there is room
-  const hu = base.tower.u + 2.6
-  if (hu + 1.4 < long / 2 - 0.5) {
-    base.hangars.push({ u0: hu - 1.3, u1: hu + 1.3, v0: tc - 0.7, v1: tc + 0.7 })
+  base.towerScale = 1 + Math.min(0.7, long / 90)
+  // hangars and cargo sheds in a row on both sides of the terminal, as far as there is room
+  const place = (side: 1 | -1) => {
+    let u = side > 0 ? base.tower!.u + 2.6 : -(tHalfLen + 3.2)
+    for (let i = 0; i < 4; i++) {
+      if (Math.abs(u) + 1.4 >= long / 2 - 0.5) break
+      base.hangars.push({ u0: u - 1.3, u1: u + 1.3, v0: tc - 0.7, v1: tc + 0.7 })
+      u += side * 3
+    }
   }
-  const hu2 = -(tHalfLen + 3.2)
-  if (-hu2 + 1.4 < long / 2 - 0.5) {
-    base.hangars.push({ u0: hu2 - 1.3, u1: hu2 + 1.3, v0: tc - 0.7, v1: tc + 0.7 })
+  place(1)
+  place(-1)
+  // landside: car park in front of the terminal and a multi-storey garage beside it
+  if (landside >= 3.5) {
+    const v0 = terminal.v1 + 0.35
+    const v1 = half - 0.3
+    base.parking.push({ u0: -tHalfLen * 0.75, u1: tHalfLen * 0.2, v0, v1 })
+    base.garages.push({ u0: tHalfLen * 0.3, u1: Math.min(tHalfLen * 0.9, tHalfLen * 0.3 + 4), v0, v1 })
   }
   // planes parked at the piers
   const stands = base.piers.flatMap((p) => [(p.u0 + p.u1) / 2 - 0.9, (p.u0 + p.u1) / 2 + 0.9])

@@ -1,5 +1,5 @@
 import { buildField, BRIDGE_THRESHOLD, makeSampler } from '../model/terrainField'
-import { RAIL } from '../model/scale'
+import { RAIL, railOf, TRAM } from '../model/scale'
 import { layoutStation, resolveDesign, scaleLayout, stationOperators, trackFor, TRACK_OFFSET } from '../model/stationDesign'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import type { CityDoc, Line, OperatorId, Station } from '../model/types'
@@ -130,6 +130,8 @@ export interface StationGroup {
   curv: number
   /** which side (±1 of the lateral axis) the reception building / station annex stands on: opposite to a tram stop beside it */
   annex: 1 | -1
+  /** a plain halt (only trams): no hall, roof or station building */
+  halt: boolean
   /** rotation about Y so that local +x runs along the tracks */
   angle: number
   /** world position of the platform complex (the station centre, or beside it for the tram stop) */
@@ -281,7 +283,7 @@ function solveDense(A: Float64Array, r: Float64Array[], n: number): void {
  * are. A stretch of free samples between them that bends too sharply is replaced by the smoothest curve (minimal
  * bending energy, so it also keeps the direction at the platform ends) that stays as close as it can to the route.
  */
-function relaxCurvature(xs: number[], zs: number[], pinned: boolean[]): void {
+function relaxCurvature(xs: number[], zs: number[], pinned: boolean[], maxTurn = MAX_TURN): void {
   const n = xs.length
   const K = 2
   const turnAt = (j: number) => {
@@ -307,7 +309,7 @@ function relaxCurvature(xs: number[], zs: number[], pinned: boolean[]): void {
     if (a < 2 || b > n - 3 || !pinned[a - 1] || !pinned[a - 2] || !pinned[b + 1] || !pinned[b + 2]) continue
     let worst = 0
     for (let q = Math.max(K, a - K); q <= Math.min(n - 1 - K, b + K); q++) worst = Math.max(worst, turnAt(q))
-    if (worst <= MAX_TURN) continue
+    if (worst <= maxTurn) continue
     const cnt = b - a + 1
     if (cnt > 160) continue
     const x0 = xs.slice(a, b + 1)
@@ -345,7 +347,7 @@ function relaxCurvature(xs: number[], zs: number[], pinned: boolean[]): void {
       }
       let w2 = 0
       for (let q = Math.max(K, a - K); q <= Math.min(n - 1 - K, b + K); q++) w2 = Math.max(w2, turnAt(q))
-      if (w2 <= MAX_TURN) break
+      if (w2 <= maxTurn) break
     }
   }
 }
@@ -357,7 +359,9 @@ interface Coarse {
   tz: number[]
 }
 
-const TRAM_STATION: Station = { id: 'tram-stop', name: '', x: 0, y: 0, type: 'standard', design: { tracks: 2, platform: 'side', length: 'short', roof: 'canopy', ubahn: false } }
+/** A tram stop is a plain halt: two tracks with a kerb-high platform beside them, no roof, no building */
+const TRAM_STATION: Station = { id: 'tram-stop', name: '', x: 0, y: 0, type: 'standard', design: { tracks: 2, platform: 'side', length: 'short', roof: 'open', ubahn: false } }
+const onlyTrams = (ops: OperatorId[]) => ops.length > 0 && ops.every((op) => op === 'tram')
 
 /** Sample index of a coarse line at arc length `d` */
 function indexAtCum(c: Coarse, d: number): number {
@@ -500,7 +504,7 @@ export function separateStations(all: { id: string; g: StationGroup }[]): void {
 }
 
 /** A platform's total turn (radians) below which it stays straight, and the sharpest a platform may be bent */
-const CURVE_MIN = 0.1
+const CURVE_MIN = 0.03
 const CURVE_MAX_TURN = 0.55
 const CURVE_MAX_K = 1 / (8 * RAIL)
 
@@ -580,11 +584,13 @@ export function groupTracks(lines: LineNet[]) {
       else grid.set(k, [{ li, j }])
     }
   })
-  const pitch = 2 * TRACK_OFF
   const dF = lines.map((ln) => new Array<number>(ln.n).fill(0))
   const dB = lines.map((ln) => new Array<number>(ln.n).fill(0))
   lines.forEach((la, a) => {
     const tram = la.line.operator === 'tram'
+    // trams and heavy rail are never bundled together, so the whole bundle has the track spacing of this line
+    const TO = TRACK_OFFSET * railOf(la.line.operator)
+    const pitch = 2 * TO
     for (let j = 0; j < la.n; j++) {
       if (la.free[j] < 0.02) continue
       const nx = -la.tz[j]
@@ -614,9 +620,18 @@ export function groupTracks(lines: LineNet[]) {
       // every track of the bundle with the side it uses now (lateral position across the bundle) and its direction
       const members = [{ u: 0, s: 1, self: true }, ...[...near.values()].map((v) => ({ u: v.u, s: v.s, self: false }))]
       const tracks: { pos: number; dir: number; self: boolean; f: boolean }[] = []
+      // lines on the very same track (the same stretch of the same kind) share it: one slot, not two side by side
+      const addTrack = (pos: number, dir: number, self: boolean, f: boolean) => {
+        const hit = tracks.find((t) => t.dir === dir && Math.abs(t.pos - pos) < 0.05)
+        if (!hit) tracks.push({ pos, dir, self, f })
+        else if (self) {
+          hit.self = true
+          hit.f = f
+        }
+      }
       for (const m of members) {
-        tracks.push({ pos: m.u + m.s * TRACK_OFF, dir: m.s, self: m.self, f: true })
-        tracks.push({ pos: m.u - m.s * TRACK_OFF, dir: -m.s, self: m.self, f: false })
+        addTrack(m.u + m.s * TO, m.s, m.self, true)
+        addTrack(m.u - m.s * TO, -m.s, m.self, false)
       }
       // against the direction of travel on the left (-normal), along it on the right: the same order as a line's own pair
       const ordered = [...tracks.filter((t) => t.dir < 0).sort((p, q) => p.pos - q.pos), ...tracks.filter((t) => t.dir > 0).sort((p, q) => p.pos - q.pos)]
@@ -624,8 +639,8 @@ export function groupTracks(lines: LineNet[]) {
       ordered.forEach((t, i) => {
         if (!t.self) return
         const target = centre + (i - (ordered.length - 1) / 2) * pitch
-        if (t.f) dF[a][j] = target - TRACK_OFF
-        else dB[a][j] = target + TRACK_OFF
+        if (t.f) dF[a][j] = target - TO
+        else dB[a][j] = target + TO
       })
     }
   })
@@ -695,6 +710,19 @@ export function separateCrossings(lines: LineNet[]) {
     }
   })
   const inZone = (ln: LineNet, d: number) => ln.stops.some((s) => Math.abs(d - s.d) < s.half + s.taper + 3)
+  /** Do the two lines run side by side (close and parallel) within about 10 units of these samples? Then they part or join here. */
+  const runBeside = (la: LineNet, j: number, lb: LineNet, k: number) => {
+    for (let p = -25; p <= 25; p += 2) {
+      const ja = j + p
+      if (ja < 0 || ja >= la.n) continue
+      for (let q = -25; q <= 25; q += 2) {
+        const kb = k + q
+        if (kb < 0 || kb >= lb.n) continue
+        if (Math.hypot(lb.cx[kb] - la.cx[ja], lb.cz[kb] - la.cz[ja]) < 0.9 && Math.abs(la.tx[ja] * lb.tx[kb] + la.tz[ja] * lb.tz[kb]) > 0.95) return true
+      }
+    }
+    return false
+  }
   type Event = { a: number; b: number; da: number; db: number; sin: number }
   const events: Event[] = []
   lines.forEach((la, a) => {
@@ -712,7 +740,8 @@ export function separateCrossings(lines: LineNet[]) {
             if (dot > 0.9) continue // running side by side, not crossing
             if (inZone(lb, lb.cum[o.j])) continue
             const prev = events.find((e) => e.a === a && e.b === o.li && Math.abs(e.da - la.cum[j]) < 8)
-            if (!prev) events.push({ a, b: o.li, da: la.cum[j], db: lb.cum[o.j], sin: Math.sqrt(1 - dot * dot) })
+            // two lines that run side by side a little further on (or back) only part or join here: no crossing
+            if (!prev && !runBeside(la, j, lb, o.j)) events.push({ a, b: o.li, da: la.cum[j], db: lb.cum[o.j], sin: Math.sqrt(1 - dot * dot) })
           }
         }
       }
@@ -772,7 +801,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
   const sample = makeSampler(field, doc.size)
   const groundAt = (x: number, z: number) => groundHeight(sample(x + half, z + half))
   // the free curves of the map; a change of lane is spread over about five cells
-  const lanes = layoutLines(doc, LANE_GAP, { smooth: 10, source: 'geo' })
+  // lines on the same stretch share one lane: they run on the same rails
+  const lanes = layoutLines(doc, LANE_GAP, { smooth: 10, source: 'geo', share: true })
   const lineList = Object.values(doc.lines)
 
   // ---- pass A: smooth axis of every line, with generous run-out at both ends ---------------
@@ -826,9 +856,10 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const sx = st.x + 0.5 - half
     const sz = st.y + 0.5 - half
     const allOps = stationOperators(doc, st.id)
-    const baseDesign = resolveDesign(st, allOps)
     const minLen = (ops: OperatorId[]) => ops.reduce((m, op) => Math.max(m, trainLength(VEHICLES[op]) + 1.2), 0)
-    stationBase.set(st.id, { st, design: baseDesign, layout: scaleLayout(layoutStation(baseDesign, minLen(allOps)), RAIL) })
+    const tramsOnly = onlyTrams(allOps)
+    const baseDesign = tramsOnly ? resolveDesign(TRAM_STATION, allOps) : resolveDesign(st, allOps)
+    stationBase.set(st.id, { st, design: baseDesign, layout: scaleLayout(layoutStation(baseDesign, minLen(allOps)), railOf(tramsOnly ? 'tram' : 'sbahn')) })
 
     const entries: Entry[] = []
     for (const line of lineList) {
@@ -849,8 +880,13 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     if (!entries.length) continue
 
     const mains = entries.filter((e) => e.line.operator !== 'tram')
-    const normal = mains.length ? mains : entries.filter((e) => e.line.operator === 'tram')
+    const allNormal = mains.length ? mains : entries.filter((e) => e.line.operator === 'tram')
     const trams = mains.length ? entries.filter((e) => e.line.operator === 'tram') : []
+    // A metro line never comes up to the surface: where it calls at a station with surface traffic (and the station is not
+    // set to be underground or on the ground by hand), it gets its own platforms below the station.
+    const deepMetro = st.underground === undefined && !isUndergroundStation(doc, st)
+    const deep = deepMetro ? allNormal.filter((e) => e.line.operator === 'ubahn') : []
+    const normal = deep.length ? allNormal.filter((e) => e.line.operator !== 'ubahn') : allNormal
 
     const groups: StationGroup[] = []
     const members = new Map<number, Entry[]>()
@@ -863,27 +899,37 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     })
     const labels = clusterByDirection(dirs, st.levels ?? 1)
     const levelCount = labels.length ? Math.max(...labels) + 1 : 0
-    for (let k = 0; k < levelCount; k++) {
-      const list = normal.filter((_, i) => labels[i] === k)
+    // the metro platforms: one underground group below the rest (listed after the surface groups, which stay the station's main one)
+    const deepDirs = deep.map((e) => lineDirectionAtStation(doc, e.line, st.id) ?? { x: e.tx, z: e.tz })
+    deep.forEach((e, i) => {
+      e.tx = deepDirs[i].x
+      e.tz = deepDirs[i].z
+    })
+    for (let k = 0; k < levelCount + (deep.length ? 1 : 0); k++) {
+      const isDeep = k >= levelCount
+      const list = isDeep ? deep : normal.filter((_, i) => labels[i] === k)
       const mean = meanDirection(list.map((e) => ({ x: e.tx, z: e.tz })))
       let ax = mean.x
       let az = mean.z
-      const resolved = resolveDesign(st, [...new Set(list.map((e) => e.line.operator))], k)
+      const groupOps = [...new Set(list.map((e) => e.line.operator))]
+      const designLevel = isDeep ? 0 : k
+      const resolved = onlyTrams(groupOps) ? resolveDesign(TRAM_STATION, groupOps, designLevel) : resolveDesign(st, groupOps, designLevel)
       if (resolved.angle !== null) {
         const a = (resolved.angle * Math.PI) / 180
         ax = Math.cos(a)
         az = -Math.sin(a)
       }
-      const lift = levelCount === 1 && isUndergroundStation(doc, st) ? UG_LIFT : levelHeight(levelCount, k)
+      const lift = isDeep || (levelCount === 1 && isUndergroundStation(doc, st)) ? UG_LIFT : levelHeight(levelCount, k)
       const g: StationGroup = {
         index: groups.length,
         kind: 'main',
-        level: k,
+        level: designLevel,
         lift,
         ax,
         az,
         curv: 0,
         annex: -1,
+        halt: onlyTrams(groupOps),
         angle: Math.atan2(-az, ax),
         ox: sx,
         oz: sz,
@@ -908,6 +954,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
           az: e.tz,
           curv: 0,
           annex: -1,
+          halt: true,
           angle: Math.atan2(-e.tz, e.tx),
           ox: sx,
           oz: sz,
@@ -929,10 +976,10 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       const ops = [...new Set(list.map((e) => e.line.operator))]
       if (g.kind === 'tram') {
         g.design = resolveDesign(TRAM_STATION, ['tram'])
-        g.layout = scaleLayout(layoutStation(g.design, minLen(['tram'])), RAIL)
+        g.layout = scaleLayout(layoutStation(g.design, minLen(['tram'])), TRAM)
       } else {
-        g.design = resolveDesign(st, ops, g.level)
-        g.layout = scaleLayout(layoutStation(g.design, minLen(ops)), RAIL)
+        g.design = g.halt ? resolveDesign(TRAM_STATION, ops, g.level) : resolveDesign(st, ops, g.level)
+        g.layout = scaleLayout(layoutStation(g.design, minLen(ops)), railOf(g.halt ? 'tram' : 'sbahn'))
       }
     }
     // station tracks every line uses, and the unused ones that become sidings
@@ -1077,6 +1124,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const px = c.pts.slice(iA, iB + 1).map((p) => p.x)
     const pz = c.pts.slice(iA, iB + 1).map((p) => p.z)
     const pt = tangents(px, pz)
+    // everything on this line is built to the scale of its operator (a tram is much smaller than a train)
+    const tOff = TRACK_OFFSET * railOf(line.operator)
     const cum0 = c.cum.slice(iA, iB + 1).map((d) => d - c.cum[iA])
 
     const info = raw.map((r, k) => {
@@ -1171,6 +1220,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       cx,
       cz,
       cx.map((_, j) => j < 3 || j > m - 4 || w[j] > 0.995),
+      // a smaller vehicle follows a tighter bend
+      MAX_TURN * (RAIL / railOf(line.operator)),
     )
     const ct = tangents(cx, cz)
     const cum: number[] = [0]
@@ -1198,8 +1249,8 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     const bx: number[] = []
     const bz: number[] = []
     for (let j = 0; j < m; j++) {
-      const f = trackAt(j, TRACK_OFF, (k) => info[k].zF)
-      const b = trackAt(j, -TRACK_OFF, (k) => info[k].zB)
+      const f = trackAt(j, tOff, (k) => info[k].zF)
+      const b = trackAt(j, -tOff, (k) => info[k].zB)
       fx.push(f.x)
       fz.push(f.z)
       bx.push(b.x)
@@ -1269,7 +1320,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         const Z: number[] = []
         const Y: number[] = []
         for (let j = ja; j <= jb; j++) {
-          const p = trackAt(j, sp.side === 'f' ? TRACK_OFF : -TRACK_OFF, (k) => (k === s.k ? sp.zt : 0))
+          const p = trackAt(j, sp.side === 'f' ? tOff : -tOff, (k) => (k === s.k ? sp.zt : 0))
           X.push(p.x)
           Z.push(p.z)
           Y.push(cy[j])

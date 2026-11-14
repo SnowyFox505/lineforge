@@ -3,8 +3,9 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useEditor } from '../store/editorStore'
 import { followState } from './follow'
-import { RAIL } from '../model/scale'
-import { LAND_Y, RAIL_Y } from './heights'
+import { railOf } from '../model/scale'
+import { LAND_Y, RAIL_Y, TRAM_ROAD_TOP } from './heights'
+import { TRAM_DIP } from './network3d'
 import type { Network3D } from './network3d'
 import { bindNet } from '../sim/world'
 import { carPoses } from './trainSim'
@@ -14,6 +15,16 @@ const qYaw = new THREE.Quaternion()
 const qPitch = new THREE.Quaternion()
 const AXIS_Y = new THREE.Vector3(0, 1, 0)
 const AXIS_Z = new THREE.Vector3(0, 0, 1)
+
+/**
+ * Height of a car's frame of reference: the car is built at design size and scaled down about the ground. A tram's track
+ * lies in the street, which is flush with the ground (its samples are lowered by TRAM_DIP): the wheels have to stand on
+ * the rails in the road, not sink into it.
+ */
+function carLift(kind: string): number {
+  const s = railOf(kind)
+  return LAND_Y * (1 - s) + (kind === 'tram' ? TRAM_DIP + (TRAM_ROAD_TOP + 0.008 - LAND_Y) - s * (RAIL_Y - LAND_Y) : 0)
+}
 
 /** All trains of the network, driving back and forth on their lines (see trainSim for the rules; the clock is the world's, see sim/world). */
 export default function Trains3D({ net }: { net: Network3D }) {
@@ -72,7 +83,7 @@ export default function Trains3D({ net }: { net: Network3D }) {
                 ;(groups.current[ti] ??= [])[ci] = g
               }}
             >
-              <group position={[0, LAND_Y * (1 - RAIL), 0]} scale={RAIL}>
+              <group position={[0, carLift(tr.spec.kind), 0]} scale={railOf(tr.spec.kind)}>
                 <CarMesh spec={tr.spec} index={ci} color={tr.color} />
               </group>
             </group>

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { RAIL } from '../model/scale'
-import { LAND_Y, RAIL_Y } from './heights'
+import { RAIL, TRAM } from '../model/scale'
+import { LAND_Y, RAIL_Y, TRAM_ROAD_TOP } from './heights'
 import { UG_COVER } from '../model/profiles'
 import { xrayMaterial } from './xray'
 import { addBridge } from './Bridges3D'
@@ -154,21 +154,24 @@ function addStreetTrack(b: Bufs, X: number[], Z: number[], Y: number[], TX: numb
   for (let j = 0; j < n - 1; j++) {
     const na = { x: -TZ[j], z: TX[j] }
     const nc = { x: -TZ[j + 1], z: TX[j + 1] }
-    for (const off of [-0.085 * RAIL, 0.085 * RAIL]) {
-      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.07 * RAIL, 0.05 * RAIL, LAND_Y + 0.04, 0.03))
+    for (const off of [-0.085 * TRAM, 0.085 * TRAM]) {
+      b.rails.push(boxAlong3(X[j] + na.x * off, Y[j] + TRAM_DIP, Z[j] + na.z * off, X[j + 1] + nc.x * off, Y[j + 1] + TRAM_DIP, Z[j + 1] + nc.z * off, 0.07 * TRAM, 0.012, TRAM_ROAD_TOP - 0.004, 0.02))
     }
   }
 }
+
+/** Half the width of the street a tram runs on: just wider than its two tracks with a car on each; the whole street is about as wide as those of the map */
+const ROAD_HALF = 0.5 * TRAM
 
 /** The street a tram runs on: asphalt strip with kerbs along the whole line. */
 function addRoad(b: Bufs, ln: LineNet) {
   for (let j = 0; j < ln.n - 1; j++) {
     const a = { x: ln.cx[j], z: ln.cz[j], y: ln.cy[j] + TRAM_DIP }
     const c = { x: ln.cx[j + 1], z: ln.cz[j + 1], y: ln.cy[j + 1] + TRAM_DIP }
-    b.roads.push(boxAlong3(a.x, a.y, a.z, c.x, c.y, c.z, 1.15 * RAIL, 0.05, LAND_Y - 0.01, 0.1))
+    b.roads.push(boxAlong3(a.x, a.y, a.z, c.x, c.y, c.z, ROAD_HALF * 2, TRAM_ROAD_TOP - (LAND_Y - 0.01), LAND_Y - 0.01, 0.05))
     for (const sgn of [-1, 1]) {
-      const o = 0.6 * RAIL * sgn
-      b.curbs.push(boxAlong3(a.x - ln.tz[j] * o, a.y, a.z + ln.tx[j] * o, c.x - ln.tz[j + 1] * o, c.y, c.z + ln.tx[j + 1] * o, 0.14 * RAIL, 0.08, LAND_Y - 0.01, 0.1))
+      const o = ROAD_HALF * sgn
+      b.curbs.push(boxAlong3(a.x - ln.tz[j] * o, a.y, a.z + ln.tx[j] * o, c.x - ln.tz[j + 1] * o, c.y, c.z + ln.tx[j + 1] * o, 0.12 * TRAM, TRAM_ROAD_TOP - (LAND_Y - 0.01) + 0.012, LAND_Y - 0.01, 0.05))
     }
   }
 }

@@ -205,7 +205,7 @@ describe('3D network geometry', () => {
     expect(net.lines.reduce((n, l) => n + l.sidings.length, 0)).toBeGreaterThan(0)
   })
 
-  it('keeps the tracks of one direction together where two lines share a corridor (no swapping pairs)', () => {
+  it('lets two lines that run the same stretch share their rails', () => {
     let d = city()
     d = station(d, 'a', 60, 130)
     d = station(d, 'b', 60, 60)
@@ -233,13 +233,13 @@ describe('3D network geometry', () => {
         }
       }
       const lat = (x: number, z: number) => (x - g.cx[j]) * nx + (z - g.cz[j]) * nz
-      // both lines run the same way: every `b` track must lie on one side of every `f` track
+      // both lines run the same way: they use the very same two tracks (one along, one against the direction of travel)
       const bs = [lat(g.bx[j], g.bz[j]), lat(t.bx[best], t.bz[best])]
       const fs = [lat(g.fx[j], g.fz[j]), lat(t.fx[best], t.fz[best])]
-      expect(Math.max(...bs)).toBeLessThan(Math.min(...fs))
-      // and the four tracks do not lie on top of each other
-      const all = [...bs, ...fs].sort((p, q) => p - q)
-      for (let i = 1; i < all.length; i++) expect(all[i] - all[i - 1]).toBeGreaterThan(0.1)
+      expect(Math.abs(bs[0] - bs[1])).toBeLessThan(0.05)
+      expect(Math.abs(fs[0] - fs[1])).toBeLessThan(0.05)
+      // and the two tracks are a pair apart, not on top of each other
+      expect(Math.min(...fs) - Math.max(...bs)).toBeGreaterThan(0.1)
     }
   })
 

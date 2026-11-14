@@ -27,8 +27,10 @@ const key = (a: Pt, b: Pt) =>
  * Compute the polyline of every line in cell coordinates.
  * Lines that share a stretch of track run side by side, `gap` cells apart (bundling),
  * with a stable lane order, mitred at bends. Coordinates are lattice points; callers add 0.5 for the cell centre.
+ * With `share` the lines of one kind that run the same stretch stay on ONE lane (the 3D view lets them share their rails);
+ * heavy rail and trams still keep apart.
  */
-export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; source?: 'grid' | 'geo' } = {}): Record<string, Pt[]> {
+export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; source?: 'grid' | 'geo'; share?: boolean } = {}): Record<string, Pt[]> {
   const lines = Object.values(doc.lines)
   const lattices: Record<string, Pt[]> = {}
   // 'geo': the free curves of the map (lines on the same corridor get identical points); 'grid': the octilinear routes
@@ -136,12 +138,12 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
   const laneOffset = (k: string, id: string, tram: boolean) => {
     const e = lanes.get(k)!
     const mine = tram ? e.t : e.h
-    const wH = Math.max(0, e.h.length - 1) * gap
-    const wT = Math.max(0, e.t.length - 1) * gap
+    const wH = opts.share ? 0 : Math.max(0, e.h.length - 1) * gap
+    const wT = opts.share ? 0 : Math.max(0, e.t.length - 1) * gap
     const sep = e.h.length && e.t.length ? gap * 2.4 : 0
     const total = wH + sep + wT
     const centre = tram ? total / 2 - wT / 2 : -total / 2 + wH / 2
-    return centre + (mine.indexOf(id) - (mine.length - 1) / 2) * gap
+    return centre + (opts.share ? 0 : (mine.indexOf(id) - (mine.length - 1) / 2) * gap)
   }
 
   const result: Record<string, Pt[]> = {}
