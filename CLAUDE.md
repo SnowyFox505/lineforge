@@ -16,7 +16,7 @@ pnpm lint                                  # oxlint (some react-compiler warning
 pnpm build                                 # tsc -b && vite build; check the exit code before pushing
 ```
 
-TypeScript is strict with `erasableSyntaxOnly` (no constructor parameter properties, no enums) and `noUnusedLocals`. Pushing to `main` deploys to Vercel; push only when the owner says so. `lineforge-app.vercel.app` is a manual alias that must be re-pointed after each deploy (the old `lineforge-seven.vercel.app` follows automatically).
+TypeScript is strict with `erasableSyntaxOnly` (no constructor parameter properties, no enums) and `noUnusedLocals`. Pushing to `main` deploys to Vercel. Since 2026-11-15 the owner wants finished work committed and pushed without asking, but only when tests, lint and build are green. `lineforge-app.vercel.app` is a manual alias that must be re-pointed after each deploy (the old `lineforge-seven.vercel.app` follows automatically).
 
 ## Architecture
 

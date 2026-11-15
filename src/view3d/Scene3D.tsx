@@ -198,6 +198,8 @@ function Stations({ net }: { net: Network3D }) {
           <mesh
             position={[0, LAND_Y + 0.5, 0]}
             onClick={(e) => {
+              // a drag that happens to end over a station is no tap (the finger moved: the map was turned or moved)
+              if (e.delta > 6) return
               e.stopPropagation()
               setEdit(st.id)
             }}
