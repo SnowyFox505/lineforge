@@ -7,7 +7,7 @@ import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
 import { migrateLandmarks } from '../model/migrate'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
-import { applyStroke, moveStationTo, splitLegAt } from '../model/lineEdit'
+import { addStationOnLines, applyStroke, moveStationTo, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
 import { stationName, stationTypeAt } from '../model/stationType'
 import { poolFor, takeName } from '../model/names'
 import { nameWaterAt, removeWaterName as removeWaterOf, renameWater as renameWaterOf, rerollWaterName as rerollWater, setWaterKind as setWaterKindOf } from '../model/waters'
@@ -19,7 +19,7 @@ setAutoFreeze(false)
 
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
-export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName' | 'forest' | 'mountain'
+export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName' | 'forest' | 'mountain' | 'legSmooth' | 'legRebuild'
 /** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
 export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
@@ -36,6 +36,8 @@ export function groupOf(tool: Tool): ToolGroup {
     case 'line':
     case 'station':
     case 'link':
+    case 'legSmooth':
+    case 'legRebuild':
       return 'infra'
     case 'city':
     case 'suburb':
@@ -81,6 +83,8 @@ interface EditorState {
   editStationId: string | null
   /** selected leg of a line in the 3D view (stretch between two stations) */
   selectedLeg: { lineId: string; leg: number } | null
+  /** the stretch that was drawn last (the smoothing button works on it) */
+  lastLeg: { lineId: string; leg: number } | null
   /** train the 3D camera follows (null: free camera) and how */
   followId: string | null
   followMode: FollowMode
@@ -102,6 +106,16 @@ interface EditorState {
   setFollow: (id: string | null) => void
   setFollowMode: (mode: FollowMode) => void
   updateLeg: (lineId: string, leg: number, patch: LegSettings) => void
+  /** Smooth one stretch a bit more; false when there is nothing to smooth */
+  smoothLegAt: (lineId: string, leg: number) => boolean
+  /** The Smooth button: the stretch drawn last, else the whole active line */
+  smoothActive: () => boolean
+  /** Throw away the waypoints of a stretch and route it again */
+  rebuildLegAt: (lineId: string, leg: number) => boolean
+  /** Remove a stretch (shortens the line or cuts it in two); false when the line has only this one */
+  removeLegAt: (lineId: string, leg: number) => boolean
+  /** Tap on a line or a crossing: a station on every line of that kind there. Null when none is close. */
+  addStationOnLine: (p: Pt, reach: number) => string | null
 
   loadDoc: (doc: CityDoc) => void
   /** `nameQueues`: names the player wants for the next districts, suburbs, waters and landscapes */
@@ -209,15 +223,16 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedWaterId: null,
     editStationId: null,
     selectedLeg: null,
+    lastLeg: null,
     followId: null,
     followMode: 'chase',
 
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
-    setTool: (tool) => set({ tool }),
+    setTool: (tool) => set({ tool, selectedLeg: null }),
     setBrush: (brush) => set({ brush }),
     setStationType: (stationType) => set({ stationType }),
     setActiveLine: (activeLineId) => set({ activeLineId }),
@@ -235,6 +250,46 @@ export const useEditor = create<EditorState>((set, get) => {
         if (!l) return
         l.legs = { ...(l.legs ?? {}), [leg]: { ...(l.legs?.[leg] ?? {}), ...patch } }
       }),
+
+    smoothLegAt: (lineId, leg) => {
+      const next = smoothLeg(get().doc, lineId, leg)
+      if (!next) return false
+      commit(next, { lastLeg: { lineId, leg } })
+      return true
+    },
+    smoothActive: () => {
+      const { doc, activeLineId, lastLeg } = get()
+      const line = lastLeg ? doc.lines[lastLeg.lineId] : undefined
+      if (lastLeg && line && lastLeg.leg < line.stations.length - 1) {
+        const next = smoothLeg(doc, lastLeg.lineId, lastLeg.leg)
+        if (!next) return false
+        commit(next)
+        return true
+      }
+      if (!activeLineId) return false
+      const next = smoothLine(doc, activeLineId)
+      if (!next) return false
+      commit(next)
+      return true
+    },
+    rebuildLegAt: (lineId, leg) => {
+      const next = rebuildLeg(get().doc, lineId, leg)
+      if (!next) return false
+      commit(next)
+      return true
+    },
+    removeLegAt: (lineId, leg) => {
+      const out = removeLeg(get().doc, lineId, leg)
+      if (!out) return false
+      commit(out.doc, { selectedLeg: null, lastLeg: null, activeLineId: get().activeLineId === lineId ? lineId : get().activeLineId })
+      return true
+    },
+    addStationOnLine: (p, reach) => {
+      const out = addStationOnLines(get().doc, p, reach)
+      if (!out) return null
+      commit(out.doc, { selectedStationId: out.created[0] ?? null })
+      return out.created[0] ?? null
+    },
 
     loadDoc: (doc) =>
       set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
@@ -539,7 +594,7 @@ export const useEditor = create<EditorState>((set, get) => {
       const { doc, stationType } = get()
       const out = applyStroke(doc, lineId, pts, { snap, stationType })
       if (!out) return false
-      commit(out.doc, { selectedStationId: out.created.length ? out.created[out.created.length - 1] : get().selectedStationId, selectedWaypoint: null })
+      commit(out.doc, { selectedStationId: out.created.length ? out.created[out.created.length - 1] : get().selectedStationId, selectedWaypoint: null, lastLeg: out.leg === undefined ? null : { lineId, leg: out.leg } })
       return true
     },
     splitLeg: (lineId, p, maxDist) => {

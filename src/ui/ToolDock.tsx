@@ -54,6 +54,8 @@ const TOOLBOXES: Toolbox[] = [
       { id: 'line', label: 'Linie', icon: 'route' },
       { id: 'station', label: 'Station', icon: 'pin' },
       { id: 'link', label: 'Verbinden', icon: 'link' },
+      { id: 'legSmooth', label: 'Glätten', icon: 'smooth' },
+      { id: 'legRebuild', label: 'Abschnitt', icon: 'cut' },
     ],
   },
   {
@@ -216,6 +218,8 @@ function LinePanel() {
   const selectedWp = useEditor((s) => s.selectedWaypoint)
   const lineMode = useEditor((s) => s.lineMode)
   const setLineMode = useEditor((s) => s.setLineMode)
+  const smoothActive = useEditor((s) => s.smoothActive)
+  const lastLeg = useEditor((s) => s.lastLeg)
   const active = activeId ? doc.lines[activeId] : undefined
   const lines = Object.values(doc.lines)
 
@@ -231,7 +235,7 @@ function LinePanel() {
                 ['connect', 'Stationen verbinden'],
               ] as const
             ).map(([m, label]) => (
-              <button key={m} onClick={() => setLineMode(m)} className={`rounded-[10px] px-2.5 py-1.5 transition-colors ${lineMode === m ? 'bg-white/90 text-black' : 'text-white/60'}`}>
+              <button key={m} onClick={() => setLineMode(m)} className={`rounded-[10px] px-2.5 py-1.5 transition-colors ${lineMode === m ? 'bg-white/90 text-[color:var(--bg)]' : 'text-white/60'}`}>
                 {label}
               </button>
             ))}
@@ -331,6 +335,15 @@ function LinePanel() {
                   Wegpunkt weg
                 </button>
               )}
+              {lineMode === 'draw' && active.stations.length >= 2 && (
+                <button
+                  className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs"
+                  onClick={() => smoothActive()}
+                  title={lastLeg && lastLeg.lineId === active.id ? 'Rundet den zuletzt gezeichneten Abschnitt ab (mehrmals tippen: noch runder)' : 'Rundet die ganze Linie ab'}
+                >
+                  Glätten
+                </button>
+              )}
               {(active.via ?? []).some((v) => v.length > 0) && (
                 <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => resetRoute(active.id)}>
                   Automatisch
@@ -340,6 +353,50 @@ function LinePanel() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+/** Tool 'legRebuild': a stretch of a line is chosen on the map, then it is laid again or removed. */
+function LegPanel() {
+  const doc = useEditor((s) => s.doc)
+  const sel = useEditor((s) => s.selectedLeg)
+  const rebuild = useEditor((s) => s.rebuildLegAt)
+  const remove = useEditor((s) => s.removeLegAt)
+  const line = sel ? doc.lines[sel.lineId] : undefined
+  const a = line ? doc.stations[line.stations[sel!.leg]] : undefined
+  const b = line ? doc.stations[line.stations[sel!.leg + 1]] : undefined
+  if (!sel || !line || !a || !b) {
+    return (
+      <div>
+        <div className="eyebrow mb-1">Abschnitt neu bauen oder löschen</div>
+        <p className="text-xs leading-snug text-white/50">Tippe auf eine Strecke zwischen zwei Stationen, um sie zu wählen.</p>
+      </div>
+    )
+  }
+  const only = line.stations.length < 3
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: line.color }} />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+          {line.name}: {a.name} → {b.name}
+        </span>
+      </div>
+      <div className="flex gap-2">
+        <button className="btn-soft flex-1 rounded-xl px-3 py-2 text-xs" onClick={() => rebuild(sel.lineId, sel.leg)}>
+          Neu verlegen
+        </button>
+        <button
+          className="btn-soft flex-1 rounded-xl px-3 py-2 text-xs text-red-300 disabled:opacity-40"
+          disabled={only}
+          title={only ? 'Die Linie hat nur diesen Abschnitt: lösche stattdessen die Linie' : 'Nimmt den Abschnitt heraus: am Ende wird die Linie kürzer, in der Mitte wird sie geteilt'}
+          onClick={() => remove(sel.lineId, sel.leg)}
+        >
+          Abschnitt entfernen
+        </button>
+      </div>
+      <p className="text-xs leading-snug text-white/50">„Neu verlegen“ wirft die Kurve weg und baut die Strecke zwischen den beiden Stationen neu. Die Stationen bleiben immer auf der Karte.</p>
     </div>
   )
 }
@@ -616,6 +673,13 @@ export default function ToolDock() {
               {tool === 'waterName' && <WaterPanel />}
               {tool === 'link' && <LinkPanel />}
               {tool === 'line' && <LinePanel />}
+              {tool === 'legSmooth' && (
+                <div>
+                  <div className="eyebrow mb-1">Abschnitt glätten</div>
+                  <p className="text-xs leading-snug text-white/50">Tippe auf eine Strecke zwischen zwei Stationen: Sie wird runder. Noch einmal tippen glättet weiter, zurück geht mit Rückgängig.</p>
+                </div>
+              )}
+              {tool === 'legRebuild' && <LegPanel />}
               {(tool === 'city' || tool === 'suburb' || tool === 'airport' || tool === 'forest' || tool === 'mountain') && <ZonePanel kind={tool} />}
               {tool === 'zoneErase' && (
                 <div>

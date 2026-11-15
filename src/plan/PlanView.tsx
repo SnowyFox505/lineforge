@@ -121,6 +121,12 @@ export default function PlanView() {
   const [flip, setFlip] = useState<{ scheme: string; theme: ThemeName } | null>(null)
   const theme: ThemeName = flip && flip.scheme === scheme ? flip.theme : scheme
   const [box, setBox] = useState({ w: 0, h: 0 })
+  // stations can only be moved on the plan while editing is on (off: a finger on a station just pans the plan)
+  const [edit, setEdit] = useState(false)
+  const editRef = useRef(false)
+  useEffect(() => {
+    editRef.current = edit
+  }, [edit])
   const T = THEMES[theme]
   const hasStations = Object.keys(doc.stations).length > 0
 
@@ -207,7 +213,7 @@ export default function PlanView() {
     }
     const down = (e: PointerEvent) => {
       const sid = stationOf(e.target)
-      if (sid && pts.size === 0) {
+      if (sid && pts.size === 0 && editRef.current) {
         drag = { id: sid, pointer: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false }
         el.setPointerCapture?.(e.pointerId)
         return
@@ -278,7 +284,7 @@ export default function PlanView() {
       // the pointer is captured by the plan, so look at what lies under it
       const under = document.elementsFromPoint(e.clientX, e.clientY).find((n) => n.closest('[data-station]'))
       const sid = under?.closest('[data-station]')?.getAttribute('data-station') ?? null
-      if (sid) {
+      if (sid && editRef.current) {
         useEditor.getState().unpinStation(sid)
         return
       }
@@ -658,6 +664,7 @@ export default function PlanView() {
 
       <div className="pointer-events-none absolute bottom-[98px] right-3 z-10 flex flex-col gap-2">
         {[
+          { icon: 'edit' as const, on: () => setEdit((v) => !v), label: edit ? 'Bearbeiten ausschalten' : 'Bearbeiten einschalten', active: edit },
           { icon: 'zoomin' as const, on: () => zoomAt(1.4, centre().x, centre().y), label: 'Vergrößern' },
           { icon: 'zoomout' as const, on: () => zoomAt(1 / 1.4, centre().x, centre().y), label: 'Verkleinern' },
           { icon: 'fit' as const, on: resetView, label: 'Einpassen' },
@@ -666,7 +673,14 @@ export default function PlanView() {
           { icon: 'download' as const, on: exportSvg, label: 'SVG exportieren' },
           { icon: 'image' as const, on: exportPng, label: 'PNG exportieren' },
         ].map((b) => (
-          <button key={b.label} onClick={b.on} aria-label={b.label} className="glass pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90">
+          <button
+            key={b.label}
+            onClick={b.on}
+            aria-label={b.label}
+            aria-pressed={'active' in b ? b.active : undefined}
+            title={b.label}
+            className={`pointer-events-auto grid h-11 w-11 place-items-center rounded-full active:scale-90 ${'active' in b && b.active ? 'btn-primary' : 'glass'}`}
+          >
             <Icon name={b.icon} size={19} />
           </button>
         ))}

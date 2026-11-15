@@ -285,6 +285,21 @@ export function nearestStation(doc: CityDoc, p: Pt, r: number, only?: (id: strin
   return best
 }
 
+/**
+ * Smooth the control points of one leg: the curve is evened out like a hand-drawn stroke and then rounded off
+ * `rounds` more times (every round takes out more of the wobble and widens the bends). The ends stay where they are.
+ * Returns the new control points (without the end stations).
+ */
+export function smoothLegPoints(curve: Pt[], rounds = 1): Pt[] {
+  if (curve.length < 4) return []
+  let dense = smoothStroke(curve)
+  for (let i = 0; i < rounds; i++) dense = smoothPass(smoothPass(dense, 4 + i), 6 + 2 * i)
+  const a = curve[0]
+  const b = curve[curve.length - 1]
+  dense = pullEnd(pullEnd(dense, true, a), false, b)
+  return strokeControlPoints(dense)
+}
+
 /** Move one end of a dense polyline onto `target`; the nearest `reach` samples follow with a fading shift. */
 export function pullEnd(dense: Pt[], atStart: boolean, target: Pt, reach = 8): Pt[] {
   const out = dense.map((p) => ({ ...p }))

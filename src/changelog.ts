@@ -28,6 +28,43 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-11-16',
+    headline: 'Linien nachbessern: glätten, neu verlegen, Stationen auf der Strecke',
+    changes: [
+      {
+        title: 'Glätten beim Zeichnen',
+        what: 'Im Linien-Werkzeug (Zeichnen) gibt es den Knopf „Glätten“. Er rundet die Strecke ab, die du zuletzt gezeichnet hast, und nimmt das Zittern der Hand heraus.',
+        how: 'Zeichne einen Abschnitt und tippe auf „Glätten“. Noch einmal tippen macht ihn noch runder. Hast du nichts gezeichnet, glättet der Knopf die ganze gewählte Linie. Rückgängig geht jederzeit.',
+        benefit: 'Schöne, flüssige Kurven, auch wenn der Strich nicht ganz ruhig war.',
+      },
+      {
+        title: 'Werkzeug „Glätten“',
+        what: 'Ein eigenes Werkzeug in Infrastruktur, mit dem du jede beliebige Strecke zwischen zwei Stationen glätten kannst.',
+        how: 'Infrastruktur → Glätten, dann auf die Strecke tippen. Jeder Tipp rundet sie etwas mehr ab. Die Stationen bleiben, wo sie sind.',
+        benefit: 'Du kannst alte, eckige Strecken nachträglich verschönern, ohne sie neu zu zeichnen.',
+      },
+      {
+        title: 'Abschnitt neu verlegen oder entfernen',
+        what: 'Das Werkzeug „Abschnitt“ wählt eine Strecke zwischen zwei Stationen. Du kannst sie neu verlegen lassen oder herausnehmen.',
+        how: 'Infrastruktur → Abschnitt, auf die Strecke tippen (sie wird hervorgehoben), dann „Neu verlegen“ oder „Abschnitt entfernen“. Am Ende der Linie wird sie kürzer, in der Mitte wird sie in zwei Linien geteilt (die zweite heißt zum Beispiel S1b). Die Stationen bleiben immer auf der Karte.',
+        benefit: 'Eine missglückte Strecke musst du nicht mehr mit der ganzen Linie wegwerfen.',
+      },
+      {
+        title: 'Station direkt auf die Strecke setzen',
+        what: 'Mit dem Stations-Werkzeug entsteht eine Station genau auf der Linie, wenn du darauf tippst. Laufen dort mehrere Linien zusammen oder kreuzen sie sich, halten alle dort.',
+        how: 'Infrastruktur → Station, dann auf eine Linie oder auf eine Kreuzung tippen. Tipp ins Freie baut wie bisher eine einzelne Station.',
+        benefit: 'Umsteigebahnhöfe an Kreuzungen entstehen mit einem einzigen Tipp.',
+      },
+      {
+        title: 'Netzplan: Bearbeiten an und aus',
+        what: 'Stationen im Netzplan lassen sich nur noch verschieben, wenn du das Bearbeiten einschaltest.',
+        how: 'Im Netzplan rechts oben auf den Stift tippen. Dann Stationen ziehen, Doppeltipp auf eine Station löst sie wieder. Ausgeschaltet bewegst du mit dem Finger nur den Plan.',
+        benefit: 'Beim Verschieben und Zoomen im Netzplan ziehst du nicht mehr aus Versehen eine Station weg.',
+      },
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-11-16',
     headline: 'Ruhigere Flächen und eigene Verläufe',

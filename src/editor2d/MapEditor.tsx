@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { lineWidthPx } from './trains2d'
-import { nearestLeg } from '../model/lineEdit'
+import { legCurve } from '../model/geo'
+import { nearestLeg, nearestLegAny } from '../model/lineEdit'
 import { findBridges, makeSampler } from '../model/terrainField'
 import { WATER } from '../model/types'
 import { effectiveTypes } from '../plan/glyphs'
@@ -131,6 +132,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     return out
   }, [terrainPaths, linePaths, doc.size])
   const selectedWaypoint = useEditor((s) => s.selectedWaypoint)
+  const selectedLeg = useEditor((s) => s.selectedLeg)
   const selectedPoiId = useEditor((s) => s.selectedPoiId)
   const selectedWaterId = useEditor((s) => s.selectedWaterId)
   const wpDrag = useRef<{ lineId: string; k: number; j: number; moved: boolean } | null>(null)
@@ -301,6 +303,33 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       ctx.stroke(path)
       ctx.setLineDash([])
       ctx.globalAlpha = 1
+    }
+
+    // --- The stretch chosen with the stretch tool --------------------------------
+    const sl = tool === 'legRebuild' ? selectedLeg : null
+    const slLine = sl ? doc.lines[sl.lineId] : undefined
+    if (sl && slLine && sl.leg < slLine.stations.length - 1) {
+      const curve = legCurve(doc, slLine, sl.leg)
+      if (curve.length > 1) {
+        ctx.save()
+        ctx.beginPath()
+        curve.forEach((q, i) => {
+          const px = ox + (q.x + 0.5) * s
+          const py = oy + (q.y + 0.5) * s
+          if (i === 0) ctx.moveTo(px, py)
+          else ctx.lineTo(px, py)
+        })
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.strokeStyle = 'rgba(5,8,12,0.7)'
+        ctx.lineWidth = lineWidthPx(slLine.operator, s) + 9
+        ctx.stroke()
+        ctx.strokeStyle = getAccent().hex
+        ctx.lineWidth = lineWidthPx(slLine.operator, s) + 5
+        ctx.setLineDash([10, 7])
+        ctx.stroke()
+        ctx.restore()
+      }
     }
 
     // --- Waypoints of the line being edited -----------------------------------
@@ -530,7 +559,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
+  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
 
   useEffect(() => {
     userMoved.current = false
@@ -717,11 +746,27 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       } else st.selectStation(hit)
       return
     }
+    if (st.tool === 'legSmooth' || st.tool === 'legRebuild') {
+      const near = nearestLegAny(st.doc, toLattice(p), Math.max(1, 22 / view.current.s))
+      if (!near) {
+        st.selectLeg(null)
+        flash('Tippe genau auf eine Strecke zwischen zwei Stationen')
+      } else if (st.tool === 'legSmooth') {
+        if (!st.smoothLegAt(near.lineId, near.k)) flash('Diese Strecke ist schon glatt')
+      } else {
+        st.selectLeg({ lineId: near.lineId, leg: near.k })
+      }
+      return
+    }
     if (st.tool === 'station') {
       if (hit) st.selectStation(hit)
       else {
-        const c = toCell(p)
-        st.addStation(c.x, c.y)
+        // a tap on a line (or a crossing of lines) puts the station on the line(s), else on the open ground
+        const onLine = st.addStationOnLine(toLattice(p), Math.max(0.9, 14 / view.current.s))
+        if (!onLine) {
+          const c = toCell(p)
+          st.addStation(c.x, c.y)
+        }
       }
     } else if (st.tool === 'line') {
       if (st.lineMode === 'draw') {
