@@ -90,13 +90,17 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
           float side = an.x > 0.5 ? (vWinN.x > 0.0 ? 1.0 : 2.0) : (vWinN.z > 0.0 ? 3.0 : 4.0);
           float h = winHash(id + vec2(seed, side * 17.0));
           float pane = winBand(f.x, 0.2, 0.8, fw.x) * winBand(f.y, 0.26, 0.82, fw.y);
-          float lit = step(0.58, h);
+          // every wall has its own share of lit windows (a quiet block, a busy one): near and far show the same share,
+          // so a far-away city is a mix of darker and brighter houses and not one flat glow
+          float frac = mix(0.1, 0.5, winHash(vec2(seed * 3.0 + 1.0, side)));
+          float lit = step(1.0 - frac, h);
           vec3 tint = mix(vec3(1.0, 0.76, 0.4), vec3(0.78, 0.9, 1.0), step(0.86, h));
           // far away or at a grazing angle the panes are smaller than a pixel: show their average instead
           // (first the on/off pattern fades to its mean, then the panes to a flat glow)
           float fwMax = max(fw.x, fw.y);
-          float litSoft = mix(lit, 0.42, smoothstep(0.08, 0.3, fwMax));
-          float average = 0.6 * 0.56 * 0.42;
+          float litSoft = mix(lit, frac, smoothstep(0.08, 0.3, fwMax));
+          // a little under the true mean: a whole city of walls glowing at the full mean looks like "every light is on"
+          float average = 0.6 * 0.56 * frac * 0.6;
           float glow = mix(pane * litSoft, average, smoothstep(0.25, 0.6, fwMax)) * inRange;
           totalEmissiveRadiance += tint * glow * uNight * 1.5;
         }
