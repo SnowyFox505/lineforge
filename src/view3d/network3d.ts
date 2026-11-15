@@ -595,17 +595,16 @@ export function groupTracks(lines: LineNet[]) {
   })
   const dF = lines.map((ln) => new Array<number>(ln.n).fill(0))
   const dB = lines.map((ln) => new Array<number>(ln.n).fill(0))
-  lines.forEach((la, a) => {
+  type Near = Map<number, { u: number; s: number; d: number }>
+  // pass 1: who runs alongside every sample of every line (and on which side)
+  const nearOf: (Near | null)[][] = lines.map((la, a) => {
     const tram = la.line.operator === 'tram'
-    // trams and heavy rail are never bundled together, so the whole bundle has the track spacing of this line
-    const TO = TRACK_OFFSET * railOf(la.line.operator)
-    const pitch = 2 * TO
+    const res: (Near | null)[] = new Array(la.n).fill(null)
     for (let j = 0; j < la.n; j++) {
       if (la.free[j] < 0.02) continue
       const nx = -la.tz[j]
       const nz = la.tx[j]
-      // the nearest sample of every other line that runs alongside
-      const near = new Map<number, { u: number; s: number; d: number }>()
+      const near: Near = new Map()
       const gx = Math.floor(la.cx[j] / cellSize)
       const gz = Math.floor(la.cz[j] / cellSize)
       for (let ox = -1; ox <= 1; ox++) {
@@ -613,6 +612,7 @@ export function groupTracks(lines: LineNet[]) {
           for (const o of grid.get(`${gx + ox},${gz + oz}`) ?? []) {
             if (o.li === a) continue
             const lb = lines[o.li]
+            // trams and heavy rail are never bundled together
             if ((lb.line.operator === 'tram') !== tram || lb.free[o.j] < 0.02) continue
             const dx = lb.cx[o.j] - la.cx[j]
             const dz = lb.cz[o.j] - la.cz[j]
@@ -625,25 +625,66 @@ export function groupTracks(lines: LineNet[]) {
           }
         }
       }
-      if (!near.size) continue
-      // every track of the bundle with the side it uses now (lateral position across the bundle) and its direction
-      const members = [{ u: 0, s: 1, self: true }, ...[...near.values()].map((v) => ({ u: v.u, s: v.s, self: false }))]
-      const tracks: { pos: number; dir: number; self: boolean; f: boolean }[] = []
+      if (near.size) res[j] = near
+    }
+    return res
+  })
+  // pass 2: which side another line is on is decided ONCE for the whole stretch they run together (a run of samples),
+  // not sample by sample. The centre lines of two lines wobble against each other (different neighbours at the next
+  // station bend their curves differently); sorting by the momentary position let a train hop to the other pair of rails.
+  const RUN_GAP = 16
+  const sideOf: Map<number, number>[][] = lines.map((la, a) => {
+    const res: Map<number, number>[] = la.cx.map(() => new Map<number, number>())
+    const runs = new Map<number, { from: number; to: number; sum: number }[]>()
+    for (let j = 0; j < la.n; j++) {
+      const near = nearOf[a][j]
+      if (!near) continue
+      for (const [b, v] of near) {
+        const list = runs.get(b) ?? []
+        runs.set(b, list)
+        const last = list[list.length - 1]
+        if (last && j - last.to <= RUN_GAP) {
+          last.to = j
+          last.sum += v.u
+        } else list.push({ from: j, to: j, sum: v.u })
+      }
+    }
+    for (const [b, list] of runs) {
+      for (const r of list) {
+        if (Math.abs(r.sum) < 1e-6) continue
+        const sg = r.sum < 0 ? -1 : 1
+        for (let j = r.from; j <= r.to; j++) res[j].set(b, sg)
+      }
+    }
+    return res
+  })
+  // pass 3: the tracks of every bundle and the lane each line takes
+  lines.forEach((la, a) => {
+    // trams and heavy rail are never bundled together, so the whole bundle has the track spacing of this line
+    const TO = TRACK_OFFSET * railOf(la.line.operator)
+    const pitch = 2 * TO
+    for (let j = 0; j < la.n; j++) {
+      const near = nearOf[a][j]
+      if (!near) continue
+      // every track of the bundle with the side it uses now (lateral position across the bundle) and its direction;
+      // `key` only sorts: the side comes from the whole stretch, the distance from the momentary position
+      const members = [{ u: 0, key: 0, s: 1, self: true }, ...[...near].map(([b, v]) => ({ u: v.u, key: (sideOf[a][j].get(b) ?? (v.u < 0 ? -1 : 1)) * (Math.abs(v.u) + 1e-3), s: v.s, self: false }))]
+      const tracks: { pos: number; key: number; dir: number; self: boolean; f: boolean }[] = []
       // lines on the very same track (the same stretch of the same kind) share it: one slot, not two side by side
-      const addTrack = (pos: number, dir: number, self: boolean, f: boolean) => {
+      const addTrack = (pos: number, key: number, dir: number, self: boolean, f: boolean) => {
         const hit = tracks.find((t) => t.dir === dir && Math.abs(t.pos - pos) < 0.05)
-        if (!hit) tracks.push({ pos, dir, self, f })
+        if (!hit) tracks.push({ pos, key, dir, self, f })
         else if (self) {
           hit.self = true
           hit.f = f
         }
       }
       for (const m of members) {
-        addTrack(m.u + m.s * TO, m.s, m.self, true)
-        addTrack(m.u - m.s * TO, -m.s, m.self, false)
+        addTrack(m.u + m.s * TO, m.key + m.s * TO, m.s, m.self, true)
+        addTrack(m.u - m.s * TO, m.key - m.s * TO, -m.s, m.self, false)
       }
       // against the direction of travel on the left (-normal), along it on the right: the same order as a line's own pair
-      const ordered = [...tracks.filter((t) => t.dir < 0).sort((p, q) => p.pos - q.pos), ...tracks.filter((t) => t.dir > 0).sort((p, q) => p.pos - q.pos)]
+      const ordered = [...tracks.filter((t) => t.dir < 0).sort((p, q) => p.key - q.key), ...tracks.filter((t) => t.dir > 0).sort((p, q) => p.key - q.key)]
       const centre = members.reduce((s, m) => s + m.u, 0) / members.length
       ordered.forEach((t, i) => {
         if (!t.self) return

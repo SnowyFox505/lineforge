@@ -243,6 +243,46 @@ describe('3D network geometry', () => {
     }
   })
 
+  it('keeps a line on its own pair of rails along a corridor (no hop to the other pair)', () => {
+    // two S-Bahn lines run side by side for a long way; their centre lines wobble against each other by less than a lane,
+    // which used to swap their order (and send a train across to the other pair) wherever the wobble changed sign
+    let d = city()
+    for (const [id, x, y] of [['a', 24, 100], ['b', 92, 35], ['e', 60, 114], ['g', 91, 83]] as [string, number, number][]) d = station(d, id, x, y)
+    d = line(d, 'L1', 'sbahn', ['b', 'a', 'g', 'e'])
+    d = line(d, 'L2', 'sbahn', ['b', 'g', 'e'])
+    const net = buildNetwork3D(d)
+    const [A, B] = net.lines
+    let prev = 0
+    let flips = 0
+    for (let j = 0; j < A.n; j++) {
+      if (A.free[j] < 0.99) {
+        prev = 0
+        continue
+      }
+      let best = -1
+      let bd = Infinity
+      for (let k = 0; k < B.n; k++) {
+        if (B.free[k] < 0.99) continue
+        const dd = Math.hypot(B.cx[k] - A.cx[j], B.cz[k] - A.cz[j])
+        if (dd < bd) {
+          bd = dd
+          best = k
+        }
+      }
+      // only where they really run side by side in the same direction
+      if (best < 0 || bd > 2.5 || A.tx[j] * B.tx[best] + A.tz[j] * B.tz[best] < 0.995) {
+        prev = 0
+        continue
+      }
+      const diff = (A.fx[j] - B.fx[best]) * -A.tz[j] + (A.fz[j] - B.fz[best]) * A.tx[j]
+      const sg = Math.abs(diff) < 0.04 ? 0 : diff < 0 ? -1 : 1
+      if (sg === 0) continue
+      if (prev !== 0 && sg !== prev) flips++
+      prev = sg
+    }
+    expect(flips).toBe(0)
+  })
+
   it('lifts one of two crossing lines over the other outside of stations', () => {
     let d = city()
     d = station(d, 'a', 20, 60)
