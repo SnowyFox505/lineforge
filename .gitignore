@@ -26,6 +26,8 @@ dist-ssr
 # Local tooling and private reference material
 .claude/
 Bilder von mir für dich/
+# The owner's local to-do list (never pushed)
+TODO.md
 
 .vercel
 .env.local

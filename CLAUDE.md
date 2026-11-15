@@ -41,6 +41,11 @@ Game time (`sim/clock.ts`, `gameTime.minutes`): one real minute is one game hour
 ### 3D
 `view3d/network3d.ts` (pure, no three.js import) builds one geometry per line (axis + forward/return tracks as samples) from `layoutLines`; rails, bridges and trains all read the same arrays. Stations (`model/stationDesign.ts`, `stationGroups.ts`) are built at design size and scaled by `model/scale.ts` `railOf(operator)` (`RAIL` for trains, the much smaller `TRAM` for trams, so a tram fits into a street). A metro line (`ubahn`) never surfaces: at a station that is not underground (and has no hand-set `Station.underground`) it gets its own platform group at `UG_LIFT` below the surface groups. A station served only by trams is a plain halt (`StationGroup.halt`: shelter and sign, no hall or building). Curved stations bend through `Bend.tsx` (a vertex shader); materials must chain `onBeforeCompile` instead of replacing it. Following a train: every car has an invisible tap box (`HIT_*` in `Trains3D.tsx`, at least 1.5 world units wide) and the train under the pointer is remembered on press (`trainPick` in `follow.ts`), because the train has moved on by the time the finger lifts; `LegPicker` asks `takeTrainPick()` before it opens a stretch of track. Besides chase, side and cockpit there is a free view (`FollowMode` `free`): the orbit controls stay on, the target follows the train; dragging in a fixed view switches to it (`FollowCam`), and a new follow starts in chase again. The follow camera uses an x-ray shader (`view3d/xray.ts`) so trains stay visible underground and inside station halls.
 
+## Local to-do list and link preview
+
+- `TODO.md` (project root, gitignored, never pushed) is the owner's running to-do list in German: add wishes, tick finished ones `[x]` and move them under "Erledigt"; never delete entries.
+- The link preview (WhatsApp, iMessage ...) comes from the Open Graph tags in `index.html` and `public/og-image.png` (1200x630). The tags need the absolute address `https://lineforge-app.vercel.app`; change title, text and picture there.
+
 ## Gotchas
 
 - On Windows, write Python patch scripts to files (heredocs with mixed quotes break) and open files with `encoding='utf-8'`.
