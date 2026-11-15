@@ -1,6 +1,5 @@
 import { buildField, WATER_THRESHOLD } from '../model/terrainField'
 import { airportLayout } from '../model/airport'
-import { STREET_AVENUE, STREET_FINE, STREET_MAJOR, STREET_MINOR } from '../model/scale'
 import { streetPaths } from './streets'
 import { ZONE_STYLE } from './zoneGfx'
 import type { ZoneGfx } from './zoneGfx'
@@ -182,28 +181,27 @@ function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', siz
     ctx.save()
     ctx.clip(patch.clip)
     ctx.strokeStyle = 'rgba(255,255,255,0.95)'
-    // the real width of the street, but never thinner than a few pixels when zoomed out
-    ctx.lineWidth = Math.max(STREET_MAJOR, 2.4 / s)
+    ctx.lineWidth = Math.max(0.5, 2.4 / s)
     ctx.stroke(patch.major)
     if (s >= 2.2) {
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'
-      ctx.lineWidth = Math.max(STREET_MINOR, 1.3 / s)
+      ctx.lineWidth = Math.max(0.22, 1.3 / s)
       ctx.stroke(patch.minor)
     }
     if (s >= 7) {
       ctx.strokeStyle = 'rgba(255,255,255,0.6)'
-      ctx.lineWidth = Math.max(STREET_FINE, 0.9 / s)
+      ctx.lineWidth = Math.max(0.1, 0.9 / s)
       ctx.stroke(patch.fine)
     }
     ctx.restore()
     // the border between two neighbourhoods is a street of its own
     ctx.strokeStyle = 'rgba(255,255,255,0.85)'
-    ctx.lineWidth = Math.max(STREET_MINOR, 1.6 / s)
+    ctx.lineWidth = Math.max(0.3, 1.6 / s)
     ctx.stroke(patch.outline)
   }
   // long avenues and the ring road
   ctx.strokeStyle = 'rgba(255,255,255,1)'
-  ctx.lineWidth = Math.max(STREET_AVENUE, 3.2 / s)
+  ctx.lineWidth = Math.max(0.7, 3.2 / s)
   ctx.lineCap = 'round'
   ctx.stroke(p.avenues)
 }

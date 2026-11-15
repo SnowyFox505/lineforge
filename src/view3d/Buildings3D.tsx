@@ -127,8 +127,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
         h = 1.0 + lot.blockRand * 0.5 + dens * 0.8 + (lot.rand - 0.5) * 0.3
         if (dens > 0.8 && lot.blockRand > 0.94 && lot.rand > 0.5) h += 1.4 + lot.rand * 1.2
       } else {
-        // a detached house of two storeys (about 6 to 9 m, one cell is 8 m)
-        h = 0.7 + lot.rand * 0.4
+        h = 0.34 + lot.rand * 0.2
       }
       h *= 0.55 + 0.45 * edge
       out.push({

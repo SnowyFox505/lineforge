@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
 import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
-import { RAIL } from '../model/scale'
-import { buildNetwork3D, BUFFER_CLEAR, posOn } from './network3d'
+import { RAIL, railOf } from '../model/scale'
+import { buildNetwork3D, BUFFER_CLEAR, posOn, STEP } from './network3d'
 import { carPoses, Sim } from './trainSim'
 
 function city(): CityDoc {
@@ -80,10 +80,11 @@ describe('train operation', () => {
           // a car rests on two bogies on the rails: in a curve its middle sits a little inside
           expect(best).toBeLessThan(0.2)
         }
-        // the centre of the train never gets closer to a buffer than half its length + clearance
-        const half = ((tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) * RAIL) / 2
-        expect(tr.s - half).toBeGreaterThan(0.5)
-        expect(tr.net.total - (tr.s + half)).toBeGreaterThan(0.5)
+        // the train never reaches a buffer: the planned clearance behind the platform is BUFFER_CLEAR, but the run-out
+        // is cut at a sample of the curve (STEP apart), so it may be up to a step shorter
+        const half = ((tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) * railOf(tr.net.line.operator)) / 2
+        expect(tr.s - half).toBeGreaterThan(BUFFER_CLEAR - STEP)
+        expect(tr.net.total - (tr.s + half)).toBeGreaterThan(BUFFER_CLEAR - STEP)
       }
     }
   })
