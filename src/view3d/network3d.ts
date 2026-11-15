@@ -52,8 +52,19 @@ export interface Stop {
   zB: number
   half: number
   taper: number
+  /** length of the crossover behind a terminal platform, where a train that changes ends moves to the other track (0 elsewhere) */
+  cross: number
   /** platform height above the ground (0, or a multiple of LEVEL_H) */
   lift: number
+}
+
+/** The short connecting track between the two tracks of a line behind a terminal platform. */
+export interface Crossover {
+  x: number[]
+  z: number[]
+  y: number[]
+  tx: number[]
+  tz: number[]
 }
 
 export interface Bridge {
@@ -116,6 +127,8 @@ export interface LineNet {
   bridges: Bridge[]
   legs: LegRange[]
   sidings: Siding[]
+  /** one behind each terminal platform: the rails a train takes to the other track after changing ends */
+  crossovers: Crossover[]
 }
 
 /** One platform complex of a station. Lines that cross at a steep angle do not share it. */
@@ -740,6 +753,50 @@ export function groupTracks(lines: LineNet[]) {
     ln.btx = bt.tx
     ln.btz = bt.tz
   })
+}
+
+/** A crossover is about this many times as long as the two tracks are apart (a gentle switch angle) */
+const CROSS_RATIO = 8
+/** Shortest crossover */
+const CROSS_MIN = 1.0
+
+/**
+ * A train that changes ends at a terminal leaves on the other track than it arrived on. It does so on a short crossover
+ * right behind the platform (rails of its own, so the train never drives across the bed between the tracks).
+ * Both the rails and the train read the same blend: `Stop.cross` is its length, the shape is smooth01 from the arrival
+ * track to the departure track (see `carPoses`).
+ */
+export function addCrossovers(lines: LineNet[]) {
+  for (const ln of lines) {
+    ln.crossovers = []
+    if (ln.stops.length < 2) continue
+    for (const [stop, out, from, to] of [
+      [ln.stops[0], 1, 'b', 'f'],
+      [ln.stops[ln.stops.length - 1], -1, 'f', 'b'],
+    ] as [Stop, 1 | -1, Which, Which][]) {
+      const d0 = stop.d + out * stop.half
+      const a = posOn(ln, 'f', d0)
+      const b = posOn(ln, 'b', d0)
+      const sep = Math.hypot(a.x - b.x, a.z - b.z)
+      stop.cross = Math.min(stop.taper, Math.max(CROSS_MIN * (railOf(ln.line.operator) / RAIL + 0.5), CROSS_RATIO * sep))
+      const x: number[] = []
+      const z: number[] = []
+      const y: number[] = []
+      const K = 12
+      for (let k = 0; k <= K; k++) {
+        const t = k / K
+        const d = d0 + out * stop.cross * t
+        const p = posOn(ln, from, d)
+        const q = posOn(ln, to, d)
+        const w = smooth01(t)
+        x.push(p.x + (q.x - p.x) * w)
+        z.push(p.z + (q.z - p.z) * w)
+        y.push(p.y + (q.y - p.y) * w)
+      }
+      const tg = tangents(x, z)
+      ln.crossovers.push({ x, z, y, tx: tg.tx, tz: tg.tz })
+    }
+  }
 }
 
 /**
@@ -1440,7 +1497,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       return { ...r, leg, style: legBridge(line, leg) }
     })
 
-    const stopOf = (s: (typeof info)[number]): Stop => ({ stationId: s.id, group: s.g.index, d: cum[s.i], zF: s.zF, zB: s.zB, half: s.half, taper: s.taper, lift: s.g.lift })
+    const stopOf = (s: (typeof info)[number]): Stop => ({ stationId: s.id, group: s.g.index, d: cum[s.i], zF: s.zF, zB: s.zB, half: s.half, taper: s.taper, cross: 0, lift: s.g.lift })
     const stops: Stop[] = info.filter((s) => !s.pass).map(stopOf)
     const through: Stop[] = info.filter((s) => s.pass).map(stopOf)
 
@@ -1469,11 +1526,13 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       bridges: bridges.filter((b) => b.d1 - b.d0 >= 1.2),
       legs: legRanges,
       sidings,
+      crossovers: [],
     })
   }
 
   groupTracks(lines)
   separateCrossings(lines)
+  addCrossovers(lines)
 
   const stations: Record<string, StationNet> = {}
   for (const st of Object.values(doc.stations)) {
@@ -1568,6 +1627,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
       addTrackSample(ln.bx[j], ln.bz[j], ln.cy[j], ln.line.id)
     }
     for (const sd of ln.sidings) for (let k = 0; k < sd.x.length; k++) addTrackSample(sd.x[k], sd.z[k], sd.y[k], ln.line.id)
+    for (const co of ln.crossovers) for (let k = 0; k < co.x.length; k++) addTrackSample(co.x[k], co.z[k], co.y[k], ln.line.id)
   }
   // footprints (platforms + tracks) of every platform complex: nothing may stand on a lower one
   const footprints: { ox: number; oz: number; ax: number; az: number; halfL: number; halfW: number; lift: number }[] = []

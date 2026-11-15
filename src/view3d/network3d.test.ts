@@ -283,6 +283,35 @@ describe('3D network geometry', () => {
     expect(flips).toBe(0)
   })
 
+  it('gives every terminal a crossover that joins the arrival track to the departure track', () => {
+    let d = city()
+    d = station(d, 'a', 20, 60)
+    d = station(d, 'b', 80, 60)
+    d = line(d, 'T', 'tram', ['a', 'b'])
+    d = line(d, 'S', 'sbahn', ['a', 'b'])
+    const net = buildNetwork3D(d)
+    for (const ln of net.lines) {
+      expect(ln.crossovers.length).toBe(2)
+      const first = ln.stops[0]
+      const last = ln.stops[ln.stops.length - 1]
+      // behind the first terminal the train goes from the return track (arrived) to the forward track (leaves)
+      const start = ln.crossovers[0]
+      const b0 = posOn(ln, 'b', first.d + first.half)
+      const f1 = posOn(ln, 'f', first.d + first.half + first.cross)
+      expect(Math.hypot(start.x[0] - b0.x, start.z[0] - b0.z)).toBeLessThan(0.02)
+      expect(Math.hypot(start.x[start.x.length - 1] - f1.x, start.z[start.z.length - 1] - f1.z)).toBeLessThan(0.02)
+      // and the other way round behind the last one
+      const end = ln.crossovers[1]
+      const f0 = posOn(ln, 'f', last.d - last.half)
+      const b1 = posOn(ln, 'b', last.d - last.half - last.cross)
+      expect(Math.hypot(end.x[0] - f0.x, end.z[0] - f0.z)).toBeLessThan(0.02)
+      expect(Math.hypot(end.x[end.x.length - 1] - b1.x, end.z[end.z.length - 1] - b1.z)).toBeLessThan(0.02)
+      // short: a few vehicle lengths at most, not a long drift across the line
+      expect(first.cross).toBeGreaterThan(0.5)
+      expect(first.cross).toBeLessThanOrEqual(first.taper)
+    }
+  })
+
   it('lifts one of two crossing lines over the other outside of stations', () => {
     let d = city()
     d = station(d, 'a', 20, 60)

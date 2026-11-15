@@ -70,14 +70,15 @@ describe('train operation', () => {
       t += 0.25
       for (const tr of sim.trains) {
         for (const p of carPoses(tr)) {
-          // distance to the nearest rail segment of either track
+          // distance to the nearest rail segment of either track or of a crossover behind a terminal
           let best = Infinity
+          for (const co of tr.net.crossovers) for (let i = 0; i < co.x.length - 1; i++) best = Math.min(best, segDist(p, co.x[i], co.z[i], co.x[i + 1], co.z[i + 1]))
           for (let i = 0; i < tr.net.n - 1; i++) {
             best = Math.min(best, segDist(p, tr.net.fx[i], tr.net.fz[i], tr.net.fx[i + 1], tr.net.fz[i + 1]), segDist(p, tr.net.bx[i], tr.net.bz[i], tr.net.bx[i + 1], tr.net.bz[i + 1]))
           }
-          // merging after a terminal may move up to one platform width away from both rails
+          // a train that changes ends at a terminal uses the crossover rails: it is never between the tracks
           // a car rests on two bogies on the rails: in a curve its middle sits a little inside
-          expect(best).toBeLessThan(tr.rev ? 1.6 : 0.2)
+          expect(best).toBeLessThan(0.2)
         }
         // the centre of the train never gets closer to a buffer than half its length + clearance
         const half = ((tr.spec.lens.reduce((a, b) => a + b, 0) + tr.spec.gap * (tr.spec.lens.length - 1)) * RAIL) / 2

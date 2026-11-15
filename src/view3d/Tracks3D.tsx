@@ -356,10 +356,12 @@ export default function Tracks3D({ net }: { net: Network3D }) {
         addStreetTrack(b, ln.fx, ln.fz, ln.cy, ln.ftx, ln.ftz)
         addStreetTrack(b, ln.bx, ln.bz, ln.cy, ln.btx, ln.btz)
         for (const s of ln.sidings) addStreetTrack(b, s.x, s.z, s.y, s.tx, s.tz)
+        for (const s of ln.crossovers) addStreetTrack(b, s.x, s.z, s.y, s.tx, s.tz)
       } else {
         addTrack(b, ln.fx, ln.fz, ln.cy, ln.ftx, ln.ftz)
         addTrack(b, ln.bx, ln.bz, ln.cy, ln.btx, ln.btz)
         for (const s of ln.sidings) addTrack(b, s.x, s.z, s.y, s.tx, s.tz, false)
+        for (const s of ln.crossovers) addTrack(b, s.x, s.z, s.y, s.tx, s.tz, false)
       }
       for (const br of ln.bridges) addBridge(b, net, ln, br)
       for (const run of liftedRuns(ln)) {

@@ -16,7 +16,7 @@ import type { LineNet, Network3D, Stop } from './network3d'
 //  * A station track is held by one train at a time. A train only leaves for the next
 //    station when the track it needs there is free, otherwise it waits where it stands.
 //  * At a terminal the train stops well in front of the buffer stop, changes ends and
-//    leaves again on the same track, merging onto the opposite track after the platform.
+//    leaves again on the same track, moving onto the opposite track on a crossover (`Crossover` rails) behind the platform.
 // ---------------------------------------------------------------------------
 
 export interface Leg {
@@ -186,7 +186,7 @@ export class Sim {
       tr.to = key
       tr.waited = 0
       const from = stops[leg.from]
-      tr.rev = tr.dir !== leg.dir ? { d: from.d, half: from.half, taper: from.taper, oldDir: tr.dir } : null
+      tr.rev = tr.dir !== leg.dir ? { d: from.d, half: from.half, taper: from.cross || from.taper, oldDir: tr.dir } : null
       tr.dir = leg.dir
       tr.duration = Math.max(2.6, Math.abs(target.d - from.d) / tr.spec.speed + 1.8)
       tr.phase = 'move'
