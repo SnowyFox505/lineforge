@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-11-16',
+    headline: 'Ringlinien, Express und Ausläufer',
+    changes: [
+      {
+        title: 'Ringlinien',
+        what: 'Eine Linie kann zum Ring werden: Sie fährt von der letzten Station zurück zur ersten, und die Züge drehen im Kreis, ohne an einem Ende zu wenden.',
+        how: 'Linie wählen, dann auf „Ring“ tippen. Die Strecke zurück zum Anfang wird automatisch gelegt, du kannst sie wie jede andere glätten oder neu zeichnen. Noch einmal „Ring“ tippen öffnet ihn wieder, ebenso das Herausnehmen einer Strecke mit dem Werkzeug „Abschnitt“. Du brauchst mindestens drei verschiedene Stationen.',
+        benefit: 'Ringbahnen um die Stadt, ohne Endstation und ohne Puffer.',
+      },
+      {
+        title: 'Expresslinien',
+        what: 'Eine Express-Linie hält nur an den wichtigen Stationen und fährt schneller. Die anderen Stationen durchfährt sie auf den Umgehungsgleisen.',
+        how: 'Linie wählen, auf „Express“ tippen. Sie hält dann an beiden Enden, an Umsteigebahnhöfen, am Hauptbahnhof und am Flughafen. Unter „Hält an“ kannst du jede Station einzeln wieder dazunehmen oder auslassen. Im Netzplan steht „Express“ in der Legende.',
+        benefit: 'Schnelle Verbindungen zwischen den großen Knoten, ohne jede Linie einzeln durchzugehen.',
+      },
+      {
+        title: 'Ausläufer',
+        what: 'Ein Ausläufer ist eine neue Linie, die an einer Station einer bestehenden Linie abzweigt. Sie hat die Farbe der Hauptlinie und heißt wie sie plus eine Ziffer, aus S3 wird S31, S32 und so weiter (bis S30).',
+        how: 'Linie wählen, auf „Ausläufer“ tippen, dann auf der Karte die Station antippen, an der er abzweigt (eine Station zwischen den Enden). Der Ausläufer übernimmt automatisch die längere Seite der Hauptlinie. „Andere Seite“ nimmt die kürzere. Danach ziehst du von der Station aus die neue Strecke.',
+        benefit: 'Verzweigungen im Netz, ohne die Hauptlinie umzubauen. Deren Strecke bleibt, wie sie ist.',
+      },
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-11-16',
     headline: 'Linien nachbessern: glätten, neu verlegen, Stationen auf der Strecke',

@@ -88,6 +88,15 @@ export interface Line {
   legs?: Record<number, LegSettings>
   /** Stations on the route this line runs through without stopping (on bypass tracks, no platform) */
   passes?: string[]
+  /**
+   * A ring line: the first station is repeated as the last one (stations[0] === stations[n - 1]) and the curve is closed.
+   * Its trains circle in one direction instead of shuttling.
+   */
+  loop?: boolean
+  /** An express line: it calls only at the important stations (`passes` holds the rest) and its trains are faster */
+  express?: boolean
+  /** An Auslaeufer (branch): the line it branches off from, the station where it leaves it, and which end of the parent it follows */
+  branch?: { parent: string; at: string; towards: 'start' | 'end' }
 }
 
 /** Kinds of areas that can be painted on the map: where the city, its suburbs and the airport are, and forests and mountains. */

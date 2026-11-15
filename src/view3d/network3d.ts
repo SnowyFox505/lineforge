@@ -774,7 +774,8 @@ const CROSS_MIN = 1.0
 export function addCrossovers(lines: LineNet[]) {
   for (const ln of lines) {
     ln.crossovers = []
-    if (ln.stops.length < 2) continue
+    // a ring has no terminals: its trains never change ends
+    if (ln.stops.length < 2 || ln.line.loop) continue
     for (const [stop, out, from, to] of [
       [ln.stops[0], 1, 'b', 'f'],
       [ln.stops[ln.stops.length - 1], -1, 'f', 'b'],

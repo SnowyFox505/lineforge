@@ -7,7 +7,8 @@ import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
 import { migrateLandmarks } from '../model/migrate'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
-import { addStationOnLines, applyStroke, moveStationTo, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
+import { addStationOnLines, applyStroke, closeRing, moveStationTo, openRing, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
+import { endExpress, flipBranch, makeBranch, makeExpress } from '../model/lineKinds'
 import { stationName, stationTypeAt } from '../model/stationType'
 import { poolFor, takeName } from '../model/names'
 import { nameWaterAt, removeWaterName as removeWaterOf, renameWater as renameWaterOf, rerollWaterName as rerollWater, setWaterKind as setWaterKindOf } from '../model/waters'
@@ -85,6 +86,8 @@ interface EditorState {
   selectedLeg: { lineId: string; leg: number } | null
   /** the stretch that was drawn last (the smoothing button works on it) */
   lastLeg: { lineId: string; leg: number } | null
+  /** the line a branch (Auslaeufer) is being started on: the next tap on a station of it is where the branch leaves */
+  branchPick: string | null
   /** train the 3D camera follows (null: free camera) and how */
   followId: string | null
   followMode: FollowMode
@@ -116,6 +119,15 @@ interface EditorState {
   removeLegAt: (lineId: string, leg: number) => boolean
   /** Tap on a line or a crossing: a station on every line of that kind there. Null when none is close. */
   addStationOnLine: (p: Pt, reach: number) => string | null
+  /** Close a line into a ring or open the ring again. Returns a problem as a message, null when it worked. */
+  toggleRing: (lineId: string) => string | null
+  /** Make a line an express line (skips the unimportant stations) or a normal one again. Returns a problem, null when it worked. */
+  toggleExpress: (lineId: string) => string | null
+  setBranchPick: (lineId: string | null) => void
+  /** The branch leaves its parent at this station: a new line is made and chosen. Returns a problem, null when it worked. */
+  makeBranchAt: (stationId: string) => string | null
+  /** A bare branch takes the other part of its parent */
+  flipBranchOf: (lineId: string) => boolean
 
   loadDoc: (doc: CityDoc) => void
   /** `nameQueues`: names the player wants for the next districts, suburbs, waters and landscapes */
@@ -224,6 +236,7 @@ export const useEditor = create<EditorState>((set, get) => {
     editStationId: null,
     selectedLeg: null,
     lastLeg: null,
+    branchPick: null,
     followId: null,
     followMode: 'chase',
 
@@ -232,10 +245,10 @@ export const useEditor = create<EditorState>((set, get) => {
     openCity: (doc) =>
       set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
-    setTool: (tool) => set({ tool, selectedLeg: null }),
+    setTool: (tool) => set({ tool, selectedLeg: null, branchPick: null }),
     setBrush: (brush) => set({ brush }),
     setStationType: (stationType) => set({ stationType }),
-    setActiveLine: (activeLineId) => set({ activeLineId }),
+    setActiveLine: (activeLineId) => set({ activeLineId, branchPick: null }),
     setLineMode: (lineMode) => set({ lineMode }),
     selectStation: (selectedStationId) => set({ selectedStationId }),
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
@@ -282,6 +295,42 @@ export const useEditor = create<EditorState>((set, get) => {
       const out = removeLeg(get().doc, lineId, leg)
       if (!out) return false
       commit(out.doc, { selectedLeg: null, lastLeg: null, activeLineId: get().activeLineId === lineId ? lineId : get().activeLineId })
+      return true
+    },
+    toggleRing: (lineId) => {
+      const line = get().doc.lines[lineId]
+      if (!line) return null
+      const next = line.loop ? openRing(get().doc, lineId) : closeRing(get().doc, lineId)
+      if (!next) return 'Ein Ring braucht mindestens drei verschiedene Stationen.'
+      commit(next, { selectedWaypoint: null, lastLeg: null })
+      return null
+    },
+    toggleExpress: (lineId) => {
+      const line = get().doc.lines[lineId]
+      if (!line) return null
+      const next = line.express ? endExpress(get().doc, lineId) : makeExpress(get().doc, lineId)
+      if (!next) return 'Hier gibt es nichts zu überspringen: Alle Stationen sind Endstationen oder Umsteigebahnhöfe.'
+      commit(next)
+      return null
+    },
+    setBranchPick: (branchPick) => set({ branchPick }),
+    makeBranchAt: (stationId) => {
+      const { doc, branchPick } = get()
+      const parent = branchPick ? doc.lines[branchPick] : undefined
+      if (!parent) return 'Wähle erst eine Linie.'
+      const out = makeBranch(doc, parent.id, stationId)
+      if (!out) {
+        if (parent.branch) return 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.'
+        if (parent.loop) return 'Von einem Ring zweigt kein Ausläufer ab.'
+        return 'Dort kann kein Ausläufer abzweigen: Tippe eine Station zwischen den Enden an, an der die Linie hält (höchstens zehn Ausläufer je Linie).'
+      }
+      commit(out.doc, { branchPick: null, activeLineId: out.lineId, lineMode: 'draw', selectedStationId: stationId, selectedWaypoint: null })
+      return null
+    },
+    flipBranchOf: (lineId) => {
+      const next = flipBranch(get().doc, lineId)
+      if (!next) return false
+      commit(next)
       return true
     },
     addStationOnLine: (p, reach) => {

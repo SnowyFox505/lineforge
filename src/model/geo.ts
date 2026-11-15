@@ -50,7 +50,7 @@ function crSegment(p0: Pt, p1: Pt, p2: Pt, p3: Pt, n: number, out: Pt[]) {
 }
 
 /** Sample a centripetal Catmull-Rom spline through `ctrl`; index list says where each control point landed. */
-export function splineThrough(ctrl: Pt[]): { pts: Pt[]; at: number[] } {
+export function splineThrough(ctrl: Pt[], closed = false): { pts: Pt[]; at: number[] } {
   const n = ctrl.length
   if (n === 0) return { pts: [], at: [] }
   const pts: Pt[] = [{ x: ctrl[0].x, y: ctrl[0].y }]
@@ -59,8 +59,9 @@ export function splineThrough(ctrl: Pt[]): { pts: Pt[]; at: number[] } {
   for (let i = 0; i < n - 1; i++) {
     const p1 = ctrl[i]
     const p2 = ctrl[i + 1]
-    const p0 = i > 0 ? ctrl[i - 1] : { x: 2 * p1.x - p2.x, y: 2 * p1.y - p2.y }
-    const p3 = i + 2 < n ? ctrl[i + 2] : { x: 2 * p2.x - p1.x, y: 2 * p2.y - p1.y }
+    // a ring is closed: the control point before the first one is the one before the (repeated) last, and so on
+    const p0 = i > 0 ? ctrl[i - 1] : closed && n > 3 ? ctrl[n - 2] : { x: 2 * p1.x - p2.x, y: 2 * p1.y - p2.y }
+    const p3 = i + 2 < n ? ctrl[i + 2] : closed && n > 3 ? ctrl[1] : { x: 2 * p2.x - p1.x, y: 2 * p2.y - p1.y }
     const steps = Math.max(1, Math.ceil(dist(p1, p2) / CURVE_STEP))
     crSegment(p0, p1, p2, p3, steps, pts)
     // land exactly on the control point
@@ -99,7 +100,7 @@ export function lineCurve(doc: CityDoc, line: Line): LineCurve {
   const hit = curveCache.get(line)
   if (hit && hit.sig === sig) return hit.curve
   const { ctrl, stationAt } = controlPolyline(doc, line)
-  const { pts, at } = splineThrough(ctrl)
+  const { pts, at } = splineThrough(ctrl, !!line.loop && line.stations.length > 3 && line.stations[0] === line.stations[line.stations.length - 1])
   const curve: LineCurve = { pts, legStart: stationAt.map((i) => at[i] ?? 0) }
   curveCache.set(line, { sig, curve })
   return curve

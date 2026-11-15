@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
+import { branchIsBare } from '../model/lineKinds'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
 import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
@@ -220,6 +221,12 @@ function LinePanel() {
   const setLineMode = useEditor((s) => s.setLineMode)
   const smoothActive = useEditor((s) => s.smoothActive)
   const lastLeg = useEditor((s) => s.lastLeg)
+  const toggleRing = useEditor((s) => s.toggleRing)
+  const toggleExpress = useEditor((s) => s.toggleExpress)
+  const branchPick = useEditor((s) => s.branchPick)
+  const setBranchPick = useEditor((s) => s.setBranchPick)
+  const flipBranchOf = useEditor((s) => s.flipBranchOf)
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null)
   const active = activeId ? doc.lines[activeId] : undefined
   const lines = Object.values(doc.lines)
 
@@ -290,6 +297,60 @@ function LinePanel() {
               </button>
             </div>
             <ColorPicker value={active.color} onChange={(color) => updateLine(active.id, { color })} />
+            <div className="border-t border-white/8 pt-3">
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                <Chip
+                  active={!!active.loop}
+                  onClick={() => {
+                    const problem = toggleRing(active.id)
+                    setNote(problem ? { id: active.id, text: problem } : null)
+                  }}
+                >
+                  <Icon name="refresh" size={16} />
+                  Ring
+                </Chip>
+                <Chip
+                  active={!!active.express}
+                  onClick={() => {
+                    const problem = toggleExpress(active.id)
+                    setNote(problem ? { id: active.id, text: problem } : null)
+                  }}
+                >
+                  <Icon name="arrow" size={16} />
+                  Express
+                </Chip>
+                <Chip
+                  active={branchPick === active.id}
+                  onClick={() => {
+                    if (active.branch || active.loop || active.stations.length < 3) {
+                      setNote({ id: active.id, text: active.branch ? 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.' : active.loop ? 'Von einem Ring zweigt kein Ausläufer ab.' : 'Ein Ausläufer braucht eine Linie mit mindestens drei Stationen.' })
+                      return
+                    }
+                    setNote(null)
+                    setBranchPick(branchPick === active.id ? null : active.id)
+                  }}
+                >
+                  <Icon name="route" size={16} />
+                  Ausläufer
+                </Chip>
+              </div>
+              {branchPick === active.id && <p className="mt-1 text-xs leading-snug text-accent">Tippe auf der Karte die Station, an der der Ausläufer abzweigt (eine Station zwischen den Enden).</p>}
+              {note?.id === active.id && <p className="mt-1 text-xs leading-snug text-amber-300">{note.text}</p>}
+              {active.loop && <p className="mt-1 text-xs leading-snug text-white/50">Ringlinie: Die Züge fahren im Kreis. Eine Strecke herausnehmen (Werkzeug „Abschnitt“) öffnet den Ring wieder.</p>}
+              {active.express && <p className="mt-1 text-xs leading-snug text-white/50">Express: hält nur an den Endstationen und an Umsteigebahnhöfen und fährt schneller. Unten legst du fest, wo sie sonst noch hält.</p>}
+              {active.branch && doc.lines[active.branch.parent] && (
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 text-xs leading-snug text-white/50">
+                    Ausläufer von {doc.lines[active.branch.parent].name}: kommt von {doc.stations[active.stations[0]]?.name ?? '?'} und zweigt an {doc.stations[active.branch.at]?.name ?? '?'} ab. Ziehe von dort weiter.
+                  </p>
+                  {branchIsBare(doc, active) && (
+                    <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => flipBranchOf(active.id)}>
+                      Andere Seite
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             {active.stations.length >= 3 && (
               <div className="border-t border-white/8 pt-3">
                 <div className="eyebrow mb-1">Hält an</div>

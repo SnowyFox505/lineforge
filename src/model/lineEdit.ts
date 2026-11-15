@@ -95,6 +95,8 @@ export function applyStroke(doc: CityDoc, lineId: string, raw: Pt[], opts: Strok
     }
   }
   if (!plan) return null
+  // a ring is closed: only a stretch of it can be drawn again, nothing can be added at its ends
+  if (line.loop && plan.mode !== 'replace') return null
 
   // let the stroke follow other lines where it runs along them
   const others = Object.values(doc.lines)
@@ -323,6 +325,72 @@ export function rebuildLeg(doc: CityDoc, lineId: string, k: number): CityDoc | n
   return rerouteAt(withLine(doc, { ...line, via, segs }), lineId, k)
 }
 
+/**
+ * Take a stretch out of a ring: the ring opens and becomes a line that runs from the station after the gap around
+ * to the station before it.
+ */
+function removeRingLeg(doc: CityDoc, line: Line, k: number): { doc: CityDoc } | null {
+  const m = line.stations.length - 1
+  if (m < 3 || k < 0 || k >= m) return null
+  const via = line.via ?? []
+  const segs = line.segs ?? []
+  const order = Array.from({ length: m }, (_, j) => (k + 1 + j) % m)
+  const stations = order.map((i) => line.stations[i])
+  const legs: NonNullable<Line['legs']> = {}
+  for (const [key, v] of Object.entries(line.legs ?? {})) {
+    const j = order.indexOf(Number(key))
+    if (j >= 0 && j < m - 1) legs[j] = v
+  }
+  const { loop: _gone, ...rest } = line
+  void _gone
+  const next: Line = {
+    ...rest,
+    stations,
+    via: [...order.slice(0, m - 1).map((i) => via[i] ?? []), []],
+    segs: order.slice(0, m - 1).map((i) => segs[i]),
+    legs: Object.keys(legs).length ? legs : undefined,
+    passes: line.passes?.filter((id) => stations.includes(id)),
+  }
+  return { doc: withLine(doc, next) }
+}
+
+/**
+ * Close a line into a ring: the first station is repeated at the end and a new stretch is routed back to it.
+ * Null when the line has fewer than three different stations or is a ring already.
+ */
+export function closeRing(doc: CityDoc, lineId: string): CityDoc | null {
+  const base = doc.lines[lineId]
+  if (!base || base.loop) return null
+  const line = shape(base)
+  const n = line.stations.length
+  if (new Set(line.stations).size < 3 || line.stations[0] === line.stations[n - 1]) return null
+  const closed: Line = {
+    ...line,
+    loop: true,
+    stations: [...line.stations, line.stations[0]],
+    // the waypoints that were set beyond the last station become those of the closing stretch
+    via: [...(line.via ?? []).slice(0, n), []],
+    segs: [...(line.segs ?? []), undefined as unknown as Pt[]],
+  }
+  return rerouteAt(withLine(doc, closed), lineId, n - 1)
+}
+
+/** A ring becomes an ordinary line again: the closing stretch is taken away, the stations stay. */
+export function openRing(doc: CityDoc, lineId: string): CityDoc | null {
+  const base = doc.lines[lineId]
+  if (!base?.loop) return null
+  const line = shape(base)
+  const n = line.stations.length
+  if (n < 2) return null
+  const { loop: _gone, ...rest } = line
+  void _gone
+  const stations = line.stations.slice(0, n - 1)
+  const via = (line.via ?? []).slice(0, n - 1)
+  via[n - 2] = []
+  const legs = line.legs ? Object.fromEntries(Object.entries(line.legs).filter(([i]) => Number(i) < n - 2)) : undefined
+  return withLine(doc, { ...rest, stations, via, segs: (line.segs ?? []).slice(0, n - 2), legs: legs && Object.keys(legs).length ? legs : undefined, passes: line.passes?.filter((id) => stations.includes(id)) })
+}
+
 /** The settings of the stretches `from` .. `from + count - 1`, renumbered from 0 */
 function sliceLegs(legs: Line['legs'], from: number, count: number): Line['legs'] {
   if (!legs) return undefined
@@ -344,6 +412,7 @@ export function removeLeg(doc: CityDoc, lineId: string, k: number): { doc: CityD
   if (!base) return null
   const line = shape(base)
   const n = line.stations.length
+  if (line.loop) return removeRingLeg(doc, line, k)
   if (k < 0 || k >= n - 1 || n < 3) return null
   const via = line.via ?? []
   const segs = line.segs ?? []

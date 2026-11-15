@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
+import { closeRing } from '../model/lineEdit'
 import { appendStation } from '../model/routing'
 import type { CityDoc, OperatorId } from '../model/types'
 import { RAIL, railOf } from '../model/scale'
@@ -125,5 +126,29 @@ describe('train operation', () => {
       }
     }
     for (const tr of sim.trains) expect(visited.get(tr.id)!.size).toBeGreaterThanOrEqual(3)
+  })
+  it('lets the trains of a ring line circle in one direction, never reversing and never leaving the rails', () => {
+    let d = city()
+    for (const [id, x, y] of [['a', 30, 30], ['b', 110, 30], ['c', 110, 110], ['e', 30, 110]] as [string, number, number][]) d = station(d, id, x, y)
+    d = line(d, 'R', 'sbahn', ['a', 'b', 'c', 'e'])
+    d = closeRing(d, 'R')!
+    const net = buildNetwork3D(d)
+    const ln = net.lines[0]
+    expect(ln.line.loop).toBe(true)
+    expect(ln.crossovers).toHaveLength(0)
+    const sim = new Sim(net)
+    expect(sim.trains.length).toBeGreaterThanOrEqual(1)
+    const tr = sim.trains[0]
+    let laps = 0
+    let last = tr.s
+    for (let t = 0; t < 1200; t += 0.25) {
+      sim.update(0.25)
+      expect(tr.dir).toBe(1)
+      expect(tr.rev).toBeNull()
+      if (tr.s < last - 50) laps++
+      last = tr.s
+      for (const c of carPoses(tr)) expect(Number.isFinite(c.x + c.z)).toBe(true)
+    }
+    expect(laps).toBeGreaterThanOrEqual(2)
   })
 })

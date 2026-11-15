@@ -488,7 +488,7 @@ function onStreet(doc: CityDoc, line: Line, stationId: string): CityDoc {
 
 export function appendStation(input: CityDoc, lineId: string, stationId: string): CityDoc {
   const base = input.lines[lineId]
-  if (!base || !input.stations[stationId]) return input
+  if (!base || !input.stations[stationId] || base.loop) return input
   const doc = onStreet(input, base, stationId)
   if (base.stations[base.stations.length - 1] === stationId) return doc
   const line = shape(base)
@@ -504,7 +504,7 @@ export function appendStation(input: CityDoc, lineId: string, stationId: string)
 
 export function popStation(doc: CityDoc, lineId: string): CityDoc {
   const base = doc.lines[lineId]
-  if (!base || !base.stations.length) return doc
+  if (!base || !base.stations.length || base.loop) return doc
   const line = shape(base)
   return withLine(doc, {
     ...line,
@@ -512,6 +512,27 @@ export function popStation(doc: CityDoc, lineId: string): CityDoc {
     via: (line.via ?? []).slice(0, -1),
     segs: (line.segs ?? []).slice(0, -1),
   })
+}
+
+/**
+ * A ring line that lost its closure (a station was taken out, a stretch removed) is an ordinary line again: the flag goes,
+ * and a dangling repeated end (A, C, A) is cut off.
+ */
+export function healRings(doc: CityDoc): CityDoc {
+  let d = doc
+  for (const l of Object.values(doc.lines)) {
+    if (!l.loop) continue
+    const n = l.stations.length
+    if (n >= 4 && l.stations[0] === l.stations[n - 1]) continue
+    const { loop: _gone, ...rest } = l
+    void _gone
+    let line: Line = rest
+    if (n >= 2 && l.stations[0] === l.stations[n - 1]) {
+      line = { ...line, stations: l.stations.slice(0, -1), via: l.via?.slice(0, -1), segs: l.segs?.slice(0, -1) }
+    }
+    d = withLine(d, line)
+  }
+  return d
 }
 
 /** Remove a station from the document and heal every line that stopped there. */
@@ -561,7 +582,7 @@ export function removeStationEverywhere(doc: CityDoc, id: string): CityDoc {
     d = withLine(d, line)
     for (const k of redo.sort((a, b) => a - b)) d = rerouteAt(d, lineId, k)
   }
-  return d
+  return healRings(d)
 }
 
 // ---- waypoints --------------------------------------------------------------

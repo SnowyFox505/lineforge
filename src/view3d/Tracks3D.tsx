@@ -358,8 +358,9 @@ export default function Tracks3D({ net }: { net: Network3D }) {
         for (const s of ln.sidings) addStreetTrack(b, s.x, s.z, s.y, s.tx, s.tz)
         for (const s of ln.crossovers) addStreetTrack(b, s.x, s.z, s.y, s.tx, s.tz)
       } else {
-        addTrack(b, ln.fx, ln.fz, ln.cy, ln.ftx, ln.ftz)
-        addTrack(b, ln.bx, ln.bz, ln.cy, ln.btx, ln.btz)
+        // a ring has no ends, so no buffer stops either
+        addTrack(b, ln.fx, ln.fz, ln.cy, ln.ftx, ln.ftz, !ln.line.loop)
+        addTrack(b, ln.bx, ln.bz, ln.cy, ln.btx, ln.btz, !ln.line.loop)
         for (const s of ln.sidings) addTrack(b, s.x, s.z, s.y, s.tx, s.tz, false)
         for (const s of ln.crossovers) addTrack(b, s.x, s.z, s.y, s.tx, s.tz, false)
       }

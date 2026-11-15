@@ -648,6 +648,7 @@ export default function PlanView() {
                       </text>
                       <text x={w + 14} y={17} fontSize={14} fill={T.label}>
                         {OPERATORS[l.operator].label}
+                        {l.loop ? ' · Ring' : l.express ? ' · Express' : l.branch ? ' · Ausläufer' : ''}
                         {first && last && first !== last ? ` · ${first} – ${last}` : ''}
                       </text>
                     </g>

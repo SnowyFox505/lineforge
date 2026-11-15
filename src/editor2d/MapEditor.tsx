@@ -769,6 +769,15 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         }
       }
     } else if (st.tool === 'line') {
+      if (st.branchPick) {
+        // starting a branch (Auslaeufer): the station where it leaves its parent line
+        if (!hit) flash('Tippe auf eine Station der Linie, an der der Ausläufer abzweigt')
+        else {
+          const problem = st.makeBranchAt(hit)
+          if (problem) flash(problem)
+        }
+        return
+      }
       if (st.lineMode === 'draw') {
         // drawing mode: a tap on a station selects it, a tap on the line puts a station there
         st.selectWaypoint(null)

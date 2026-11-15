@@ -1,3 +1,4 @@
+import { EXPRESS_SPEED } from '../model/lineKinds'
 import { railOf } from '../model/scale'
 import { carOffsets } from '../model/vehicles'
 import type { VehicleSpec } from '../model/vehicles'
@@ -10,7 +11,7 @@ import type { LineNet, Network3D, Stop } from './network3d'
 // ---------------------------------------------------------------------------
 // Train operation
 //
-// Every train shuttles between the two terminals of its line and calls at every station.
+// Every train shuttles between the two terminals of its line and calls at every station (a ring line circles instead).
 //  * Trains only ever run on the rails: their position is a point on the line's forward /
 //    return track at an arc length, exactly the geometry the rails are built from.
 //  * A station track is held by one train at a time. A train only leaves for the next
@@ -54,9 +55,11 @@ const ease = (u: number) => u * u * (3 - 2 * u)
 
 const keyOf = (stop: Stop, dir: 1 | -1) => `${stop.stationId}|${(dir > 0 ? stop.zF : stop.zB).toFixed(2)}`
 
-export function buildLegs(stopCount: number): Leg[] {
+/** A ring (`loop`) only runs forward: the last stop is the first station again, and the train carries on from there. */
+export function buildLegs(stopCount: number, loop = false): Leg[] {
   const legs: Leg[] = []
   for (let i = 0; i < stopCount - 1; i++) legs.push({ from: i, to: i + 1, dir: 1 })
+  if (loop) return legs
   for (let i = stopCount - 1; i > 0; i--) legs.push({ from: i, to: i - 1, dir: -1 })
   return legs
 }
@@ -75,7 +78,7 @@ export class Sim {
     for (const ln of net.lines) {
       if (ln.stops.length < 2) continue
       const spec = VEHICLES[ln.line.operator]
-      const legs = buildLegs(ln.stops.length)
+      const legs = buildLegs(ln.stops.length, !!ln.line.loop)
       const count = Math.min(maxPerLine, Math.max(1, Math.floor(ln.total / 70) + 1))
       for (let i = 0; i < count; i++) {
         const tr: SimTrain = {
@@ -188,7 +191,7 @@ export class Sim {
       const from = stops[leg.from]
       tr.rev = tr.dir !== leg.dir ? { d: from.d, half: from.half, taper: from.cross || from.taper, oldDir: tr.dir } : null
       tr.dir = leg.dir
-      tr.duration = Math.max(2.6, Math.abs(target.d - from.d) / tr.spec.speed + 1.8)
+      tr.duration = Math.max(2.6, Math.abs(target.d - from.d) / (tr.spec.speed * (tr.net.line.express ? EXPRESS_SPEED : 1)) + 1.8)
       tr.phase = 'move'
       tr.t = 0
       return
@@ -200,6 +203,8 @@ export class Sim {
       tr.s = to.d
       tr.phase = 'dwell'
       tr.leg = (tr.leg + 1) % legs.length
+      // a ring closes here: the last stop and the first one are the same platform, so the train simply starts over
+      if (tr.net.line.loop && tr.leg === 0) tr.s = stops[0].d
       tr.at = tr.to
       tr.to = null
       tr.rev = null
