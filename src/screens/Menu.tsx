@@ -10,6 +10,11 @@ import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
 import AccountSheet, { WELCOME_KEY } from '../ui/AccountSheet'
 import UpdateOverlay from '../ui/UpdateOverlay'
+import WhatsNew from '../ui/WhatsNew'
+import { lastSeenVersion, markVersionSeen, useUpdateAvailable } from '../ui/updates'
+import { RELEASES, releasesSince } from '../changelog'
+import type { Release } from '../changelog'
+import { APP_STAGE, APP_VERSION } from '../version'
 import { useAuth } from '../auth/authStore'
 import { downloadBlob, MODE_INFO } from '../ui/SettingsSheet'
 import MenuBackdrop from './MenuBackdrop'
@@ -69,6 +74,28 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
   const status = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
   const sync = useAuth((s) => s.sync)
+  const updateAvailable = useUpdateAvailable()
+  // patch notes: after an update (a version the person has not seen yet) and on request via the version number
+  const [notes, setNotes] = useState<{ releases: Release[]; title: string } | null>(null)
+  useEffect(() => {
+    if (status === 'loading') return
+    const seen = lastSeenVersion()
+    if (seen === APP_VERSION) return
+    // the very first start shows the welcome first; the notes follow on the next start
+    let firstStart = false
+    if (status === 'guest') {
+      try {
+        firstStart = localStorage.getItem(WELCOME_KEY) !== '1'
+      } catch {
+        firstStart = false
+      }
+    }
+    if (!firstStart) setNotes({ releases: releasesSince(seen), title: 'Das ist neu' })
+  }, [status])
+  const closeNotes = () => {
+    markVersionSeen(APP_VERSION)
+    setNotes(null)
+  }
 
   // first start with accounts available: offer to sign in (or continue as guest) once
   useEffect(() => {
@@ -117,12 +144,20 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
           </motion.button>
         )}
         {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
-        <motion.button variants={item} whileTap={{ scale: 0.94 }} onClick={() => setUpdating(true)} className="glass flex items-center gap-2 rounded-full px-3.5 py-2.5 text-[13px] font-semibold" aria-label="App aktualisieren">
+        <motion.button
+          variants={item}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setUpdating(true)}
+          className="glass relative flex items-center gap-2 rounded-full px-3.5 py-2.5 text-[13px] font-semibold"
+          aria-label={updateAvailable ? 'App aktualisieren, es gibt eine neue Version' : 'App aktualisieren'}
+        >
           <Icon name="refresh" size={16} stroke={2.2} />
           <span className="hidden min-[360px]:inline">Aktualisieren</span>
+          {updateAvailable && <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#0f131b] bg-accent" />}
         </motion.button>
       </div>
       {updating && <UpdateOverlay />}
+      <WhatsNew open={!!notes} releases={notes?.releases ?? []} title={notes?.title} onClose={closeNotes} />
       <AccountSheet open={account} onClose={() => setAccount(false)} welcome={welcome && !user} />
 
       <div>
@@ -185,6 +220,9 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
             </motion.button>
           ))}
         </div>
+        <motion.button variants={item} onClick={() => setNotes({ releases: RELEASES, title: 'Neuigkeiten' })} className="mx-auto block rounded-full px-3 py-1.5 text-xs text-white/45 active:text-white/80 md:mx-0 md:px-0">
+          {APP_STAGE} {APP_VERSION} · Was ist neu?
+        </motion.button>
       </div>
     </motion.div>
   )
