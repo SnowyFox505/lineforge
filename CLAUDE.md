@@ -44,7 +44,7 @@ Game time (`sim/clock.ts`, `gameTime.minutes`): one real minute is one game hour
 ## Local to-do list and link preview
 
 - `TODO.md` (project root, gitignored, never pushed) is the owner's running to-do list in German: add wishes, tick finished ones `[x]` and move them under "Erledigt"; never delete entries.
-- The link preview (WhatsApp, iMessage ...) comes from the Open Graph tags in `index.html` and `public/og-image.png` (1200x630). The tags need the absolute address `https://lineforge-app.vercel.app`; change title, text and picture there.
+- The link preview (WhatsApp, iMessage ...) comes from the Open Graph tags in `index.html` and `public/og-preview.png` (1200x630, name, logo and tagline in the middle 630 px because some apps show only a square piece of the middle; the file name changes when the picture changes, because WhatsApp caches previews by address). The tags need the absolute address `https://lineforge-app.vercel.app`; change title, text and picture there.
 
 ## Gotchas
 
