@@ -56,7 +56,10 @@ export default function TouchRig({ onGesture }: { onGesture?: () => void }) {
       rebase()
     }
     const move = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch' || !pts.has(e.pointerId) || useEditor.getState().followId) return
+      if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return
+      // while a train is followed the fixed views own the camera; in the free view pinch, twist and tilt work as on the map
+      const fs = useEditor.getState()
+      if (fs.followId && fs.followMode !== 'free') return
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
       off.copy(camera.position).sub(controls.target)
 

@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { carOffsets } from '../model/vehicles'
 import type { VehicleSpec } from '../model/vehicles'
 import { RAIL_Y } from './heights'
+import { carGlassCompile, poolTexture, trainSpill } from './night'
 
 /** Underside of the car bodies above the rail head */
 export const BODY_Y = RAIL_Y + 0.07
@@ -396,6 +397,11 @@ const lampWhite = new THREE.MeshStandardMaterial({ color: '#fff7dc', emissive: '
 const lampRed = new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2a1a', emissiveIntensity: 1.3 })
 const lampGeo = new THREE.BoxGeometry(0.03, 0.035, 0.07)
 const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.25 })
+// at night the windows light up from inside
+bodyMat.onBeforeCompile = carGlassCompile(new THREE.Color(GLASS))
+bodyMat.customProgramCacheKey = () => 'lf-car-glass'
+trainSpill.map = poolTexture()
+const spillGeo = new THREE.PlaneGeometry(1, 1)
 
 /** One railcar in its own frame: +x is the direction of travel, origin at the car centre, rail level at y = 0 of BODY_Y. */
 export function CarMesh({ spec, index, color }: { spec: VehicleSpec; index: number; color: string }) {
@@ -411,6 +417,8 @@ export function CarMesh({ spec, index, color }: { spec: VehicleSpec; index: numb
   return (
     <group position={[0, BODY_Y, 0]}>
       <mesh geometry={geo} material={bodyMat} />
+      {/* warm light from the windows on the ground below (only visible at night) */}
+      <mesh geometry={spillGeo} material={trainSpill} position={[0, RAIL_Y + 0.02 - BODY_Y, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[len * 1.35, spec.width * 2.2, 1]} renderOrder={3} />
       {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampGeo} material={lampWhite} position={[len / 2 + 0.004, lampY, s * lampZ]} />)}
       {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampGeo} material={lampRed} position={[-len / 2 - 0.004, lampY, s * lampZ]} />)}
     </group>

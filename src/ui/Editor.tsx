@@ -9,6 +9,7 @@ import { distToRect, fadeOpacity, useDockFade } from './dockFade'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import { spring } from './primitives'
+import { formatClock, gameTime } from '../sim/clock'
 import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
 import ToolDock from './ToolDock'
@@ -22,6 +23,22 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: 'plan', label: 'Netzplan', icon: 'plan' },
   { id: 'view3d', label: '3D', icon: 'cube' },
 ]
+
+/** The game time as a digital clock (hh:mm); one real second is one game minute. */
+function GameClock() {
+  const [text, setText] = useState(() => formatClock(gameTime.minutes))
+  useEffect(() => {
+    const tick = () => setText(formatClock(gameTime.minutes))
+    tick()
+    const id = window.setInterval(tick, 250)
+    return () => window.clearInterval(id)
+  }, [])
+  return (
+    <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[14px] font-bold leading-none tabular-nums tracking-wide text-white/90" aria-label="Spielzeit">
+      {text}
+    </span>
+  )
+}
 
 function TopBar({ onSettings }: { onSettings: () => void }) {
   const doc = useEditor((s) => s.doc)
@@ -51,6 +68,7 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
             {doc.mode === 'normal' ? 'Normal' : 'Kreativ'} · {stations} Stationen · {lines} Linien
           </span>
         </span>
+        <GameClock />
         <Icon name="sliders" size={18} className="shrink-0 text-white/60" />
       </button>
       {tab === 'map' && (

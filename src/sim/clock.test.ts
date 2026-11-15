@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exportCityJson, importCityJson } from '../persistence/db'
 import { createCity } from '../model/factory'
-import { clockHands, formatClock, gameTime, GAME_MINUTES_PER_SECOND, GAME_START, minuteOfDay, startGameTime } from './clock'
+import { clockHands, formatClock, gameTime, GAME_MINUTES_PER_SECOND, GAME_START, minuteOfDay, startGameTime, sunAt, SUNRISE, SUNSET } from './clock'
 
 describe('game clock', () => {
   it('runs one game hour per real minute', () => {
@@ -35,5 +35,36 @@ describe('game clock', () => {
     startGameTime(doc.id, undefined)
     expect(gameTime.minutes).toBe(GAME_START)
     startGameTime('')
+  })
+})
+
+describe('the sun', () => {
+  it('is up at noon, down at midnight and on the horizon at sunrise and sunset', () => {
+    expect(sunAt(12 * 60).daylight).toBe(1)
+    expect(sunAt(12 * 60).elevation).toBeCloseTo(1, 5)
+    expect(sunAt(0).daylight).toBe(0)
+    expect(sunAt(0).elevation).toBeLessThan(0)
+    expect(sunAt(SUNRISE).elevation).toBeCloseTo(0, 5)
+    expect(sunAt(SUNSET).elevation).toBeCloseTo(0, 5)
+    // east in the morning, west in the evening
+    expect(sunAt(SUNRISE + 30).dir.x).toBeGreaterThan(0)
+    expect(sunAt(SUNSET - 30).dir.x).toBeLessThan(0)
+  })
+
+  it('has a glow at dawn and dusk but not at noon or at night', () => {
+    expect(sunAt(SUNRISE).glow).toBeGreaterThan(0.9)
+    expect(sunAt(SUNSET).glow).toBeGreaterThan(0.9)
+    expect(sunAt(12 * 60).glow).toBeLessThan(0.05)
+    expect(sunAt(0).glow).toBeLessThan(0.05)
+  })
+
+  it('changes smoothly and repeats every day', () => {
+    let prev = sunAt(0).daylight
+    for (let m = 5; m <= 1440; m += 5) {
+      const d = sunAt(m).daylight
+      expect(Math.abs(d - prev)).toBeLessThan(0.12)
+      prev = d
+    }
+    expect(sunAt(9 * 60).daylight).toBe(sunAt(9 * 60 + 1440).daylight)
   })
 })

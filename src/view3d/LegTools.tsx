@@ -4,6 +4,7 @@ import { BRIDGE_STYLES, legBridge, legProfile, PROFILE_LABEL } from '../model/pr
 import type { BridgeStyle, TrackProfile } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import { useTheme } from '../ui/theme'
+import { takeTrainPick } from './follow'
 import { RAIL_Y } from './heights'
 import type { LineNet, Network3D } from './network3d'
 
@@ -35,6 +36,7 @@ type Strip = { ln: LineNet; lg: LineNet['legs'][number]; geo: THREE.BufferGeomet
 /** Invisible strips over every stretch of track between two stations: tap one to change how it runs. */
 export function LegPicker({ net, see }: { net: Network3D; see: boolean }) {
   const select = useEditor((s) => s.selectLeg)
+  const setFollow = useEditor((s) => s.setFollow)
   const sel = useEditor((s) => s.selectedLeg)
   const accent = useTheme((s) => s.accent)
   const strips = useMemo(
@@ -59,8 +61,17 @@ export function LegPicker({ net, see }: { net: Network3D; see: boolean }) {
             renderOrder={on ? 12 : 1}
             raycast={pickable ? undefined : () => null}
             onClick={(e) => {
-              if (e.delta > 6) return
+              if (e.delta > 6) {
+                takeTrainPick() // it was a drag, not a tap
+                return
+              }
               e.stopPropagation()
+              // a train was pressed and has moved on while the finger was down: the tap was meant for the train
+              const train = takeTrainPick()
+              if (train) {
+                setFollow(train)
+                return
+              }
               select({ lineId: ln.line.id, leg: lg.k })
             }}
           >

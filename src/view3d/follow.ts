@@ -1,12 +1,33 @@
 import * as THREE from 'three'
 
-export type FollowMode = 'chase' | 'side' | 'cockpit'
+/** `free`: you look around yourself (drag to turn, pinch or wheel to zoom) while the camera stays with the train */
+export type FollowMode = 'chase' | 'side' | 'cockpit' | 'free'
+
+/** The modes with a fixed camera place (everything but `free`) */
+export type FixedFollowMode = Exclude<FollowMode, 'free'>
 
 export const FOLLOW_MODES: { id: FollowMode; label: string }[] = [
   { id: 'chase', label: 'Verfolger' },
   { id: 'side', label: 'Seite' },
   { id: 'cockpit', label: 'Cockpit' },
+  { id: 'free', label: 'Frei' },
 ]
+
+/**
+ * The train that was under the finger (or the mouse) when the pointer went down. Trains are fast: by the time the finger lifts
+ * the train has moved on, and the tap would land on the track. Whoever handles that tap asks `takeTrainPick` first.
+ */
+export const trainPick = { id: null as string | null, at: 0 }
+
+/** How long after pressing a train a tap still counts as a tap on that train (ms) */
+export const TRAIN_PICK_MS = 900
+
+/** The pressed train, once: null when none was pressed (or too long ago). */
+export function takeTrainPick(now: number = performance.now()): string | null {
+  const id = trainPick.id && now - trainPick.at < TRAIN_PICK_MS ? trainPick.id : null
+  trainPick.id = null
+  return id
+}
 
 /** Live data of the followed train: written by the train renderer every frame, read by the camera and the HUD. */
 export const followState = {
@@ -32,7 +53,7 @@ const up = new THREE.Vector3(0, 1, 0)
 const right = new THREE.Vector3()
 
 /** Where the camera wants to be for a mode (and what it looks at). */
-export function cameraFor(mode: FollowMode, pos: THREE.Vector3, dir: THREE.Vector3, underground: boolean, out: CameraRig): CameraRig {
+export function cameraFor(mode: FixedFollowMode, pos: THREE.Vector3, dir: THREE.Vector3, underground: boolean, out: CameraRig): CameraRig {
   const flat = new THREE.Vector3(dir.x, 0, dir.z)
   if (flat.lengthSq() < 1e-6) flat.set(1, 0, 0)
   flat.normalize()

@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import { RAIL, TRAM } from '../model/scale'
 import { LAND_Y, RAIL_Y, TRAM_ROAD_TOP } from './heights'
 import { UG_COVER } from '../model/profiles'
-import { xrayMaterial } from './xray'
+import { windowsCompile } from './night'
+import { xrayCompile, xrayMaterial } from './xray'
 import { addBridge } from './Bridges3D'
 import { posOn, TRAM_DIP } from './network3d'
 import type { LineNet, Network3D, P } from './network3d'
@@ -45,7 +46,16 @@ export function matrixAt(x: number, y: number, z: number, yaw: number, sx: numbe
   return tmp.matrix.clone()
 }
 
-export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, shape = 'box', geo, opacity, xray }: { items: THREE.Matrix4[]; color: string; roughness?: number; metalness?: number; emissive?: number; shape?: 'box' | 'cyl'; geo?: THREE.BufferGeometry; opacity?: number; xray?: boolean }) {
+/** x-ray dissolve plus lit windows */
+const windowedXray = {
+  onBeforeCompile: (shader: THREE.WebGLProgramParametersWithUniforms) => {
+    xrayCompile(shader)
+    windowsCompile(shader)
+  },
+  customProgramCacheKey: () => 'lf-xray-windows',
+}
+
+export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, shape = 'box', geo, opacity, xray, windows }: { items: THREE.Matrix4[]; color: string; roughness?: number; metalness?: number; emissive?: number; shape?: 'box' | 'cyl'; geo?: THREE.BufferGeometry; opacity?: number; xray?: boolean; windows?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   useLayoutEffect(() => {
     const m = ref.current
@@ -58,7 +68,7 @@ export function Boxes({ items, color, roughness = 0.9, metalness = 0, emissive, 
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, items.length]} frustumCulled={false}>
       {geo ? <primitive object={geo} attach="geometry" /> : shape === 'box' ? <boxGeometry args={[1, 1, 1]} /> : <cylinderGeometry args={[1, 1, 1, 12]} />}
-      <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} emissive={emissive ? color : '#000'} emissiveIntensity={emissive ?? 0} transparent={opacity !== undefined} opacity={opacity ?? 1} {...(xray ? xrayMaterial : {})} />
+      <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} emissive={emissive ? color : '#000'} emissiveIntensity={emissive ?? 0} transparent={opacity !== undefined} opacity={opacity ?? 1} {...(windows ? windowedXray : xray ? xrayMaterial : {})} />
     </instancedMesh>
   )
 }

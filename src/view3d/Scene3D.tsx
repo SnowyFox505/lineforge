@@ -1,7 +1,7 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { AnimatePresence } from 'motion/react'
 import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
 import { buildZoneGfx } from '../editor2d/zoneGfx'
@@ -12,6 +12,8 @@ import Icon from '../ui/Icon'
 import { lookOf } from '../model/profiles'
 import Airports3D from './Airport3D'
 import Buildings3D from './Buildings3D'
+import DayNight from './DayNight'
+import NightGlow from './NightGlow'
 import Pois3D from './Pois3D'
 import Label3D from './Label3D'
 import { LegPanel, LegPicker } from './LegTools'
@@ -268,6 +270,7 @@ export default function Scene3D() {
   const cam = useInitialCamera(doc)
   const net = useMemo(() => netFor(doc), [doc])
   if (import.meta.env.DEV) (window as unknown as { __net: unknown }).__net = net
+  const skyRef = useRef<HTMLDivElement>(null)
   const [auto, setAuto] = useState(false)
   const [see, setSee] = useState(false)
   // speed and pause belong to the world (they stay when you switch views)
@@ -280,19 +283,19 @@ export default function Scene3D() {
   world.speedIdx = speedIdx
 
   return (
-    <div className={`absolute inset-0 ${editId ? 'invisible' : ''}`} style={{ background: 'radial-gradient(ellipse at 50% 38%, #1a2a3a 0%, #0a1017 55%, #06080c 100%)' }}>
+    <div ref={skyRef} className={`absolute inset-0 ${editId ? 'invisible' : ''}`} style={{ background: 'radial-gradient(ellipse at 50% 38%, #1a2a3a 0%, #0a1017 55%, #06080c 100%)' }}>
       <Canvas frameloop={editId ? 'never' : 'always'} camera={{ position: cam.position, fov: 42, near: 1, far: Math.max(600, doc.size * 4) }} gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }} dpr={[1, 2]} performance={{ min: 0.55 }}>
         {/* while the camera moves the picture is drawn at a lower resolution, and sharp again once it rests */}
         <AdaptiveDpr />
-        <hemisphereLight args={['#cfe2ff', '#1d3a30', 1.7]} />
-        <directionalLight position={[doc.size * 0.6, doc.size * 0.9, doc.size * 0.35]} intensity={2.3} color="#fff0d9" />
-        <directionalLight position={[-doc.size * 0.5, doc.size * 0.4, -doc.size * 0.6]} intensity={0.35} color="#7aa8ff" />
+        {/* sky, sun, moon, stars and light follow the game time */}
+        <DayNight sky={skyRef} size={doc.size} />
         <Terrain doc={doc} net={net} see={see} />
         {!see && <Buildings3D doc={doc} net={net} />}
         {!see && <Airports3D doc={doc} net={net} />}
         <LegPicker net={net} see={see} />
         <Tracks3D net={net} />
         <Stations net={net} />
+        <NightGlow net={net} />
         <Pois3D net={net} />
         <Trains3D net={net} />
         <DevCam />

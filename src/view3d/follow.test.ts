@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { cameraFor, FOLLOW_MODES } from './follow'
+import { cameraFor, FOLLOW_MODES, takeTrainPick, TRAIN_PICK_MS, trainPick } from './follow'
 import type { CameraRig } from './follow'
 
 const rig = (): CameraRig => ({ position: new THREE.Vector3(), look: new THREE.Vector3() })
@@ -34,7 +34,17 @@ describe('follow camera', () => {
     expect(down).toBeGreaterThan(up)
   })
 
-  it('has three views', () => {
-    expect(FOLLOW_MODES.map((m) => m.id)).toEqual(['chase', 'side', 'cockpit'])
+  it('has three fixed views and a free one', () => {
+    expect(FOLLOW_MODES.map((m) => m.id)).toEqual(['chase', 'side', 'cockpit', 'free'])
+  })
+
+  it('remembers the pressed train for a tap that lands on the track, once and not for long', () => {
+    trainPick.id = 'T1'
+    trainPick.at = 1000
+    expect(takeTrainPick(1400)).toBe('T1')
+    expect(takeTrainPick(1400)).toBeNull() // used up
+    trainPick.id = 'T2'
+    trainPick.at = 1000
+    expect(takeTrainPick(1000 + TRAIN_PICK_MS + 1)).toBeNull() // too long ago
   })
 })

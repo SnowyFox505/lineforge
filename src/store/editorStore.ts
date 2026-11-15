@@ -199,7 +199,8 @@ export const useEditor = create<EditorState>((set, get) => {
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
     setEditStation: (editStationId) => set({ editStationId }),
     selectLeg: (selectedLeg) => set({ selectedLeg }),
-    setFollow: (followId) => set({ followId, selectedLeg: null }),
+    // the free view is what a drag makes of a fixed one: a new follow starts in the chase view again
+    setFollow: (followId) => set((s) => ({ followId, selectedLeg: null, followMode: followId && !s.followId && s.followMode === 'free' ? 'chase' : s.followMode })),
     setFollowMode: (followMode) => set({ followMode }),
     updateLeg: (lineId, leg, patch) =>
       mutate((d) => {

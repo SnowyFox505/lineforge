@@ -41,7 +41,7 @@ export default function FollowHud() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[14px] font-semibold leading-tight">{followState.status || 'Zug folgen'}</div>
-          <div className="truncate text-[11px] leading-tight text-white/50">{under ? 'Unter der Erde: Röntgenblick' : 'Über der Erde'}</div>
+          <div className="truncate text-[11px] leading-tight text-white/50">{(under ? 'Unter der Erde: Röntgenblick' : 'Über der Erde') + (mode === 'free' ? ' · Wischen zum Drehen' : ' · Wischen zum Umschauen')}</div>
         </div>
         <button onClick={() => step(-1)} aria-label="Vorheriger Zug" className="btn-soft grid h-9 w-9 place-items-center rounded-full disabled:opacity-30" disabled={ids.length < 2}>
           <Icon name="back" size={18} />
