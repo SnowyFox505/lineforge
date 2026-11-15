@@ -9,15 +9,17 @@ import { migrateLandmarks } from '../model/migrate'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { applyStroke, moveStationTo, splitLegAt } from '../model/lineEdit'
 import { stationName, stationTypeAt } from '../model/stationType'
+import { poolFor, takeName } from '../model/names'
+import { nameWaterAt, removeWaterName as removeWaterOf, renameWater as renameWaterOf, rerollWaterName as rerollWater, setWaterKind as setWaterKindOf } from '../model/waters'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
-import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
+import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, WaterKind, Zone, ZoneKind } from '../model/types'
 
 // Terrain is a typed array; keep immer from trying to freeze document internals.
 setAutoFreeze(false)
 
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
-export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi'
+export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName'
 /** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
 export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
@@ -27,6 +29,7 @@ export function groupOf(tool: Tool): ToolGroup {
   switch (tool) {
     case 'water':
     case 'erase':
+    case 'waterName':
       return 'terra'
     case 'line':
     case 'station':
@@ -68,6 +71,8 @@ interface EditorState {
   activeZone: Record<ZoneKind, number>
   poiKind: PoiKind
   selectedPoiId: string | null
+  /** id of the named body of water that is selected (tool 'waterName') */
+  selectedWaterId: string | null
   /** Station currently open in the 3D station editor */
   editStationId: string | null
   /** selected leg of a line in the 3D view (stretch between two stations) */
@@ -95,7 +100,9 @@ interface EditorState {
   updateLeg: (lineId: string, leg: number, patch: LegSettings) => void
 
   loadDoc: (doc: CityDoc) => void
-  newCity: (name: string, mode: GameMode, size?: number) => void
+  /** `nameQueues`: names the player wants for the next districts, suburbs, waters and landscapes */
+  newCity: (name: string, mode: GameMode, size?: number, nameQueues?: CityDoc['nameQueues']) => void
+  setNameQueues: (queues: NonNullable<CityDoc['nameQueues']>) => void
   /** Enlarge the map around its centre; terrain and stations keep their place. */
   resizeMap: (newSize: number) => void
   renameCity: (name: string) => void
@@ -114,10 +121,18 @@ interface EditorState {
   paintZone: (cx: number, cy: number, zoneId: number) => void
   addZone: (kind: ZoneKind) => number
   renameZone: (id: number, name: string) => void
+  /** A new name for a district or suburb: the next wish of the player, else a random one */
+  rerollZoneName: (id: number) => void
   removeZone: (id: number) => void
   setActiveZone: (kind: ZoneKind, id: number) => void
   setPoiKind: (kind: PoiKind) => void
   selectPoi: (id: string | null) => void
+  /** Tap on the map with the water-name tool: names the water at the cell (if it has no name yet) and selects it; on land it selects nothing. */
+  tapWater: (x: number, y: number) => void
+  setWaterKind: (id: string, kind: WaterKind) => void
+  rerollWaterName: (id: string) => void
+  renameWater: (id: string, name: string) => void
+  removeWaterName: (id: string) => void
   addPoi: (x: number, y: number) => string | null
   updatePoi: (id: string, patch: Partial<Omit<Poi, 'id'>>) => void
   removePoi: (id: string) => void
@@ -183,6 +198,7 @@ export const useEditor = create<EditorState>((set, get) => {
     activeZone: { city: 0, suburb: 0, airport: 0 },
     poiKind: 'stadium',
     selectedPoiId: null,
+    selectedWaterId: null,
     editStationId: null,
     selectedLeg: null,
     followId: null,
@@ -191,7 +207,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -250,9 +266,9 @@ export const useEditor = create<EditorState>((set, get) => {
         }
       })
     },
-    newCity: (name, mode, size) =>
+    newCity: (name, mode, size, nameQueues) =>
       set({
-        doc: createCity(name, mode, size),
+        doc: { ...createCity(name, mode, size), ...(nameQueues ? { nameQueues } : {}) },
         past: [],
         future: [],
         activeLineId: null,
@@ -261,6 +277,7 @@ export const useEditor = create<EditorState>((set, get) => {
         tab: 'map',
         tool: 'pan',
       }),
+    setNameQueues: (queues) => commit({ ...get().doc, nameQueues: queues }),
     renameCity: (name) => set((s) => ({ doc: { ...s.doc, name } })),
     setMode: (mode) => set((s) => ({ doc: { ...s.doc, mode } })),
 
@@ -349,14 +366,33 @@ export const useEditor = create<EditorState>((set, get) => {
       const zones = doc.zones ?? []
       const id = zones.reduce((m, z) => Math.max(m, z.id), 0) + 1
       const n = zones.filter((z) => z.kind === kind).length + 1
-      const name = kind === 'airport' && n === 1 ? 'Flughafen' : `${ZONE_DEFAULT_NAME[kind]} ${n}`
+      const plain = kind === 'airport' && n === 1 ? 'Flughafen' : `${ZONE_DEFAULT_NAME[kind]} ${n}`
+      // districts and suburbs: first a name the player wished for, else a random one that is not in use
+      let name = plain
+      let nameQueues = doc.nameQueues
+      if (kind === 'city' || kind === 'suburb') {
+        const nk = kind === 'city' ? 'district' : 'suburb'
+        const taken = takeName(doc, nk, poolFor(nk), plain)
+        name = taken.name
+        nameQueues = taken.queues
+      }
       const zone: Zone = { id, kind, name }
-      set({ doc: { ...doc, zones: [...zones, zone] }, activeZone: { ...get().activeZone, [kind]: id } })
+      set({ doc: { ...doc, zones: [...zones, zone], nameQueues }, activeZone: { ...get().activeZone, [kind]: id } })
       return id
     },
     renameZone: (id, name) => {
       const { doc } = get()
       commit({ ...doc, zones: (doc.zones ?? []).map((z) => (z.id === id ? { ...z, name } : z)) })
+    },
+    rerollZoneName: (id) => {
+      const { doc } = get()
+      const zone = (doc.zones ?? []).find((z) => z.id === id)
+      if (!zone || (zone.kind !== 'city' && zone.kind !== 'suburb')) return
+      const nk = zone.kind === 'city' ? 'district' : 'suburb'
+      // the old name is free again, so the new one differs from it
+      const others = { ...doc, zones: (doc.zones ?? []).map((z) => (z.id === id ? { ...z, name: '' } : z)) }
+      const taken = takeName(others, nk, poolFor(nk), zone.name)
+      commit({ ...others, zones: others.zones!.map((z) => (z.id === id ? { ...z, name: taken.name } : z)), nameQueues: taken.queues })
     },
     removeZone: (id) => {
       const { doc, activeZone } = get()
@@ -367,6 +403,16 @@ export const useEditor = create<EditorState>((set, get) => {
     setActiveZone: (kind, id) => set({ activeZone: { ...get().activeZone, [kind]: id } }),
     setPoiKind: (poiKind) => set({ poiKind }),
     selectPoi: (selectedPoiId) => set({ selectedPoiId }),
+    tapWater: (x, y) => {
+      const out = nameWaterAt(get().doc, x, y)
+      if (!out) return set({ selectedWaterId: null })
+      if (out.doc !== get().doc) commit(out.doc, { selectedWaterId: out.id })
+      else set({ selectedWaterId: out.id })
+    },
+    setWaterKind: (id, kind) => commit(setWaterKindOf(get().doc, id, kind)),
+    rerollWaterName: (id) => commit(rerollWater(get().doc, id)),
+    renameWater: (id, name) => commit(renameWaterOf(get().doc, id, name)),
+    removeWaterName: (id) => commit(removeWaterOf(get().doc, id), { selectedWaterId: null }),
     addPoi: (x, y) => {
       const { doc, poiKind } = get()
       if (x < 0 || y < 0 || x >= doc.size || y >= doc.size) return null

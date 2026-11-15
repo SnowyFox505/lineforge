@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.9.0',
+    date: '2026-11-16',
+    headline: 'Namen für alles',
+    changes: [
+      {
+        title: 'Gewässer benennen',
+        what: 'Seen, Flüsse, Kanäle und das Meer können einen Namen bekommen. Das Spiel erkennt, was es ist: ein See ist breit, ein Fluss ist lang und schmal. Fließt ein Fluss in einen See, sind es zwei Gewässer mit eigenem Namen.',
+        how: 'Öffne Terraforming und wähle „Gewässer“. Tippe auf das Wasser: Es bekommt sofort einen Namen und eine Art. Oben im Menü änderst du den Namen, die Art (zum Beispiel Fluss oder Kanal), würfelst einen neuen Namen oder entfernst ihn. Große Gewässer am Kartenrand können auch ein Meer sein.',
+        benefit: 'Deine Karte bekommt Orte mit Namen, und die Gewässer erscheinen in blauer Schrift auf der Karte.',
+      },
+      {
+        title: 'Namen, die sich das Spiel ausdenkt',
+        what: 'Neue Bezirke und Vororte bekommen automatisch einen Namen aus mehr als 500 vorbereiteten, erfundenen Ortsnamen. Ähnliche Namen wie Rotterfeld und Rotterhagen kommen nie in derselben Stadt vor.',
+        how: 'Du musst nichts tun. Mit dem Pfeil neben dem Namen im Gebiete-Menü würfelst du einen neuen.',
+        benefit: 'Deine Stadt klingt nach echter Gegend, ohne dass du dir alle Namen ausdenken musst.',
+      },
+      {
+        title: 'Wunschliste für Namen',
+        what: 'Du kannst Namen aufschreiben, die du schön findest. Das Spiel nimmt sie der Reihe nach für den nächsten neuen Bezirk, Vorort, See oder Fluss.',
+        how: 'Beim Gründen einer Stadt unter „Namen vorgeben“ oder später in den Stadt-Einstellungen unter „Namen für Neues“. Schreibe einen oder mehrere Namen (mit Komma getrennt) und tippe auf „Hinzufügen“.',
+        benefit: 'Deine Lieblingsnamen kommen zuerst dran. Was übrig bleibt, bleibt in der Liste.',
+      },
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-11-15',
     headline: 'Stationen, Nacht und Updates',

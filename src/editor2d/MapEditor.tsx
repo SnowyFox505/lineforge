@@ -11,6 +11,7 @@ import { drawPoi, drawPoiReach, POI_STYLE } from './drawPoi'
 import { useTheme, getAccent } from '../ui/theme'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
+import { drawWaterLabels } from './waterLabels'
 import { buildTerrainPaths } from './terrainRender'
 import { drawTerrainCached, newTerrainCache } from './terrainCache'
 import TrainLayer from './TrainLayer'
@@ -125,6 +126,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   }, [terrainPaths, linePaths, doc.size])
   const selectedWaypoint = useEditor((s) => s.selectedWaypoint)
   const selectedPoiId = useEditor((s) => s.selectedPoiId)
+  const selectedWaterId = useEditor((s) => s.selectedWaterId)
   const wpDrag = useRef<{ lineId: string; k: number; j: number; moved: boolean } | null>(null)
   /** the stroke being drawn (lattice coordinates); `moved` once the finger has left the tap radius */
   const stroke = useRef<{ pts: { x: number; y: number }[]; moved: boolean } | null>(null)
@@ -201,6 +203,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     })
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     drawZoneLabels(ctx, v, zoneGfx)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    drawWaterLabels(ctx, v, doc, tool === 'waterName' ? selectedWaterId : null)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
     let animating = false
@@ -517,7 +521,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, activeLineId, tool, brush, fit, accent])
+  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent])
 
   useEffect(() => {
     userMoved.current = false
@@ -679,6 +683,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
   function handleTap(p: { x: number; y: number }) {
     const st = useEditor.getState()
+    if (st.tool === 'waterName') {
+      const c = toCell(p)
+      st.tapWater(c.x, c.y)
+      return
+    }
     if (st.tool === 'poi') {
       const hitP = hitPoi(p)
       if (hitP) st.selectPoi(hitP)

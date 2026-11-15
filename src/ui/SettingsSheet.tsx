@@ -3,6 +3,7 @@ import type { GameMode } from '../model/types'
 import { exportCityJson } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
 import Icon from './Icon'
+import NameQueuesEditor from './NameQueues'
 import { CommitInput, Segmented, Sheet } from './primitives'
 
 export function downloadBlob(blob: Blob, filename: string) {
@@ -24,6 +25,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   const renameCity = useEditor((s) => s.renameCity)
   const setMode = useEditor((s) => s.setMode)
   const resizeMap = useEditor((s) => s.resizeMap)
+  const setNameQueues = useEditor((s) => s.setNameQueues)
   const bigger = MAP_SIZES.filter((m) => m.size > doc.size)
 
   return (
@@ -63,6 +65,11 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
             <p className="text-sm text-white/55">Größer geht es nicht.</p>
           )}
           <p className="mt-2 text-xs text-white/40">Beim Erweitern bleibt alles in der Mitte erhalten. Rückgängig ist möglich.</p>
+        </div>
+
+        <div>
+          <div className="eyebrow mb-2">Namen für Neues</div>
+          <NameQueuesEditor value={doc.nameQueues} onChange={setNameQueues} />
         </div>
 
         <button

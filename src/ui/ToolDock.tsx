@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { stopsAt } from '../model/stops'
+import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
 import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
 import { effectiveTypes } from '../plan/glyphs'
 import { poiModel, poiRadius, poiStations, poisServedBy, POI_MODELS, POI_RADIUS_MAX, POI_RADIUS_MIN, stationsInReach } from '../model/poi'
@@ -38,6 +39,7 @@ const TOOLBOXES: Toolbox[] = [
     tools: [
       { id: 'water', label: 'Wasser', icon: 'drop' },
       { id: 'erase', label: 'Land', icon: 'leaf' },
+      { id: 'waterName', label: 'Gewässer', icon: 'edit' },
     ],
   },
   {
@@ -353,6 +355,7 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   const setActive = useEditor((s) => s.setActiveZone)
   const addZone = useEditor((s) => s.addZone)
   const renameZone = useEditor((s) => s.renameZone)
+  const rerollZone = useEditor((s) => s.rerollZoneName)
   const removeZone = useEditor((s) => s.removeZone)
   const zones = (doc.zones ?? []).filter((z) => z.kind === kind)
   const current = zones.find((z) => z.id === active)
@@ -386,11 +389,57 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
         <div className="card flex items-center gap-2 rounded-2xl p-2">
           <span className="eyebrow shrink-0 pl-1">Name</span>
           <CommitInput value={current.name} onCommit={(name) => renameZone(current.id, name)} className="min-w-0 flex-1 !py-2" />
+          {kind !== 'airport' && (
+            <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl" onClick={() => rerollZone(current.id)} aria-label="Neuen Namen würfeln">
+              <Icon name="refresh" size={18} />
+            </button>
+          )}
           <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl text-red-300" onClick={() => removeZone(current.id)} aria-label={`${L.single} löschen`}>
             <Icon name="trash" size={18} />
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Name the bodies of water: tap a lake, river or sea; kind, name and a new random name can be changed here. */
+function WaterPanel() {
+  const doc = useEditor((s) => s.doc)
+  const id = useEditor((s) => s.selectedWaterId)
+  const setKind = useEditor((s) => s.setWaterKind)
+  const reroll = useEditor((s) => s.rerollWaterName)
+  const rename = useEditor((s) => s.renameWater)
+  const remove = useEditor((s) => s.removeWaterName)
+  const named = namedWaters(doc).find((n) => n.water.id === id)
+  if (!named) {
+    return <p className="text-sm text-white/55">Tippe auf einen See, Fluss, Kanal oder das Meer. Das Spiel erkennt, was es ist, und gibt ihm einen Namen. Du kannst beides ändern.</p>
+  }
+  const { water, body } = named
+  const kinds = allowedKinds(doc, body)
+  return (
+    <div className="card space-y-2 rounded-2xl p-3">
+      <div className="flex items-center gap-2">
+        <CommitInput value={water.name} onCommit={(name) => rename(water.id, name)} className="min-w-0 flex-1 !py-2" />
+        <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl" onClick={() => reroll(water.id)} aria-label="Neuen Namen würfeln">
+          <Icon name="refresh" size={18} />
+        </button>
+        <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl text-red-300" onClick={() => remove(water.id)} aria-label="Namen entfernen">
+          <Icon name="trash" size={18} />
+        </button>
+      </div>
+      {kinds.length > 1 && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {kinds.map((k) => (
+            <Chip key={k} active={water.kind === k} onClick={() => setKind(water.id, k)}>
+              {WATER_LABEL[k]}
+            </Chip>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-white/45">
+        {WATER_LABEL[water.kind]} · {body.area} Felder
+      </p>
     </div>
   )
 }
@@ -536,6 +585,7 @@ export default function ToolDock() {
                   </div>
                 </div>
               )}
+              {tool === 'waterName' && <WaterPanel />}
               {tool === 'link' && <LinkPanel />}
               {tool === 'line' && <LinePanel />}
               {(tool === 'city' || tool === 'suburb' || tool === 'airport') && <ZonePanel kind={tool} />}

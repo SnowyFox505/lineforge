@@ -139,6 +139,8 @@ export function importCityJson(text: string, keepId = false): CityDoc {
     zones: Array.isArray(raw.zones) ? raw.zones : [],
     zoneGrid: Array.isArray(raw.zoneGrid) && raw.zoneGrid.length === raw.size ** 2 ? Uint16Array.from(raw.zoneGrid) : new Uint16Array(raw.size ** 2),
     pois: Array.isArray(raw.pois) ? raw.pois : [],
+    waters: Array.isArray(raw.waters) ? raw.waters : undefined,
+    nameQueues: raw.nameQueues && typeof raw.nameQueues === 'object' ? raw.nameQueues : undefined,
     links: Array.isArray(raw.links) ? raw.links : undefined,
     clock: typeof raw.clock === 'number' ? raw.clock : undefined,
     geoV: typeof raw.geoV === 'number' ? raw.geoV : undefined,

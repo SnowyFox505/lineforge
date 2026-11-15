@@ -118,6 +118,23 @@ export interface Poi {
   model?: 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower'
 }
 
+/** What a body of water is: the player decides, the map suggests one (see model/waters.ts). */
+export type WaterKind = 'lake' | 'river' | 'canal' | 'sea'
+
+/**
+ * A named body of water. It is found again by the cell (x, y) that lay in it when it was named: the body is
+ * whatever water is connected to that cell now, so painting more water or land keeps the name with the water.
+ */
+export interface WaterName {
+  id: string
+  kind: WaterKind
+  name: string
+  x: number
+  y: number
+  /** The name was made up by the game (not typed by the player): it changes with the kind */
+  auto?: boolean
+}
+
 export interface CityDoc {
   id: string
   name: string
@@ -132,6 +149,10 @@ export interface CityDoc {
   zoneGrid?: Uint16Array
   zones?: Zone[]
   pois?: Poi[]
+  /** Named bodies of water (lakes, rivers, canals, seas) */
+  waters?: WaterName[]
+  /** Names the player wants for the next new districts, suburbs, waters and landscapes (first one is used first) */
+  nameQueues?: Partial<Record<'district' | 'suburb' | 'water' | 'landscape', string[]>>
   /** Pairs of stations that are linked as one interchange (a tram stop next to a station): they stay separate stations but share a name */
   links?: [string, string][]
   /** Game time (minutes, see sim/clock) when the city was last saved */

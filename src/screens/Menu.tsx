@@ -11,6 +11,8 @@ import { Segmented, spring } from '../ui/primitives'
 import AccountSheet, { WELCOME_KEY } from '../ui/AccountSheet'
 import UpdateOverlay from '../ui/UpdateOverlay'
 import WhatsNew from '../ui/WhatsNew'
+import NameQueuesEditor from '../ui/NameQueues'
+import type { NameQueues } from '../model/names'
 import { lastSeenVersion, markVersionSeen, useUpdateAvailable } from '../ui/updates'
 import { RELEASES, releasesSince } from '../changelog'
 import type { Release } from '../changelog'
@@ -234,6 +236,7 @@ function NewCity({ back }: { back: () => void }) {
   const [placeholder] = useState(() => NAMES[Math.floor(Math.random() * NAMES.length)])
   const [mode, setMode] = useState<GameMode>('normal')
   const [size, setSize] = useState(256)
+  const [queues, setQueues] = useState<Partial<NameQueues>>({})
 
   const modes: { id: GameMode; icon: IconName }[] = [
     { id: 'normal', icon: 'alert' },
@@ -287,11 +290,17 @@ function NewCity({ back }: { back: () => void }) {
           <div className="eyebrow mb-2">Kartengröße</div>
           <Segmented value={size} onChange={setSize} options={MAP_SIZES.map((m) => ({ value: m.size, label: m.label, sub: `${m.size}×${m.size}` }))} />
         </div>
+
+        <div>
+          <div className="eyebrow mb-2">Namen vorgeben (freiwillig)</div>
+          <p className="mb-3 text-xs text-white/50">Schreibe dir schöne Namen auf. Neue Bezirke, Vororte, Gewässer und Landschaften nehmen sie der Reihe nach. Ohne Wünsche wählt das Spiel zufällig.</p>
+          <NameQueuesEditor value={queues} onChange={setQueues} />
+        </div>
       </div>
 
       <motion.button
         whileTap={{ scale: 0.97 }}
-        onClick={() => newCity(name.trim() || placeholder, mode, size)}
+        onClick={() => newCity(name.trim() || placeholder, mode, size, Object.values(queues).some((q) => q?.length) ? queues : undefined)}
         className="btn-primary mx-auto mt-4 flex w-full max-w-md items-center justify-center gap-2 rounded-[22px] py-4 text-lg"
       >
         Stadt gründen <Icon name="arrow" size={20} stroke={2.4} />
