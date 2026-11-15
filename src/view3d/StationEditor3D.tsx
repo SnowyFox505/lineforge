@@ -5,9 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { effectiveTypes } from '../plan/glyphs'
-import { isUndergroundStation, lookOf, STATION_LOOKS, UG_COVER, UG_LIFT } from '../model/profiles'
+import { HEIGHT_LABEL, lookOf, STATION_LOOKS, stationHeight, stationLift, UG_COVER } from '../model/profiles'
 import { RAIL } from '../model/scale'
 import { layoutStation, MAX_TRACKS, resolveDesign, stationOperators } from '../model/stationDesign'
+import StationHeightPicker from '../ui/StationHeightPicker'
 import { clusterByDirection, levelHeight, lineDirectionAtStation, MAX_LEVELS } from '../model/stationGroups'
 import type { CityDoc } from '../model/types'
 import type { OperatorId, PlatformLength, PlatformStyle, StationDesign } from '../model/types'
@@ -181,8 +182,8 @@ function Panel({ id, level, setLevel }: { id: string; level: number; setLevel: (
       </Section>
 
       <Section title="Lage">
-        <Toggle on={isUndergroundStation(doc, st)} onChange={(v) => update(id, { underground: v })} label="Unterirdischer Bahnhof (im Tunnel)" />
-        <p className="mt-2 text-xs text-white/45">Das geht für jeden Bahnhof, auch für S-Bahn und Fernverkehr (zum Beispiel am Flughafen). Reine U-Bahn-Stationen und Flughäfen liegen standardmäßig unter der Erde. Bei mehreren Ebenen ist das nicht möglich. Den Streckenverlauf stellst du in der 3D-Karte ein: Abschnitt antippen.</p>
+        <StationHeightPicker doc={doc} id={id} disabled={levels > 1} />
+        <p className="mt-2 text-xs text-white/45">{HEIGHT_LABEL[stationHeight(doc, st)].hint}. Das geht für jeden Bahnhof, auch für S-Bahn und Fernverkehr (zum Beispiel am Flughafen). Reine U-Bahn-Stationen und Flughäfen liegen standardmäßig unter der Erde. Bei mehreren Ebenen ist das nicht möglich. Die Gleise steigen oder fallen von selbst zum Bahnhof; den Streckenverlauf stellst du in der 3D-Karte ein: Abschnitt antippen.</p>
       </Section>
 
       <Section title="Anzahl der Gleise">
@@ -294,7 +295,7 @@ export default function StationEditor3D() {
   }, [design, ops])
   // what the station looks like in the world: the same rules as there (level height, tunnel, outer look, entrance building)
   const levelCount = Math.max(1, assign.length)
-  const liftWorld = st && levelCount === 1 && isUndergroundStation(doc, st) ? UG_LIFT : levelHeight(levelCount, activeLevel)
+  const liftWorld = st ? stationLift(doc, st, levelCount, activeLevel) : levelHeight(levelCount, activeLevel)
   const lift = liftWorld / RAIL // the editor builds at design size
   const underground = lift <= UG_COVER / RAIL
   const sign: EntranceSign = ops.includes('ubahn') ? 'U' : ops.includes('sbahn') ? 'S' : 'Bf'

@@ -63,6 +63,8 @@ export interface Station {
   look?: StationLook
   /** Underground station (platforms below the ground). Default: true for stations that only the metro serves. */
   underground?: boolean
+  /** Raised on a viaduct or sunk into an open cutting (single-level stations on or near the ground; `underground` wins). */
+  height?: 'elevated' | 'lowered'
   /** Position of the station in the network plan, set by hand (plan cells, see plan/schematic.ts); without it the plan places the station */
   planPin?: Pt
   /** Connection to the outside world: the far-away destination trains from here go to (only regional and long-distance lines may serve it) */

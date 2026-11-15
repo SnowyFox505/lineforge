@@ -4,6 +4,7 @@ import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { STREET_STYLES } from '../editor2d/streets'
 import { branchIsBare } from '../model/lineKinds'
 import { outsideBlockers } from '../model/outside'
+import StationHeightPicker from './StationHeightPicker'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
 import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
@@ -174,6 +175,7 @@ function StationCard() {
           {STATION_TYPES[effective].label}: {STATION_TYPES[effective].hint}
         </p>
       )}
+      {st.type !== 'tramstop' && <StationHeightPicker doc={doc} id={st.id} className="mt-2" />}
       {st.type !== 'tramstop' && (
         <div className="mt-2 flex items-center gap-2">
           <Chip active={!!st.outside} onClick={() => (st.outside || !blockers.length) && setOutside(st.id, !st.outside)}>

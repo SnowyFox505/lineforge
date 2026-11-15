@@ -4,8 +4,8 @@ import { bypassFor, layoutStation, resolveDesign, scaleLayout, stationOperators,
 import { passesThrough, stopsAt } from '../model/stops'
 import type { ResolvedDesign, StationLayout } from '../model/stationDesign'
 import type { CityDoc, Line, OperatorId, Station } from '../model/types'
-import { clusterByDirection, levelHeight, lineDirectionAtStation, meanDirection, LEVEL_STEP } from '../model/stationGroups'
-import { EMB_H, isUndergroundStation, legBridge, legProfile, UG_COVER, UG_LIFT } from '../model/profiles'
+import { clusterByDirection, lineDirectionAtStation, meanDirection, LEVEL_STEP } from '../model/stationGroups'
+import { EMB_H, isUndergroundStation, legBridge, legProfile, stationLift, UG_COVER, UG_LIFT } from '../model/profiles'
 import type { BridgeStyle, TrackProfile } from '../model/types'
 import { trainLength, VEHICLES } from '../model/vehicles'
 import { layoutLines } from '../plan/layout'
@@ -1036,7 +1036,7 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
         ax = Math.cos(a)
         az = -Math.sin(a)
       }
-      const lift = isDeep || (levelCount === 1 && isUndergroundStation(doc, st)) ? UG_LIFT : levelHeight(levelCount, k)
+      const lift = isDeep ? UG_LIFT : stationLift(doc, st, levelCount, k)
       const g: StationGroup = {
         index: groups.length,
         kind: 'main',

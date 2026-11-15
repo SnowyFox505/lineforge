@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.20.0',
+    date: '2026-11-16',
+    headline: 'Erhöhte und abgesenkte Bahnhöfe',
+    changes: [
+      {
+        title: 'Bahnhöfe auf dem Viadukt',
+        what: 'Ein Bahnhof kann jetzt hoch über dem Boden liegen. Seine Bahnsteige stehen auf Pfeilern, und die Gleise davor und dahinter steigen auf einen Damm mit Bögen.',
+        how: 'Station antippen und bei „Lage“ (Karte oder 3D-Bahnhofseditor) „Erhöht“ wählen. Die Strecke zu diesem Bahnhof wird von selbst zum Damm; willst du sie anders, tippst du in 3D den Abschnitt an und stellst ihn um.',
+        benefit: 'Stadtbahnen über den Straßen, Hochbahnen wie in großen Metropolen und freie Fahrt über Kreuzungen sind möglich.',
+      },
+      {
+        title: 'Abgesenkte Bahnhöfe',
+        what: 'Ein Bahnhof kann auch in einem offenen Einschnitt liegen: unter dem Boden, aber ohne Tunneldecke. Das Gelände wird um die Gleise herum ausgehoben.',
+        how: 'Station antippen und bei „Lage“ „Abgesenkt“ wählen. Mit „Ebenerdig“ und „Unterirdisch“ wählst du die anderen Lagen, so wie vorher den Tunnel.',
+        benefit: 'Du hast vier Lagen zur Auswahl und kannst Bahnhöfe passend zur Landschaft bauen, zum Beispiel in einem Tal oder an einem Hang.',
+      },
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-11-16',
     headline: 'Dom, Kirche, Rathaus, Friedhof und Schloss',

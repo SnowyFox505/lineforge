@@ -1,3 +1,4 @@
+import { levelHeight } from './stationGroups'
 import { stopsAt } from './stops'
 import type { BridgeStyle, CityDoc, Line, Station, StationLook, TrackProfile } from './types'
 
@@ -7,6 +8,11 @@ export const EMB_H = 1.25
 export const UG_LIFT = -2.0
 /** Anything lower than this lies fully under the ground (no trench is cut into the terrain) */
 export const UG_COVER = -1.0
+
+/** Platform height of an elevated station: level with the viaduct (embankment) its tracks run on */
+export const ELEV_LIFT = EMB_H
+/** Platform height of a lowered station in an open cutting (shallower than UG_COVER, so the ground stays open above it) */
+export const LOWER_LIFT = -0.7
 
 export const PROFILE_LABEL: Record<TrackProfile, string> = {
   ground: 'Ebenerdig',
@@ -18,6 +24,12 @@ export const PROFILE_LABEL: Record<TrackProfile, string> = {
 export function legProfile(line: Line, k: number, doc?: CityDoc): TrackProfile {
   const own = line.legs?.[k]?.profile
   if (own) return own
+  // a leg that starts or ends at an elevated station climbs onto an arched embankment
+  if (doc) {
+    const a = doc.stations[line.stations[k]]
+    const b = doc.stations[line.stations[k + 1]]
+    if ((a && stopsAt(line, a.id) && stationHeight(doc, a) === 'elevated') || (b && stopsAt(line, b.id) && stationHeight(doc, b) === 'elevated')) return 'embankment'
+  }
   if (line.operator === 'ubahn') return 'tunnel'
   // a leg that starts or ends at an underground station dives into a tunnel by default
   if (doc) {
@@ -39,9 +51,41 @@ export function legBridge(line: Line, k: number): BridgeStyle {
  */
 export function isUndergroundStation(doc: CityDoc, st: Station): boolean {
   if (st.underground !== undefined) return st.underground
+  // raised or lowered by choice: not underground, whatever the lines
+  if (st.height) return false
   const lines = Object.values(doc.lines).filter((l) => stopsAt(l, st.id))
   if (!lines.length) return false
   return st.type === 'airport' || lines.every((l) => l.operator === 'ubahn')
+}
+
+export type StationHeight = 'ground' | 'elevated' | 'lowered' | 'underground'
+
+export const HEIGHT_LABEL: Record<StationHeight, { label: string; hint: string }> = {
+  ground: { label: 'Ebenerdig', hint: 'Bahnsteige auf Höhe des Bodens' },
+  elevated: { label: 'Erhöht', hint: 'Auf einem Viadukt über der Straße' },
+  lowered: { label: 'Abgesenkt', hint: 'In einem offenen Einschnitt unter dem Boden' },
+  underground: { label: 'Unterirdisch', hint: 'Im Tunnel unter der Erde' },
+}
+
+/** Where the platforms of a station lie: on the ground, on a viaduct, in a cutting or in a tunnel. */
+export function stationHeight(doc: CityDoc, st: Station): StationHeight {
+  if (isUndergroundStation(doc, st)) return 'underground'
+  return st.height ?? 'ground'
+}
+
+/** Platform height (world units) of level `index` of a station with `levelCount` levels. A single level follows the station's setting. */
+export function stationLift(doc: CityDoc, st: Station, levelCount: number, index: number): number {
+  if (levelCount > 1) return levelHeight(levelCount, index)
+  switch (stationHeight(doc, st)) {
+    case 'underground':
+      return UG_LIFT
+    case 'elevated':
+      return ELEV_LIFT
+    case 'lowered':
+      return LOWER_LIFT
+    default:
+      return 0
+  }
 }
 
 export interface BridgeInfo {
