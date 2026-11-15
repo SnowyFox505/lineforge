@@ -2,6 +2,7 @@ import { produce, setAutoFreeze } from 'immer'
 import { create } from 'zustand'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
+import { addCounty as addCountyTo, divideIntoCounties } from '../model/counties'
 import { applyMap } from '../model/mapGen'
 import type { MapPreset } from '../model/mapGen'
 import { LAND, WATER } from '../model/types'
@@ -22,7 +23,7 @@ setAutoFreeze(false)
 
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
-export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName' | 'forest' | 'mountain' | 'legSmooth' | 'legRebuild'
+export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName' | 'forest' | 'mountain' | 'county' | 'legSmooth' | 'legRebuild'
 /** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
 export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
@@ -46,6 +47,7 @@ export function groupOf(tool: Tool): ToolGroup {
     case 'suburb':
     case 'airport':
     case 'zoneErase':
+    case 'county':
       return 'area'
     case 'poi':
       return 'poi'
@@ -76,6 +78,9 @@ interface EditorState {
   selectedWaypoint: { lineId: string; k: number; j: number } | null
   /** Zone that the area tools currently paint with, per kind (0 = none yet) */
   activeZone: Record<ZoneKind, number>
+  /** the county painted with (0 = none yet) and whether the brush takes counties away */
+  activeCounty: number
+  countyErase: boolean
   /** the area picker is on: the next tap on the map chooses the area under it to paint with */
   pickZone: boolean
   poiKind: PoiKind
@@ -162,6 +167,19 @@ interface EditorState {
   removeZone: (id: number) => void
   setActiveZone: (kind: ZoneKind, id: number) => void
   setPickZone: (on: boolean) => void
+  setActiveCounty: (id: number) => void
+  setCountyErase: (on: boolean) => void
+  /** Start a county stroke: records history and makes sure there is a county to paint with. Returns its id (0 = erasing). */
+  beginCountyPaint: () => number
+  paintCounty: (cx: number, cy: number, countyId: number) => void
+  /** A new county (with a wished-for or made-up name), chosen as the one to paint with */
+  addCounty: () => number
+  renameCounty: (id: number, name: string) => void
+  recolorCounty: (id: number, color: string) => void
+  rerollCountyName: (id: number) => void
+  removeCounty: (id: number) => void
+  /** Cut the land into this many counties of similar size (replaces the existing ones) */
+  divideCounties: (n: number) => void
   /** Chooses the area at this cell: its tool is switched on and it becomes the one painted with. False when no area is there. */
   pickZoneAt: (x: number, y: number) => boolean
   setPoiKind: (kind: PoiKind) => void
@@ -236,6 +254,8 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedWaypoint: null,
     activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 },
     pickZone: false,
+    activeCounty: 0,
+    countyErase: false,
     poiKind: 'stadium',
     selectedPoiId: null,
     selectedWaterId: null,
@@ -249,7 +269,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, activeCounty: 0, countyErase: false, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool, selectedLeg: null, branchPick: null }),
     setBrush: (brush) => set({ brush }),
@@ -362,6 +382,11 @@ export const useEditor = create<EditorState>((set, get) => {
         for (const s of Object.values(d.stations)) {
           s.x += off
           s.y += off
+        }
+        if (d.countyGrid) {
+          const cg = new Uint8Array(newSize * newSize)
+          for (let y = 0; y < old; y++) cg.set(d.countyGrid.subarray(y * old, (y + 1) * old), (y + off) * newSize + off)
+          d.countyGrid = cg
         }
         if (d.zoneGrid) {
           const zg = new Uint16Array(newSize * newSize)
@@ -482,6 +507,70 @@ export const useEditor = create<EditorState>((set, get) => {
         }
       }
       if (changed) set({ doc: { ...doc, zoneGrid: grid } })
+    },
+    setActiveCounty: (activeCounty) => set({ activeCounty }),
+    setCountyErase: (countyErase) => set({ countyErase }),
+    beginCountyPaint: () => {
+      const st = get()
+      st.checkpoint()
+      if (st.countyErase) return 0
+      let id = st.activeCounty
+      if (!id || !st.doc.counties?.some((c) => c.id === id)) id = get().addCounty()
+      return id
+    },
+    paintCounty: (cx, cy, countyId) => {
+      const { doc, brush } = get()
+      const { size } = doc
+      const grid = new Uint8Array(doc.countyGrid ?? new Uint8Array(size * size))
+      const r = brush - 1
+      let changed = false
+      for (let y = cy - r; y <= cy + r; y++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+          if (x < 0 || y < 0 || x >= size || y >= size) continue
+          if ((x - cx) ** 2 + (y - cy) ** 2 > r * r + r) continue
+          const i = y * size + x
+          if (grid[i] !== countyId) {
+            grid[i] = countyId
+            changed = true
+          }
+        }
+      }
+      if (changed) set({ doc: { ...doc, countyGrid: grid } })
+    },
+    addCounty: () => {
+      const made = addCountyTo(get().doc)
+      if (!made) return 0
+      set({ doc: made.doc, activeCounty: made.id, countyErase: false })
+      return made.id
+    },
+    renameCounty: (id, name) => {
+      const { doc } = get()
+      commit({ ...doc, counties: (doc.counties ?? []).map((c) => (c.id === id ? { ...c, name } : c)) })
+    },
+    recolorCounty: (id, color) => {
+      const { doc } = get()
+      commit({ ...doc, counties: (doc.counties ?? []).map((c) => (c.id === id ? { ...c, color } : c)) })
+    },
+    rerollCountyName: (id) => {
+      const { doc } = get()
+      const county = (doc.counties ?? []).find((c) => c.id === id)
+      if (!county) return
+      // the old name is free again, so the new one differs from it
+      const others = { ...doc, counties: (doc.counties ?? []).map((c) => (c.id === id ? { ...c, name: '' } : c)) }
+      const taken = takeName(others, 'county', poolFor('county'), county.name)
+      commit({ ...others, counties: others.counties!.map((c) => (c.id === id ? { ...c, name: taken.name } : c)), nameQueues: taken.queues })
+    },
+    removeCounty: (id) => {
+      const { doc, activeCounty } = get()
+      const grid = doc.countyGrid ? new Uint8Array(doc.countyGrid) : undefined
+      if (grid) for (let i = 0; i < grid.length; i++) if (grid[i] === id) grid[i] = 0
+      const counties = (doc.counties ?? []).filter((c) => c.id !== id)
+      commit({ ...doc, counties, countyGrid: grid }, { activeCounty: activeCounty === id ? 0 : activeCounty })
+    },
+    divideCounties: (n) => {
+      const { doc } = get()
+      const next = divideIntoCounties(doc, n, 1 + Math.floor(Math.random() * 9999))
+      commit(next, { activeCounty: next.counties?.[0]?.id ?? 0, countyErase: false })
     },
     addZone: (kind) => {
       const { doc } = get()

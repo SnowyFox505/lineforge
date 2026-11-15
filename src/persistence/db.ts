@@ -119,7 +119,7 @@ export async function clearOwner(forOwner: string): Promise<void> {
 
 export function exportCityJson(doc: CityDoc): string {
   const clock = doc.id === gameTime.cityId ? Math.round(gameTime.minutes) : doc.clock
-  return JSON.stringify({ ...doc, clock, terrain: Array.from(doc.terrain), zoneGrid: doc.zoneGrid ? Array.from(doc.zoneGrid) : undefined })
+  return JSON.stringify({ ...doc, clock, terrain: Array.from(doc.terrain), zoneGrid: doc.zoneGrid ? Array.from(doc.zoneGrid) : undefined, countyGrid: doc.countyGrid ? Array.from(doc.countyGrid) : undefined })
 }
 
 /** A city from a file gets a new id (so an import never overwrites a city); the cloud keeps the id with `keepId`. */
@@ -138,6 +138,8 @@ export function importCityJson(text: string, keepId = false): CityDoc {
     lines: raw.lines ?? {},
     zones: Array.isArray(raw.zones) ? raw.zones : [],
     zoneGrid: Array.isArray(raw.zoneGrid) && raw.zoneGrid.length === raw.size ** 2 ? Uint16Array.from(raw.zoneGrid) : new Uint16Array(raw.size ** 2),
+    counties: Array.isArray(raw.counties) && raw.counties.length ? raw.counties : undefined,
+    countyGrid: Array.isArray(raw.countyGrid) && raw.countyGrid.length === raw.size ** 2 && Array.isArray(raw.counties) && raw.counties.length ? Uint8Array.from(raw.countyGrid) : undefined,
     pois: Array.isArray(raw.pois) ? raw.pois : [],
     waters: Array.isArray(raw.waters) ? raw.waters : undefined,
     nameQueues: raw.nameQueues && typeof raw.nameQueues === 'object' ? raw.nameQueues : undefined,

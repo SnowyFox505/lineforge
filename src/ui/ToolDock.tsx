@@ -69,6 +69,7 @@ const TOOLBOXES: Toolbox[] = [
       { id: 'suburb', label: 'Vorort', icon: 'house' },
       { id: 'airport', label: 'Flughafen', icon: 'plane' },
       { id: 'zoneErase', label: 'Radierer', icon: 'eraser' },
+      { id: 'county', label: 'Landkreis', icon: 'map' },
     ],
   },
   {
@@ -569,6 +570,90 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   )
 }
 
+/** Counties (Landkreise): paint them on the map, name them, give them a colour, or let the game divide the land. */
+function CountyPanel() {
+  const doc = useEditor((s) => s.doc)
+  const brush = useEditor((s) => s.brush)
+  const setBrush = useEditor((s) => s.setBrush)
+  const active = useEditor((s) => s.activeCounty)
+  const setActive = useEditor((s) => s.setActiveCounty)
+  const erase = useEditor((s) => s.countyErase)
+  const setErase = useEditor((s) => s.setCountyErase)
+  const add = useEditor((s) => s.addCounty)
+  const rename = useEditor((s) => s.renameCounty)
+  const recolor = useEditor((s) => s.recolorCounty)
+  const reroll = useEditor((s) => s.rerollCountyName)
+  const remove = useEditor((s) => s.removeCounty)
+  const divide = useEditor((s) => s.divideCounties)
+  const [parts, setParts] = useState(4)
+  const counties = doc.counties ?? []
+  const current = counties.find((c) => c.id === active)
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="eyebrow">Landkreise malen: ein Landkreis fasst mehrere Städte zusammen</span>
+          <span className="text-sm font-bold tabular-nums">{brush}</span>
+        </div>
+        <Slider value={brush} min={2} max={24} onChange={setBrush} />
+      </div>
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {counties.map((c) => (
+          <Chip
+            key={c.id}
+            active={!erase && c.id === active}
+            onClick={() => {
+              setErase(false)
+              setActive(c.id)
+            }}
+          >
+            <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
+            {c.name}
+          </Chip>
+        ))}
+        <Chip onClick={() => add()}>
+          <Icon name="plus" size={16} />
+          Neuer Landkreis
+        </Chip>
+        <Chip active={erase} onClick={() => setErase(!erase)}>
+          <Icon name="eraser" size={16} />
+          Radierer
+        </Chip>
+      </div>
+      {current && !erase && (
+        <div className="card space-y-2 rounded-2xl p-2">
+          <div className="flex items-center gap-2">
+            <span className="eyebrow shrink-0 pl-1">Name</span>
+            <CommitInput value={current.name} onCommit={(name) => rename(current.id, name)} className="min-w-0 flex-1 !py-2" />
+            <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl" onClick={() => reroll(current.id)} aria-label="Neuen Namen würfeln">
+              <Icon name="refresh" size={18} />
+            </button>
+            <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl text-red-300" onClick={() => remove(current.id)} aria-label="Landkreis löschen">
+              <Icon name="trash" size={18} />
+            </button>
+          </div>
+          <ColorPicker value={current.color} onChange={(c) => recolor(current.id, c)} />
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-xs leading-snug text-white/50">Oder lass das Spiel das Land in gleich große Landkreise teilen (ersetzt die bisherigen).</span>
+        <div className="flex items-center rounded-xl bg-white/6 text-sm font-bold">
+          <button className="grid h-9 w-9 place-items-center" onClick={() => setParts((n) => Math.max(2, n - 1))} aria-label="Weniger Landkreise">
+            −
+          </button>
+          <span className="w-6 text-center tabular-nums">{parts}</span>
+          <button className="grid h-9 w-9 place-items-center" onClick={() => setParts((n) => Math.min(12, n + 1))} aria-label="Mehr Landkreise">
+            +
+          </button>
+        </div>
+        <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => divide(parts)}>
+          Einteilen
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** Name the bodies of water: tap a lake, river or sea; kind, name and a new random name can be changed here. */
 function WaterPanel() {
   const doc = useEditor((s) => s.doc)
@@ -771,6 +856,7 @@ export default function ToolDock() {
                   <Slider value={brush} min={2} max={24} onChange={setBrush} />
                 </div>
               )}
+              {tool === 'county' && <CountyPanel />}
               {tool === 'poi' && <PoiPanel />}
             </div>
           </motion.div>

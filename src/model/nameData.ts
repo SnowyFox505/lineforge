@@ -65,6 +65,10 @@ export const SEA_NAMES: string[] = [
   'Nebelmeer', 'Silbermeer', 'Weitmeer', 'Morgenmeer', 'Sturmmeer', 'Möwenmeer', 'Dünenmeer', 'Salzmeer', 'Wellenmeer', 'Leuchtturmsee', 'Nordstrandmeer', 'Bernsteinmeer', 'Ankermeer', 'Seglermeer', 'Gezeitenmeer', 'Windmeer',
 ]
 
+export const COUNTY_NAMES: string[] = [
+  'Nordmark', 'Altmark', 'Hochwaldgau', 'Elbtal', 'Seegau', 'Goldmark', 'Heidegau', 'Kornland', 'Lindengau', 'Marschland', 'Bruchland', 'Quellmark', 'Birkengau', 'Weinhang', 'Steinfurt-Land', 'Rabengau', 'Hügelmark', 'Moorgau', 'Auenland', 'Sonnental', 'Frankenhöhe', 'Burggrafenmark', 'Salzgau', 'Wiesengrund', 'Fennland', 'Sandmark', 'Dünengau', 'Hopfenland', 'Eisenmark', 'Kupfergau', 'Ährenland', 'Schlehengau', 'Oberbruch', 'Unterland', 'Mittelmark', 'Westgau', 'Ostmark', 'Südhang', 'Waldmark', 'Glockengau',
+]
+
 export const FOREST_NAMES: string[] = [
   'Eichenforst', 'Buchenhain', 'Tannenwald', 'Birkenholz', 'Kiefernheide', 'Erlenbruch', 'Fichtenforst', 'Lärchenwald', 'Ulmenwald', 'Weidenholz', 'Hasselforst', 'Schattenwald', 'Wolfswald', 'Hirschforst', 'Rabenholz', 'Moosforst', 'Farnwald', 'Nebelforst', 'Pilzwald', 'Hainholz', 'Eulenforst', 'Dachswald', 'Fuchsforst', 'Habichtswald', 'Bärenforst', 'Dunkelholz', 'Silberforst', 'Mondwald', 'Waldwinkel', 'Grünholz',
 ]

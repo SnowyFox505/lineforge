@@ -14,6 +14,7 @@ import { penActive, pointerRole, usePen } from '../ui/pen'
 import { useZoneLook } from './zoneLook'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
+import { buildCountyGfx, drawCountyLabels, drawCounties } from './countyGfx'
 import { drawWaterLabels } from './waterLabels'
 import { buildTerrainPaths } from './terrainRender'
 import { drawTerrainCached, newTerrainCache } from './terrainCache'
@@ -22,7 +23,7 @@ import { useDockFade } from '../ui/dockFade'
 import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
 
-const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
+const isPaintTool = (t: Tool) => t === 'county' || t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 const BRUSH_TINT = {
   water: ['rgba(90,190,255,0.18)', 'rgba(150,220,255,0.9)'],
   erase: ['rgba(170,230,120,0.18)', 'rgba(200,245,150,0.9)'],
@@ -123,6 +124,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const terrainPaths = useMemo(() => buildTerrainPaths(deferredTerrain, doc.size), [deferredTerrain, doc.size])
   const deferredZones = useDeferredValue(doc.zoneGrid)
   const zoneGfx = useMemo(() => buildZoneGfx({ ...doc, zoneGrid: deferredZones }), [deferredZones, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
+  const deferredCounties = useDeferredValue(doc.countyGrid)
+  const countyGfx = useMemo(() => buildCountyGfx({ ...doc, countyGrid: deferredCounties }), [deferredCounties, doc.counties, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
   const linePaths = useMemo(() => layoutLines(doc, 0.82, { source: 'geo', smooth: 10 }), [doc.lines, doc.stations]) // eslint-disable-line react-hooks/exhaustive-deps
   const types = useMemo(() => effectiveTypes(doc), [doc])
   const bridges = useMemo(() => {
@@ -213,7 +216,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       }, 140)
     })
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    drawCounties(ctx, v, countyGfx)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     drawZoneLabels(ctx, v, zoneGfx)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    drawCountyLabels(ctx, v, countyGfx)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     drawWaterLabels(ctx, v, doc, tool === 'waterName' ? selectedWaterId : null)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -559,7 +566,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
+  }, [doc, terrainPaths, zoneGfx, countyGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
 
   useEffect(() => {
     userMoved.current = false
@@ -661,7 +668,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     for (let i = 1; i <= steps; i++) {
       const x = Math.round(from.x + ((cell.x - from.x) * i) / steps)
       const y = Math.round(from.y + ((cell.y - from.y) * i) / steps)
-      if (isZone) st.paintZone(x, y, zoneId.current)
+      if (st.tool === 'county') st.paintCounty(x, y, zoneId.current)
+      else if (isZone) st.paintZone(x, y, zoneId.current)
       else st.paint(x, y, value)
     }
     g.lastCell = cell
@@ -850,13 +858,14 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       // pen mode: a finger only moves (and with two fingers zooms) the map, whatever tool is chosen
       hover.current = null
       g.kind = 'pan'
-    } else if (useEditor.getState().pickZone && isPaintTool(t) && t !== 'water' && t !== 'erase' && t !== 'zoneErase') {
+    } else if (useEditor.getState().pickZone && isPaintTool(t) && t !== 'water' && t !== 'erase' && t !== 'zoneErase' && t !== 'county') {
       // area picker: the area under the finger becomes the one to paint with
       const c = toCell(p)
       if (!useEditor.getState().pickZoneAt(c.x, c.y)) flash('Hier ist kein Gebiet. Tippe auf eine bemalte Fläche.')
       g.kind = 'none'
     } else if (isPaintTool(t)) {
       if (t === 'water' || t === 'erase') useEditor.getState().checkpoint()
+      else if (t === 'county') zoneId.current = useEditor.getState().beginCountyPaint()
       else zoneId.current = useEditor.getState().beginZonePaint()
       g.kind = 'paint'
       strokeStart.current = performance.now()

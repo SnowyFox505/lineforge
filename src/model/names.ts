@@ -1,8 +1,8 @@
-import { CANAL_NAMES, FOREST_NAMES, LAKE_STEMS, MOUNTAIN_NAMES, PLACE_NAMES, RIVER_NAMES, SEA_NAMES } from './nameData'
+import { CANAL_NAMES, COUNTY_NAMES, FOREST_NAMES, LAKE_STEMS, MOUNTAIN_NAMES, PLACE_NAMES, RIVER_NAMES, SEA_NAMES } from './nameData'
 import type { CityDoc } from './types'
 
 /** The wish lists a player can fill: the next names that are used before random ones. */
-export type NameKind = 'district' | 'suburb' | 'water' | 'landscape'
+export type NameKind = 'district' | 'suburb' | 'water' | 'landscape' | 'county'
 
 export type NameQueues = Record<NameKind, string[]>
 
@@ -11,9 +11,10 @@ export const NAME_KINDS: { kind: NameKind; label: string; hint: string }[] = [
   { kind: 'suburb', label: 'Vororte', hint: 'Der nächste neue Vorort bekommt den ersten Namen.' },
   { kind: 'water', label: 'Gewässer', hint: 'Seen, Flüsse, Kanäle und Meere nehmen den ersten Namen.' },
   { kind: 'landscape', label: 'Landschaft', hint: 'Wälder und Gebirge nehmen den ersten Namen.' },
+  { kind: 'county', label: 'Landkreise', hint: 'Der nächste neue Landkreis heißt wie der erste Name hier.' },
 ]
 
-export const emptyQueues = (): NameQueues => ({ district: [], suburb: [], water: [], landscape: [] })
+export const emptyQueues = (): NameQueues => ({ district: [], suburb: [], water: [], landscape: [], county: [] })
 
 export function queuesOf(doc: CityDoc): NameQueues {
   return { ...emptyQueues(), ...(doc.nameQueues ?? {}) }
@@ -37,7 +38,7 @@ export function tooSimilar(a: string, b: string): boolean {
 
 /** Names that are in use in a city: districts, suburbs, waters and landscapes. */
 export function usedNames(doc: CityDoc): string[] {
-  return [...(doc.zones ?? []).map((z) => z.name), ...(doc.waters ?? []).map((w) => w.name)]
+  return [...(doc.zones ?? []).map((z) => z.name), ...(doc.waters ?? []).map((w) => w.name), ...(doc.counties ?? []).map((c) => c.name)]
 }
 
 /** A random name from the pool that does not look like any used one; null when the pool has nothing left. */
@@ -54,6 +55,7 @@ export const LAKE_NAMES: string[] = LAKE_STEMS.map((s) => `${s}see`)
 
 export function poolFor(kind: NameKind, detail?: 'lake' | 'river' | 'canal' | 'sea' | 'forest' | 'mountain'): string[] {
   if (kind === 'district' || kind === 'suburb') return PLACE_NAMES
+  if (kind === 'county') return COUNTY_NAMES
   if (kind === 'water') return detail === 'river' ? RIVER_NAMES : detail === 'canal' ? CANAL_NAMES : detail === 'sea' ? SEA_NAMES : LAKE_NAMES
   return detail === 'mountain' ? MOUNTAIN_NAMES : FOREST_NAMES
 }

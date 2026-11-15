@@ -115,6 +115,14 @@ export interface Zone {
   street?: { style: StreetStyle; seed: number }
 }
 
+/** A county (Landkreis): a named region that spans several towns on a big map. Painted like an area, drawn as a coloured outline. */
+export interface County {
+  /** 1..255, stored in `CityDoc.countyGrid` */
+  id: number
+  name: string
+  color: string
+}
+
 export type PoiKind = 'stadium' | 'landmark' | 'attraction'
 
 /** A point of interest (stadium, landmark, ...) shown as a marker on the map. */
@@ -162,11 +170,14 @@ export interface CityDoc {
   /** Painted areas: zone id per cell (0 = none), size*size, row-major */
   zoneGrid?: Uint16Array
   zones?: Zone[]
+  /** Counties: county id per cell (0 = none), size*size, row-major */
+  countyGrid?: Uint8Array
+  counties?: County[]
   pois?: Poi[]
   /** Named bodies of water (lakes, rivers, canals, seas) */
   waters?: WaterName[]
   /** Names the player wants for the next new districts, suburbs, waters and landscapes (first one is used first) */
-  nameQueues?: Partial<Record<'district' | 'suburb' | 'water' | 'landscape', string[]>>
+  nameQueues?: Partial<Record<'district' | 'suburb' | 'water' | 'landscape' | 'county', string[]>>
   /** Pairs of stations that are linked as one interchange (a tram stop next to a station): they stay separate stations but share a name */
   links?: [string, string][]
   /** Game time (minutes, see sim/clock) when the city was last saved */

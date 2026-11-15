@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.17.0',
+    date: '2026-11-16',
+    headline: 'Landkreise für große Karten',
+    changes: [
+      {
+        title: 'Landkreise',
+        what: 'Ein Landkreis fasst mehrere Städte und Vororte zu einer größeren Region mit eigenem Namen und eigener Farbe zusammen. Auf der Karte siehst du ihn als sanft eingefärbte Fläche mit gestricheltem Rand und großem Namen.',
+        how: 'Unter „Gebiete“ den Reiter „Landkreis“ wählen und mit dem Finger oder Stift malen. „Neuer Landkreis“ legt einen weiteren an, Name, Farbe und Würfeln des Namens findest du darunter, der Radierer nimmt Felder wieder weg. Der Name kommt zuerst aus deinen Namenswünschen („Landkreise“), sonst wird einer ausgedacht.',
+        benefit: 'Auf großen Karten behältst du den Überblick, und deine Welt wirkt wie ein richtiges Land mit Regionen.',
+      },
+      {
+        title: 'Automatisch einteilen',
+        what: 'Das Spiel kann das Land selbst in gleich große Landkreise teilen. Wasser bleibt dabei draußen.',
+        how: 'Im Landkreis-Reiter die Anzahl (2 bis 12) wählen und „Einteilen“ tippen. Die bisherigen Landkreise werden ersetzt, mit „Rückgängig“ holst du sie zurück.',
+        benefit: 'Mit einem Tipp hast du eine sinnvolle Einteilung, die du danach von Hand nachmalen kannst.',
+      },
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2026-11-16',
     headline: 'Riesige Karten und fertige Landschaften',
