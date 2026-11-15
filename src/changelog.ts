@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.10.0',
+    date: '2026-11-16',
+    headline: 'Wald und Gebirge',
+    changes: [
+      {
+        title: 'Wald malen',
+        what: 'Du kannst Waldflächen auf das Land malen. Jeder Wald bekommt einen eigenen Namen.',
+        how: 'Öffne Terraforming, dann „Gebiete“, und wähle „Wald“. Male mit dem Finger über das Land. In 3D wachsen dort Bäume, auf der Karte erscheinen beim Hineinzoomen kleine Bäume. Die Bäume halten Abstand zu Gleisen und Bahnhöfen.',
+        benefit: 'Deine Landschaft sieht lebendig aus, und Wälder lassen sich auf der Karte wiederfinden.',
+      },
+      {
+        title: 'Gebirge malen',
+        what: 'Gebirge sind Gebiete, in denen das Land nach innen immer höher wird. In der Mitte stehen Gipfel, am Rand ist der Boden noch flach.',
+        how: 'Wähle „Gebirge“ und male das Gebiet. In 3D siehst du die Berge. Gleise und Bahnhöfe bleiben befahrbar: Der Berg weicht ihnen aus, sodass die Strecke in einem Tal verläuft.',
+        benefit: 'Du kannst Strecken durch bergiges Land planen und siehst, wie sie sich ins Gelände legen.',
+      },
+      {
+        title: 'Namen für Wald und Gebirge',
+        what: 'Wälder und Gebirge bekommen automatisch einen erfundenen Namen. Eigene Wunschnamen kommen zuerst dran.',
+        how: 'Mit dem Pfeil neben dem Namen würfelst du einen neuen. Wunschnamen trägst du unter „Namen für Neues“ ein.',
+        benefit: 'Auch die Landschaft hat Orte mit Namen.',
+      },
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-11-16',
     headline: 'Namen für alles',

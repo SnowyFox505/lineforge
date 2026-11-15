@@ -13,6 +13,8 @@ export interface ZoneGfx {
   soft: HTMLCanvasElement | null
   /** bounding boxes of airport areas (cell coordinates), for the runways */
   airports: { x0: number; y0: number; x1: number; y1: number; cells: number }[]
+  /** cells of every kind of area (1 = painted), for drawing trees and mountains */
+  masks: Partial<Record<ZoneKind, Uint8Array>>
 }
 
 /** Light grey for the city, a slightly lighter grey for suburbs, dark grey for the airport. */
@@ -20,9 +22,11 @@ export const ZONE_STYLE: Record<ZoneKind, { fill: string; alpha: number; text: s
   city: { fill: '#c9ced6', alpha: 0.96, text: '#1a2028', halo: 'rgba(240,243,247,0.9)' },
   suburb: { fill: '#dce0e6', alpha: 0.94, text: '#262d36', halo: 'rgba(248,249,251,0.9)' },
   airport: { fill: '#4a505a', alpha: 0.98, text: '#f2f5f8', halo: 'rgba(20,24,30,0.8)' },
+  forest: { fill: '#2f7048', alpha: 0.96, text: '#e8f6ea', halo: 'rgba(8,38,20,0.85)' },
+  mountain: { fill: '#8d887e', alpha: 0.97, text: '#1f1c18', halo: 'rgba(236,231,221,0.88)' },
 }
 
-const DRAW_ORDER: ZoneKind[] = ['suburb', 'city', 'airport']
+const DRAW_ORDER: ZoneKind[] = ['forest', 'mountain', 'suburb', 'city', 'airport']
 
 /** Smooth outlines of the painted areas (same contour method as the water) plus borders and name positions. */
 export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
@@ -31,7 +35,7 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
   if (!grid || !zones.length) return null
   const size = doc.size
   const kindOf = new Map(zones.map((z) => [z.id, z.kind]))
-  const masks: Record<ZoneKind, Uint8Array | null> = { city: null, suburb: null, airport: null }
+  const masks: Record<ZoneKind, Uint8Array | null> = { city: null, suburb: null, airport: null, forest: null, mountain: null }
   const sums = new Map<number, { x: number; y: number; n: number; x0: number; y0: number; x1: number; y1: number }>()
   const borders = new Path2D()
   for (let y = 0; y < size; y++) {
@@ -87,7 +91,9 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
     }
     sc.putImageData(img, 0, 0)
   }
-  return layers.length ? { layers, borders, labels, airports, soft } : null
+  const painted: Partial<Record<ZoneKind, Uint8Array>> = {}
+  for (const k of DRAW_ORDER) if (masks[k]) painted[k] = masks[k]!
+  return layers.length ? { layers, borders, labels, airports, soft, masks: painted } : null
 }
 
 /** Names of districts, suburbs and airports (screen space, drawn when zoomed in far enough). */

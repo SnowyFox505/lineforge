@@ -85,6 +85,7 @@ const PATHS: Record<string, ReactNode> = {
   fit: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   link: <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
   mountain: <path d="M3 19 9 8l4 6 3-4 5 9H3z" />,
+  tree: <path d="M12 3 7 10.5h3L5.5 16.5H11V21h2v-4.5h5.5L14 10.5h3L12 3z" />,
   layers: <path d="m12 4-9 5 9 5 9-5-9-5zM3 14l9 5 9-5" />,
   house: <path d="m4 11 8-7 8 7M6 10v9h12v-9M10 19v-5h4v5" />,
   plane: <path d={planePath(12, 12, 9, 45)} />,

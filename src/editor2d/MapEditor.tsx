@@ -19,7 +19,7 @@ import { useDockFade } from '../ui/dockFade'
 import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
 
-const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'zoneErase'
+const isPaintTool = (t: Tool) => t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 const BRUSH_TINT = {
   water: ['rgba(90,190,255,0.18)', 'rgba(150,220,255,0.9)'],
   erase: ['rgba(170,230,120,0.18)', 'rgba(200,245,150,0.9)'],
@@ -614,7 +614,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
   function paintAt(cell: { x: number; y: number }) {
     const st = useEditor.getState()
-    const isZone = st.tool === 'city' || st.tool === 'suburb' || st.tool === 'airport' || st.tool === 'zoneErase'
+    const isZone = st.tool === 'city' || st.tool === 'suburb' || st.tool === 'airport' || st.tool === 'forest' || st.tool === 'mountain' || st.tool === 'zoneErase'
     const value = st.tool === 'water' ? WATER : 0
     const g = gesture.current
     // Interpolate between the last and current cell so fast strokes leave no gaps.

@@ -19,7 +19,7 @@ setAutoFreeze(false)
 
 export type Tab = 'map' | 'plan' | 'view3d'
 export type Screen = 'menu' | 'editor'
-export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName'
+export type Tool = 'pan' | 'water' | 'erase' | 'station' | 'link' | 'line' | 'city' | 'suburb' | 'airport' | 'zoneErase' | 'poi' | 'waterName' | 'forest' | 'mountain'
 /** Line tool: draw strokes with the finger, or connect existing stations one after the other. */
 export type LineMode = 'draw' | 'connect'
 export type ToolGroup = 'move' | 'terra' | 'infra' | 'area' | 'poi'
@@ -30,6 +30,8 @@ export function groupOf(tool: Tool): ToolGroup {
     case 'water':
     case 'erase':
     case 'waterName':
+    case 'forest':
+    case 'mountain':
       return 'terra'
     case 'line':
     case 'station':
@@ -47,7 +49,7 @@ export function groupOf(tool: Tool): ToolGroup {
   }
 }
 
-const ZONE_DEFAULT_NAME: Record<ZoneKind, string> = { city: 'Bezirk', suburb: 'Vorort', airport: 'Flughafen' }
+const ZONE_DEFAULT_NAME: Record<ZoneKind, string> = { city: 'Bezirk', suburb: 'Vorort', airport: 'Flughafen', forest: 'Wald', mountain: 'Gebirge' }
 
 const HISTORY_LIMIT = 60
 
@@ -195,7 +197,7 @@ export const useEditor = create<EditorState>((set, get) => {
     lineMode: 'draw',
     selectedStationId: null,
     selectedWaypoint: null,
-    activeZone: { city: 0, suburb: 0, airport: 0 },
+    activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 },
     poiKind: 'stadium',
     selectedPoiId: null,
     selectedWaterId: null,
@@ -207,7 +209,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, editStationId: null, selectedLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool }),
     setBrush: (brush) => set({ brush }),
@@ -346,6 +348,9 @@ export const useEditor = create<EditorState>((set, get) => {
       const { doc, brush } = get()
       const { size } = doc
       const grid = new Uint16Array(doc.zoneGrid ?? new Uint16Array(size * size))
+      // forests and mountains grow on land only
+      const kind = doc.zones?.find((z) => z.id === zoneId)?.kind
+      const landOnly = kind === 'forest' || kind === 'mountain'
       const r = brush - 1
       let changed = false
       for (let y = cy - r; y <= cy + r; y++) {
@@ -353,6 +358,7 @@ export const useEditor = create<EditorState>((set, get) => {
           if (x < 0 || y < 0 || x >= size || y >= size) continue
           if ((x - cx) ** 2 + (y - cy) ** 2 > r * r + r) continue
           const i = y * size + x
+          if (landOnly && doc.terrain[i] === WATER) continue
           if (grid[i] !== zoneId) {
             grid[i] = zoneId
             changed = true
@@ -375,6 +381,10 @@ export const useEditor = create<EditorState>((set, get) => {
         const taken = takeName(doc, nk, poolFor(nk), plain)
         name = taken.name
         nameQueues = taken.queues
+      } else if (kind === 'forest' || kind === 'mountain') {
+        const taken = takeName(doc, 'landscape', poolFor('landscape', kind), plain)
+        name = taken.name
+        nameQueues = taken.queues
       }
       const zone: Zone = { id, kind, name }
       set({ doc: { ...doc, zones: [...zones, zone], nameQueues }, activeZone: { ...get().activeZone, [kind]: id } })
@@ -387,11 +397,11 @@ export const useEditor = create<EditorState>((set, get) => {
     rerollZoneName: (id) => {
       const { doc } = get()
       const zone = (doc.zones ?? []).find((z) => z.id === id)
-      if (!zone || (zone.kind !== 'city' && zone.kind !== 'suburb')) return
-      const nk = zone.kind === 'city' ? 'district' : 'suburb'
+      if (!zone || zone.kind === 'airport') return
+      const nk = zone.kind === 'city' ? 'district' : zone.kind === 'suburb' ? 'suburb' : 'landscape'
       // the old name is free again, so the new one differs from it
       const others = { ...doc, zones: (doc.zones ?? []).map((z) => (z.id === id ? { ...z, name: '' } : z)) }
-      const taken = takeName(others, nk, poolFor(nk), zone.name)
+      const taken = takeName(others, nk, poolFor(nk, zone.kind === 'forest' || zone.kind === 'mountain' ? zone.kind : undefined), zone.name)
       commit({ ...others, zones: others.zones!.map((z) => (z.id === id ? { ...z, name: taken.name } : z)), nameQueues: taken.queues })
     },
     removeZone: (id) => {

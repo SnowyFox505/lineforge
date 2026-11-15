@@ -40,6 +40,8 @@ const TOOLBOXES: Toolbox[] = [
       { id: 'water', label: 'Wasser', icon: 'drop' },
       { id: 'erase', label: 'Land', icon: 'leaf' },
       { id: 'waterName', label: 'Gewässer', icon: 'edit' },
+      { id: 'forest', label: 'Wald', icon: 'tree' },
+      { id: 'mountain', label: 'Gebirge', icon: 'mountain' },
     ],
   },
   {
@@ -344,7 +346,11 @@ const ZONE_LABEL: Record<ZoneKind, { single: string; add: string; hint: string }
   city: { single: 'Bezirk', add: 'Neuer Bezirk', hint: 'Male die Stadt und teile sie in benannte Bezirke.' },
   suburb: { single: 'Vorort', add: 'Neuer Vorort', hint: 'Zeigt, wo die Vororte liegen.' },
   airport: { single: 'Flughafen', add: 'Neuer Flughafen', hint: 'Ein Flughafen braucht eine große Fläche.' },
+  forest: { single: 'Wald', add: 'Neuer Wald', hint: 'Male Wälder auf das Land. Du kannst sie benennen.' },
+  mountain: { single: 'Gebirge', add: 'Neues Gebirge', hint: 'Male Gebirge auf das Land. Gleise führen durch Täler.' },
 }
+
+const ZONE_PLURAL: Record<ZoneKind, string> = { city: 'Bezirke', suburb: 'Vororte', airport: 'Flughäfen', forest: 'Wälder', mountain: 'Gebirge' }
 
 /** Paint areas: brush, the zones of this kind (named) and how to add, rename and delete them. */
 function ZonePanel({ kind }: { kind: ZoneKind }) {
@@ -371,7 +377,7 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
         <Slider value={brush} min={2} max={24} onChange={setBrush} />
       </div>
       <div>
-        <div className="eyebrow mb-2">{kind === 'city' ? 'Bezirke' : kind === 'suburb' ? 'Vororte' : 'Flughäfen'}</div>
+        <div className="eyebrow mb-2">{ZONE_PLURAL[kind]}</div>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {zones.map((z) => (
             <Chip key={z.id} active={z.id === active} onClick={() => setActive(kind, z.id)}>
@@ -588,7 +594,7 @@ export default function ToolDock() {
               {tool === 'waterName' && <WaterPanel />}
               {tool === 'link' && <LinkPanel />}
               {tool === 'line' && <LinePanel />}
-              {(tool === 'city' || tool === 'suburb' || tool === 'airport') && <ZonePanel kind={tool} />}
+              {(tool === 'city' || tool === 'suburb' || tool === 'airport' || tool === 'forest' || tool === 'mountain') && <ZonePanel kind={tool} />}
               {tool === 'zoneErase' && (
                 <div>
                   <div className="mb-1 flex items-center justify-between">

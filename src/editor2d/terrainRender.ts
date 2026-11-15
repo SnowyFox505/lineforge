@@ -206,6 +206,77 @@ function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', siz
   ctx.stroke(p.avenues)
 }
 
+/** A number between 0 and 1 from a cell and a salt: the same trees and peaks on every redraw. */
+function cellRand(x: number, y: number, salt: number): number {
+  let h = Math.imul(x + 1013, 374761393) ^ Math.imul(y + 7919, 668265263) ^ Math.imul(salt + 31, 1274126177)
+  h = Math.imul(h ^ (h >>> 13), 1103515245)
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+
+/** Forests: a dark green area with a tree on every cell once you zoom in (the 3D view has real trees, so its texture stays flat). */
+function drawForest(ctx: CanvasRenderingContext2D, mask: Uint8Array | undefined, size: number, s: number, bare: boolean) {
+  if (!mask || bare || s < 3) return
+  const greens = ['#1f5a36', '#276b40', '#2f7a48', '#1b4e30']
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (!mask[y * size + x]) continue
+      const r = 0.3 + cellRand(x, y, 1) * 0.16
+      const px = x + 0.25 + cellRand(x, y, 2) * 0.5
+      const py = y + 0.25 + cellRand(x, y, 3) * 0.5
+      ctx.fillStyle = greens[Math.floor(cellRand(x, y, 4) * greens.length)]
+      ctx.beginPath()
+      ctx.arc(px, py, r, 0, Math.PI * 2)
+      ctx.fill()
+      if (s >= 6) {
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'
+        ctx.beginPath()
+        ctx.arc(px - r * 0.3, py - r * 0.3, r * 0.45, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  }
+}
+
+/** Mountains: little peaks (a light and a dark side, snow on the high ones) every other cell; the 3D view raises the ground itself. */
+function drawMountains(ctx: CanvasRenderingContext2D, mask: Uint8Array | undefined, size: number, s: number, bare: boolean) {
+  if (!mask || bare || s < 2.4) return
+  for (let y = 0; y < size; y += 2) {
+    for (let x = 0; x < size; x += 2) {
+      // a peak stands at this cell when the cell is painted
+      if (!mask[y * size + x]) continue
+      const w = 1.5 + cellRand(x, y, 5) * 0.7
+      const h = w * (0.9 + cellRand(x, y, 6) * 0.4)
+      const cx = x + 0.5 + (cellRand(x, y, 7) - 0.5) * 0.8
+      const base = y + 1.2 + (cellRand(x, y, 8) - 0.5) * 0.6
+      const peak = base - h
+      ctx.fillStyle = '#6c675d'
+      ctx.beginPath()
+      ctx.moveTo(cx - w / 2, base)
+      ctx.lineTo(cx, peak)
+      ctx.lineTo(cx + w * 0.08, base)
+      ctx.closePath()
+      ctx.fill()
+      ctx.fillStyle = '#b3ada1'
+      ctx.beginPath()
+      ctx.moveTo(cx + w * 0.08, base)
+      ctx.lineTo(cx, peak)
+      ctx.lineTo(cx + w / 2, base)
+      ctx.closePath()
+      ctx.fill()
+      if (cellRand(x, y, 9) > 0.45) {
+        ctx.fillStyle = '#f4f6f8'
+        ctx.beginPath()
+        ctx.moveTo(cx, peak)
+        ctx.lineTo(cx - w * 0.14, peak + h * 0.26)
+        ctx.lineTo(cx + w * 0.02, peak + h * 0.2)
+        ctx.lineTo(cx + w * 0.15, peak + h * 0.27)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+  }
+}
+
 /** Runways, taxiway, apron, terminal and hangars of an airport (layout shared with the 3D view). */
 function drawAirport(ctx: CanvasRenderingContext2D, zones: ZoneGfx, s: number) {
   for (const a of zones.airports) {
@@ -336,7 +407,7 @@ export function drawTerrain(
     const cell = ctx.getTransform()
     for (const layer of zones.layers) {
       const st = ZONE_STYLE[layer.kind]
-      const soft = layer.kind !== 'airport' && zones.soft
+      const soft = (layer.kind === 'city' || layer.kind === 'suburb') && zones.soft
       // towns are painted on a scratch canvas first, so their whole look (colour, streets) can fade out at the edge
       const target = soft ? scratchFor(ctx.canvas.width, ctx.canvas.height) : null
       const c = target ? target.getContext('2d')! : ctx
@@ -354,6 +425,8 @@ export function drawTerrain(
       c.save()
       c.clip(layer.paths.water)
       if (layer.kind === 'airport') drawAirport(c, zones, s)
+      else if (layer.kind === 'forest') drawForest(c, zones.masks.forest, size, s, bare)
+      else if (layer.kind === 'mountain') drawMountains(c, zones.masks.mountain, size, s, bare)
       else drawStreets(c, layer.kind, size, s)
       c.restore()
       if (target && soft) {
@@ -369,7 +442,7 @@ export function drawTerrain(
         ctx.drawImage(target, 0, 0)
         ctx.restore()
       } else {
-        ctx.strokeStyle = layer.kind === 'airport' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.55)'
+        ctx.strokeStyle = layer.kind === 'airport' ? 'rgba(255,255,255,0.22)' : layer.kind === 'forest' || layer.kind === 'mountain' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.55)'
         ctx.lineWidth = Math.max(0.1, 1.3 / s)
         ctx.stroke(layer.paths.coast)
       }

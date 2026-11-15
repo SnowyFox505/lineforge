@@ -12,6 +12,8 @@ import Icon from '../ui/Icon'
 import { lookOf } from '../model/profiles'
 import Airports3D from './Airport3D'
 import Buildings3D from './Buildings3D'
+import Forests3D from './Forests3D'
+import { buildMountains, mountainHeightAt } from '../model/mountains'
 import DayNight from './DayNight'
 import NightGlow from './NightGlow'
 import Pois3D from './Pois3D'
@@ -34,7 +36,7 @@ import Trains3D from './Trains3D'
 const c = (hex: string) => new THREE.Color(hex)
 
 /** Smooth terrain with real river beds. Resolution doubles on small maps so the banks stay round. */
-function buildTerrain(doc: CityDoc, field: Float32Array, carve: (x: number, z: number, h: number) => number) {
+function buildTerrain(doc: CityDoc, field: Float32Array, carve: (x: number, z: number, h: number) => number, rise: (u: number, v: number, x: number, z: number) => number) {
   const { size } = doc
   const r = size <= 256 ? 2 : 1
   const m = size * r
@@ -48,7 +50,7 @@ function buildTerrain(doc: CityDoc, field: Float32Array, carve: (x: number, z: n
       const idx = j * n + i
       const u = i / r
       const v = j / r
-      const h = carve(u - size / 2, v - size / 2, groundHeight(sample(u, v)))
+      const h = carve(u - size / 2, v - size / 2, groundHeight(sample(u, v))) + rise(u, v, u - size / 2, v - size / 2)
       heights[idx] = h
       pos[idx * 3] = u - size / 2
       pos[idx * 3 + 1] = h
@@ -147,7 +149,17 @@ function buildTexture(doc: CityDoc) {
 }
 
 function Terrain({ doc, net, see }: { doc: CityDoc; net: Network3D; see: boolean }) {
-  const { geo, skirt } = useMemo(() => buildTerrain(doc, net.field, net.carve), [doc.size, net.field, net.carve]) // eslint-disable-line react-hooks/exhaustive-deps
+  // mountains lift the ground, but never where a line runs: the rails stay in a valley
+  const mountains = useMemo(() => buildMountains(doc), [doc.zoneGrid, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rise = useMemo(
+    () => (u: number, v: number, x: number, z: number) => {
+      if (!mountains) return 0
+      const h = mountainHeightAt(mountains, u, v)
+      return h > 0.01 ? h * net.railClearance(x, z) : 0
+    },
+    [mountains, net],
+  )
+  const { geo, skirt } = useMemo(() => buildTerrain(doc, net.field, net.carve, rise), [doc.size, net.field, net.carve, rise]) // eslint-disable-line react-hooks/exhaustive-deps
   const tex = useMemo(() => buildTexture(doc), [doc.terrain, doc.zoneGrid, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
   const water = useMemo(() => buildWater(doc.size, net.field), [doc.size, net.field])
   return (
@@ -293,6 +305,7 @@ export default function Scene3D() {
         <DayNight sky={skyRef} size={doc.size} />
         <Terrain doc={doc} net={net} see={see} />
         {!see && <Buildings3D doc={doc} net={net} />}
+        {!see && <Forests3D doc={doc} net={net} />}
         {!see && <Airports3D doc={doc} net={net} />}
         <LegPicker net={net} see={see} />
         <Tracks3D net={net} />

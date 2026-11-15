@@ -90,8 +90,8 @@ export interface Line {
   passes?: string[]
 }
 
-/** Kinds of areas that can be painted on the map to show where the city, its suburbs and the airport are. */
-export type ZoneKind = 'city' | 'suburb' | 'airport'
+/** Kinds of areas that can be painted on the map: where the city, its suburbs and the airport are, and forests and mountains. */
+export type ZoneKind = 'city' | 'suburb' | 'airport' | 'forest' | 'mountain'
 
 /** A named area. Districts (Bezirke) are several `city` zones, each with its own name. */
 export interface Zone {

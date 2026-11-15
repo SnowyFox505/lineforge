@@ -190,6 +190,11 @@ export interface Network3D {
    * that lies at least 0.8 below height `yTop`? Pillars must not stand there.
    */
   trackBelow: (x: number, z: number, yTop: number, ignoreLine?: string) => boolean
+  /**
+   * How free of rails and platforms a spot is: 0 on and right next to them, 1 from about 4 cells away. Mountains are
+   * lowered by it, so a line always runs through a valley, and trees keep off the track.
+   */
+  railClearance: (x: number, z: number) => number
   field: Float32Array
 }
 
@@ -1654,5 +1659,26 @@ export function buildNetwork3D(doc: CityDoc): Network3D {
     return false
   }
 
-  return { lines, stations, groundAt: groundCarved, carve, trackBelow, field }
+  const CLEAR_NEAR = 1.2
+  const CLEAR_FAR = 4.2
+  const railClearance = (x: number, z: number) => {
+    let d = Infinity
+    const gx = Math.floor(x / tcell)
+    const gz = Math.floor(z / tcell)
+    const reach = Math.ceil(CLEAR_FAR / tcell)
+    for (let ox = -reach; ox <= reach; ox++) {
+      for (let oz = -reach; oz <= reach; oz++) {
+        for (const p of tg.get(`${gx + ox},${gz + oz}`) ?? []) d = Math.min(d, Math.hypot(p.x - x, p.z - z))
+      }
+    }
+    for (const f of footprints) {
+      const dx = x - f.ox
+      const dz = z - f.oz
+      const outside = Math.max(Math.abs(dx * f.ax + dz * f.az) - f.halfL, Math.abs(-dx * f.az + dz * f.ax) - f.halfW)
+      d = Math.min(d, Math.max(0, outside))
+    }
+    return smooth01((d - CLEAR_NEAR) / (CLEAR_FAR - CLEAR_NEAR))
+  }
+
+  return { lines, stations, groundAt: groundCarved, carve, trackBelow, railClearance, field }
 }
