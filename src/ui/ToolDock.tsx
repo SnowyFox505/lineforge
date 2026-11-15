@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
+import { STREET_STYLES } from '../editor2d/streets'
 import { branchIsBare } from '../model/lineKinds'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
@@ -483,6 +484,8 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   const renameZone = useEditor((s) => s.renameZone)
   const rerollZone = useEditor((s) => s.rerollZoneName)
   const removeZone = useEditor((s) => s.removeZone)
+  const setStreet = useEditor((s) => s.setZoneStreet)
+  const rerollStreet = useEditor((s) => s.rerollZoneStreet)
   const pick = useEditor((s) => s.pickZone)
   const setPick = useEditor((s) => s.setPickZone)
   const weight = useZoneLook((s) => s.weight)
@@ -543,6 +546,23 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
           <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl text-red-300" onClick={() => removeZone(current.id)} aria-label={`${L.single} löschen`}>
             <Icon name="trash" size={18} />
           </button>
+        </div>
+      )}
+      {current && (kind === 'city' || kind === 'suburb') && (
+        <div>
+          <div className="eyebrow mb-2">Straßenbild von {current.name}</div>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {STREET_STYLES.map((st) => (
+              <Chip key={st.id} active={(current.street?.style ?? 'gewachsen') === st.id} onClick={() => setStreet(current.id, { style: st.id })}>
+                {st.label}
+              </Chip>
+            ))}
+            <Chip onClick={() => rerollStreet(current.id)}>
+              <Icon name="refresh" size={16} />
+              Anderes Muster
+            </Chip>
+          </div>
+          <p className="mt-1 text-xs leading-snug text-white/50">{STREET_STYLES.find((st) => st.id === (current.street?.style ?? 'gewachsen'))?.hint}. Jede Stadt kann ihr eigenes Straßenbild haben.</p>
         </div>
       )}
     </div>

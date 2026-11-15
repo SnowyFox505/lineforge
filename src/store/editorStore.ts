@@ -13,7 +13,7 @@ import { stationName, stationTypeAt } from '../model/stationType'
 import { poolFor, takeName } from '../model/names'
 import { nameWaterAt, removeWaterName as removeWaterOf, renameWater as renameWaterOf, rerollWaterName as rerollWater, setWaterKind as setWaterKindOf } from '../model/waters'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
-import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, WaterKind, Zone, ZoneKind } from '../model/types'
+import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, StreetStyle, WaterKind, Zone, ZoneKind } from '../model/types'
 
 // Terrain is a typed array; keep immer from trying to freeze document internals.
 setAutoFreeze(false)
@@ -153,6 +153,10 @@ interface EditorState {
   renameZone: (id: number, name: string) => void
   /** A new name for a district or suburb: the next wish of the player, else a random one */
   rerollZoneName: (id: number) => void
+  /** The street layout of a district or suburb: another style and/or another number (= another town of that style) */
+  setZoneStreet: (id: number, patch: { style?: StreetStyle; seed?: number }) => void
+  /** A new random number for the street layout of the area: the same style, a different town */
+  rerollZoneStreet: (id: number) => void
   removeZone: (id: number) => void
   setActiveZone: (kind: ZoneKind, id: number) => void
   setPickZone: (on: boolean) => void
@@ -503,6 +507,28 @@ export const useEditor = create<EditorState>((set, get) => {
     renameZone: (id, name) => {
       const { doc } = get()
       commit({ ...doc, zones: (doc.zones ?? []).map((z) => (z.id === id ? { ...z, name } : z)) })
+    },
+    setZoneStreet: (id, patch) => {
+      const { doc } = get()
+      commit({
+        ...doc,
+        zones: (doc.zones ?? []).map((z) => {
+          if (z.id !== id || (z.kind !== 'city' && z.kind !== 'suburb')) return z
+          const style = patch.style ?? z.street?.style ?? 'gewachsen'
+          const seed = patch.seed ?? z.street?.seed ?? 0
+          const { street: _old, ...rest } = z
+          void _old
+          // the default look is stored as "nothing", so old towns and new ones stay the same file
+          return style === 'gewachsen' && seed === 0 ? rest : { ...rest, street: { style, seed } }
+        }),
+      })
+    },
+    rerollZoneStreet: (id) => {
+      const zone = (get().doc.zones ?? []).find((z) => z.id === id)
+      if (!zone) return
+      let seed = 1 + Math.floor(Math.random() * 999)
+      if (seed === (zone.street?.seed ?? 0)) seed++
+      get().setZoneStreet(id, { seed })
     },
     rerollZoneName: (id) => {
       const { doc } = get()

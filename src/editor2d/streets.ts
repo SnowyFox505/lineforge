@@ -1,3 +1,7 @@
+import type { StreetStyle, Zone } from '../model/types'
+
+export type { StreetStyle }
+
 /**
  * Street pattern of towns, shaped like a grown German city: neighbourhoods ("Kieze") with their own street
  * grid at different angles, long diagonal avenues through the centre and a ring road. The same data draws
@@ -31,9 +35,52 @@ export interface Avenues {
   ring: number
 }
 
+/** The street look of an area: a style and a number (another number gives another town of the same style). */
+export interface StreetLook {
+  style: StreetStyle
+  seed: number
+}
+
+export const DEFAULT_LOOK: StreetLook = { style: 'gewachsen', seed: 0 }
+
+export const STREET_STYLES: { id: StreetStyle; label: string; hint: string }[] = [
+  { id: 'gewachsen', label: 'Gewachsen', hint: 'Viertel mit eigenen Straßenrastern in verschiedenen Winkeln, wie in einer alten Stadt' },
+  { id: 'raster', label: 'Schachbrett', hint: 'Gerade Straßen in einem gleichmäßigen Raster, wie in einer Planstadt' },
+  { id: 'dicht', label: 'Dicht', hint: 'Kleine Blöcke und viele Straßen, wie in einer Altstadt' },
+  { id: 'weit', label: 'Weitläufig', hint: 'Große Blöcke mit breiten Abständen' },
+  { id: 'strahlen', label: 'Strahlen', hint: 'Straßen laufen sternförmig auf die Mitte der Karte zu' },
+]
+
+export const lookKey = (l: StreetLook) => `${l.style}.${l.seed}`
+
+/** The street look of an area (the default one when it has none of its own). */
+export const lookOf = (z: Zone | undefined): StreetLook => z?.street ?? DEFAULT_LOOK
+
 const CONFIG: Record<UrbanKind, { spacing: number; gap: number; majorEvery: number; seed: number }> = {
   city: { spacing: 26, gap: 4.9, majorEvery: 3, seed: 7 },
   suburb: { spacing: 32, gap: 6.2, majorEvery: 3, seed: 19 },
+}
+
+type Cfg = (typeof CONFIG)[UrbanKind]
+
+/** The numbers of a style: the default style keeps the original values, so old towns look as they always did. */
+function cfgOf(kind: UrbanKind, look: StreetLook): Cfg {
+  const b = CONFIG[kind]
+  switch (look.style) {
+    case 'dicht':
+      return { ...b, spacing: b.spacing * 0.78, gap: b.gap * 0.76, majorEvery: 4 }
+    case 'weit':
+      return { ...b, spacing: b.spacing * 1.3, gap: b.gap * 1.5 }
+    case 'strahlen':
+      return { ...b, spacing: b.spacing * 0.9 }
+    case 'raster': {
+      // blocks of equal size; a patch is six streets wide so its borders lie on streets
+      const gap = Math.round(b.gap)
+      return { ...b, gap, spacing: gap * 6 }
+    }
+    default:
+      return b
+  }
 }
 
 /** Small deterministic random generator (mulberry32). */
@@ -72,12 +119,54 @@ function clipCloser(poly: Pt[], a: Pt, b: Pt): Pt[] {
 
 const patchCache = new Map<string, Patch[]>()
 
-export function streetPatches(kind: UrbanKind, size: number): Patch[] {
-  const key = `${kind}|${size}`
+/**
+ * A chessboard town: every neighbourhood has the same angle and the streets run straight through from one to the next
+ * (their positions are multiples of the block size in the common frame), so the town is one even grid.
+ */
+function rasterPatches(size: number, look: StreetLook, cfg: Cfg): Patch[] {
+  const theta = look.seed === 0 ? 0.12 : ((look.seed * 0.6180339) % 1) * (Math.PI / 2)
+  const ca = Math.cos(theta)
+  const sa = Math.sin(theta)
+  const S = cfg.spacing
+  const R = S * 1.3
+  const n = Math.ceil((size * 1.5) / S) + 1
+  const patches: Patch[] = []
+  const axis = (proj: number) => {
+    const pos: number[] = []
+    const major: boolean[] = []
+    // global positions are multiples of the block size
+    for (let k = Math.ceil((proj - R) / cfg.gap); k * cfg.gap <= proj + R; k++) {
+      pos.push(k * cfg.gap - proj)
+      major.push(((k % cfg.majorEvery) + cfg.majorEvery) % cfg.majorEvery === 0)
+    }
+    return { pos, major }
+  }
+  for (let j = -n; j <= n; j++) {
+    for (let i = -n; i <= n; i++) {
+      const cx = (i + 0.5) * S * ca - (j + 0.5) * S * sa
+      const cy = (i + 0.5) * S * sa + (j + 0.5) * S * ca
+      if (cx < -S || cy < -S || cx > size + S || cy > size + S) continue
+      const u = axis(cx * ca + cy * sa)
+      const v = axis(-cx * sa + cy * ca)
+      const h = S / 2
+      const corner = (du: number, dv: number): Pt => [cx + du * ca - dv * sa, cy + du * sa + dv * ca]
+      patches.push({ id: patches.length, cx, cy, angle: theta, us: u.pos, vs: v.pos, majorU: u.major, majorV: v.major, cell: [corner(-h, -h), corner(h, -h), corner(h, h), corner(-h, h)] })
+    }
+  }
+  return patches
+}
+
+export function streetPatches(kind: UrbanKind, size: number, look: StreetLook = DEFAULT_LOOK): Patch[] {
+  const key = `${kind}|${size}|${lookKey(look)}`
   const hit = patchCache.get(key)
   if (hit) return hit
-  const cfg = CONFIG[kind]
-  const r = rng(cfg.seed * 1009 + size)
+  const cfg = cfgOf(kind, look)
+  if (look.style === 'raster') {
+    const raster = rasterPatches(size, look, cfg)
+    patchCache.set(key, raster)
+    return raster
+  }
+  const r = rng(cfg.seed * 1009 + size + look.seed * 7919)
   const S = cfg.spacing
   const seeds: Pt[] = []
   for (let j = -1; j * S < size + S; j++) {
@@ -94,7 +183,9 @@ export function streetPatches(kind: UrbanKind, size: number): Patch[] {
       if (o === s || Math.hypot(o[0] - s[0], o[1] - s[1]) > S * 2.6) continue
       cell = clipCloser(cell, s, o)
     }
-    const angle = r() * (Math.PI / 2)
+    const random = r() * (Math.PI / 2)
+    // a radial town turns every neighbourhood towards the middle of the map, so its streets run like spokes and rings
+    const angle = look.style === 'strahlen' ? Math.atan2(s[1] - size / 2, s[0] - size / 2) : random
     const gap = cfg.gap * (0.85 + r() * 0.35)
     const R = S * 1.3
     const make = () => {
@@ -184,12 +275,12 @@ const segCache = new Map<string, PatchSegs[]>()
  * The streets as plain line pieces in cell space (not yet clipped to the neighbourhood). Minor streets and alleys have
  * dead ends so blocks look organic. The 2D map draws these, the trams route over them.
  */
-export function streetSegments(kind: UrbanKind, size: number): PatchSegs[] {
-  const key = `${kind}|${size}`
+export function streetSegments(kind: UrbanKind, size: number, look: StreetLook = DEFAULT_LOOK): PatchSegs[] {
+  const key = `${kind}|${size}|${lookKey(look)}`
   const hit = segCache.get(key)
   if (hit) return hit
-  const patches = streetPatches(kind, size)
-  const r = rng(CONFIG[kind].seed * 77 + size)
+  const patches = streetPatches(kind, size, look)
+  const r = rng(CONFIG[kind].seed * 77 + size + look.seed * 104729)
   const out: PatchSegs[] = []
   for (const p of patches) {
     // skip neighbourhoods far outside the map
@@ -197,7 +288,7 @@ export function streetSegments(kind: UrbanKind, size: number): PatchSegs[] {
     const major: StreetSeg[] = []
     const minor: StreetSeg[] = []
     const fine: StreetSeg[] = []
-    const ext = CONFIG[kind].spacing * 1.3
+    const ext = cfgOf(kind, look).spacing * 1.3
     const seg = (list: StreetSeg[], fixed: number, a: number, b: number, alongU: boolean) => {
       const s = alongU ? patchToCell(p, a, fixed) : patchToCell(p, fixed, a)
       const e = alongU ? patchToCell(p, b, fixed) : patchToCell(p, fixed, b)
@@ -237,12 +328,12 @@ export function streetSegments(kind: UrbanKind, size: number): PatchSegs[] {
 const pathCache = new Map<string, StreetPaths>()
 
 /** The streets as paths in cell space. */
-export function streetPaths(kind: UrbanKind, size: number): StreetPaths {
-  const key = `${kind}|${size}`
+export function streetPaths(kind: UrbanKind, size: number, look: StreetLook = DEFAULT_LOOK): StreetPaths {
+  const key = `${kind}|${size}|${lookKey(look)}`
   const hit = pathCache.get(key)
   if (hit) return hit
   const out: PatchPaths[] = []
-  for (const { patch: p, major: ma, minor: mi, fine: fi } of streetSegments(kind, size)) {
+  for (const { patch: p, major: ma, minor: mi, fine: fi } of streetSegments(kind, size, look)) {
     const clip = new Path2D()
     const outline = new Path2D()
     p.cell.forEach(([x, y], i) => {
@@ -300,10 +391,10 @@ export interface Lot {
  * Buildings between the streets (before checking the zone map). The city gets perimeter blocks: houses
  * around the edge of every block with a courtyard inside; suburbs get detached houses.
  */
-export function lotsOf(kind: UrbanKind, size: number): Lot[] {
-  const patches = streetPatches(kind, size)
+export function lotsOf(kind: UrbanKind, size: number, look: StreetLook = DEFAULT_LOOK): Lot[] {
+  const patches = streetPatches(kind, size, look)
   const av = avenuesOf(size)
-  const r = rng(CONFIG[kind].seed * 131 + size)
+  const r = rng(CONFIG[kind].seed * 131 + size + look.seed * 337)
   const out: Lot[] = []
   for (const p of patches) {
     if (p.cx < -40 || p.cy < -40 || p.cx > size + 40 || p.cy > size + 40) continue

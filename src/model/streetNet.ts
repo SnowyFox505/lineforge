@@ -1,5 +1,5 @@
-import { avenuesOf, streetSegments } from '../editor2d/streets'
-import type { UrbanKind } from '../editor2d/streets'
+import { avenuesOf, DEFAULT_LOOK, lookKey, lookOf, streetSegments } from '../editor2d/streets'
+import type { StreetLook, UrbanKind } from '../editor2d/streets'
 import { nearestOnCurve, pointsFromRoute } from './geo'
 import { Heap } from './heap'
 import { WATER } from './types'
@@ -21,6 +21,8 @@ interface Seg {
   w: number
   /** the neighbourhood kind the street belongs to; avenues belong to either */
   kind: UrbanKind | 'any'
+  /** the street look the street belongs to (null for avenues) */
+  look: string | null
 }
 
 export interface StreetGraph {
@@ -69,10 +71,10 @@ function clipToPolygon(px: number, py: number, dx: number, dy: number, poly: [nu
   return [t0, t1]
 }
 
-function collectSegments(size: number): Seg[] {
+function collectSegments(size: number, looks: Map<string, StreetLook>): Seg[] {
   const segs: Seg[] = []
   const box: [number, number][] = [[0, 0], [size, 0], [size, size], [0, size]]
-  const add = (x0: number, y0: number, x1: number, y1: number, w: number, kind: Seg['kind']) => {
+  const add = (x0: number, y0: number, x1: number, y1: number, w: number, kind: Seg['kind'], look: string | null) => {
     const c = clipToPolygon(x0, y0, x1 - x0, y1 - y0, box)
     if (!c) return
     const ax = x0 + (x1 - x0) * c[0]
@@ -80,18 +82,19 @@ function collectSegments(size: number): Seg[] {
     const bx = x0 + (x1 - x0) * c[1]
     const by = y0 + (y1 - y0) * c[1]
     if (Math.hypot(bx - ax, by - ay) < 0.05) return
-    segs.push({ x0: ax, y0: ay, x1: bx, y1: by, w, kind })
+    segs.push({ x0: ax, y0: ay, x1: bx, y1: by, w, kind, look })
   }
   const seenBorder = new Set<string>()
   const key = (p: [number, number]) => `${Math.round(p[0] * 500)},${Math.round(p[1] * 500)}`
   for (const kind of ['city', 'suburb'] as UrbanKind[]) {
-    for (const { patch: p, major, minor } of streetSegments(kind, size)) {
+    for (const [lk, look] of looks) {
+    for (const { patch: p, major, minor } of streetSegments(kind, size, look)) {
       // main and side streets, clipped to the neighbourhood
       const clipped = (list: [number, number, number, number][], w: number) => {
         for (const [x0, y0, x1, y1] of list) {
           const c = clipToPolygon(x0, y0, x1 - x0, y1 - y0, p.cell)
           if (!c) continue
-          add(x0 + (x1 - x0) * c[0], y0 + (y1 - y0) * c[0], x0 + (x1 - x0) * c[1], y0 + (y1 - y0) * c[1], w, kind)
+          add(x0 + (x1 - x0) * c[0], y0 + (y1 - y0) * c[0], x0 + (x1 - x0) * c[1], y0 + (y1 - y0) * c[1], w, kind, lk)
         }
       }
       clipped(major, 1)
@@ -100,23 +103,24 @@ function collectSegments(size: number): Seg[] {
       for (let i = 0; i < p.cell.length; i++) {
         const a = p.cell[i]
         const b = p.cell[(i + 1) % p.cell.length]
-        const k = [key(a), key(b)].sort().join('|') + '|' + kind
+        const k = [key(a), key(b)].sort().join('|') + '|' + kind + '|' + lk
         if (seenBorder.has(k)) continue
         seenBorder.add(k)
-        add(a[0], a[1], b[0], b[1], 1.15, kind)
+        add(a[0], a[1], b[0], b[1], 1.15, kind, lk)
       }
+    }
     }
   }
   // long avenues and the ring road
   const av = avenuesOf(size)
   const L = size * 1.6
-  for (const a of av.angles) add(av.cx - Math.cos(a) * L, av.cy - Math.sin(a) * L, av.cx + Math.cos(a) * L, av.cy + Math.sin(a) * L, 0.85, 'any')
+  for (const a of av.angles) add(av.cx - Math.cos(a) * L, av.cy - Math.sin(a) * L, av.cx + Math.cos(a) * L, av.cy + Math.sin(a) * L, 0.85, 'any', null)
   if (av.ring > 0) {
     const N = 72
     for (let i = 0; i < N; i++) {
       const t0 = (i / N) * Math.PI * 2
       const t1 = ((i + 1) / N) * Math.PI * 2
-      add(av.cx + Math.cos(t0) * av.ring, av.cy + Math.sin(t0) * av.ring, av.cx + Math.cos(t1) * av.ring, av.cy + Math.sin(t1) * av.ring, 0.85, 'any')
+      add(av.cx + Math.cos(t0) * av.ring, av.cy + Math.sin(t0) * av.ring, av.cx + Math.cos(t1) * av.ring, av.cy + Math.sin(t1) * av.ring, 0.85, 'any', null)
     }
   }
   return segs
@@ -127,6 +131,11 @@ export function buildStreetGraph(doc: CityDoc): StreetGraph | null {
   const { size, zoneGrid, zones } = doc
   if (!zoneGrid || !zones?.length) return null
   const kindOf = new Map(zones.map((z) => [z.id, z.kind]))
+  const zoneById = new Map(zones.map((z) => [z.id, z]))
+  // every street look in use: the streets of each are only kept inside the areas that have that look
+  const looks = new Map<string, StreetLook>()
+  for (const z of zones) if (z.kind === 'city' || z.kind === 'suburb') looks.set(lookKey(lookOf(z)), lookOf(z))
+  if (!looks.size) looks.set(lookKey(DEFAULT_LOOK), DEFAULT_LOOK)
   const cellKind = (x: number, y: number): UrbanKind | null => {
     const cx = Math.floor(x)
     const cy = Math.floor(y)
@@ -135,14 +144,15 @@ export function buildStreetGraph(doc: CityDoc): StreetGraph | null {
     const k = kindOf.get(zoneGrid[cy * size + cx])
     return k === 'city' || k === 'suburb' ? k : null
   }
+  const lookAtCell = (x: number, y: number): string => lookKey(lookOf(zoneById.get(zoneGrid[Math.floor(y) * size + Math.floor(x)])))
   const allowed = (s: Seg, x: number, y: number) => {
     const k = cellKind(x, y)
-    return k !== null && (s.kind === 'any' || s.kind === k)
+    return k !== null && (s.kind === 'any' || s.kind === k) && (s.look === null || s.look === lookAtCell(x, y))
   }
 
   // 1. cut every street into the pieces that lie inside its own kind of area
   const pieces: Seg[] = []
-  for (const s of collectSegments(size)) {
+  for (const s of collectSegments(size, looks)) {
     const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0)
     const n = Math.max(1, Math.ceil(len / 0.5))
     let from = -1
@@ -270,15 +280,15 @@ export function buildStreetGraph(doc: CityDoc): StreetGraph | null {
   }
 }
 
-const graphCache = new WeakMap<object, { terrain: Uint8Array; graph: StreetGraph | null }>()
+const graphCache = new WeakMap<object, { terrain: Uint8Array; zones: CityDoc['zones']; graph: StreetGraph | null }>()
 
-/** The street graph of a document (cached for as long as its zone map and terrain stay the same objects). */
+/** The street graph of a document (cached for as long as its zone map, the zones and the terrain stay the same objects). */
 export function streetGraphOf(doc: CityDoc): StreetGraph | null {
   if (!doc.zoneGrid) return null
   const hit = graphCache.get(doc.zoneGrid)
-  if (hit && hit.terrain === doc.terrain) return hit.graph
+  if (hit && hit.terrain === doc.terrain && hit.zones === doc.zones) return hit.graph
   const graph = buildStreetGraph(doc)
-  graphCache.set(doc.zoneGrid, { terrain: doc.terrain, graph })
+  graphCache.set(doc.zoneGrid, { terrain: doc.terrain, zones: doc.zones, graph })
   return graph
 }
 

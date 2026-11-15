@@ -1,6 +1,7 @@
 import { buildField, WATER_THRESHOLD } from '../model/terrainField'
 import { airportLayout } from '../model/airport'
 import { streetPaths } from './streets'
+import type { StreetLook } from './streets'
 import { ZONE_STYLE } from './zoneGfx'
 import { fillStrength, getZoneLook, OUTLINE } from './zoneLook'
 import type { ZoneGfx } from './zoneGfx'
@@ -175,8 +176,8 @@ function scratchFor(w: number, h: number): HTMLCanvasElement {
 }
 
 /** Streets of a town in white on its grey area; finer streets appear as you zoom in. */
-function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number) {
-  const p = streetPaths(kind, size)
+function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number, look?: StreetLook) {
+  const p = streetPaths(kind, size, look)
   ctx.lineCap = 'butt'
   for (const patch of p.patches) {
     ctx.save()
@@ -429,7 +430,16 @@ export function drawTerrain(
       if (layer.kind === 'airport') drawAirport(c, zones, s)
       else if (layer.kind === 'forest') drawForest(c, zones.masks.forest, size, s, bare)
       else if (layer.kind === 'mountain') drawMountains(c, zones.masks.mountain, size, s, bare)
-      else drawStreets(c, layer.kind, size, s)
+      else {
+        // every street look draws its streets inside its own areas
+        for (const sl of zones.streets) {
+          if (sl.kind !== layer.kind) continue
+          c.save()
+          if (sl.paths !== layer.paths) c.clip(sl.paths.water)
+          drawStreets(c, sl.kind, size, s, sl.look)
+          c.restore()
+        }
+      }
       c.restore()
       if (target && soft) {
         c.save()

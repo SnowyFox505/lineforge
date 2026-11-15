@@ -1,11 +1,15 @@
 import { airportBoxes } from '../model/airport'
 import type { CityDoc, ZoneKind } from '../model/types'
 import { buildTerrainPaths } from './terrainRender'
+import { lookKey, lookOf } from './streets'
+import type { StreetLook, UrbanKind } from './streets'
 import { urbanAlpha } from './zoneSoft'
 import type { TerrainPaths, ViewTransform } from './terrainRender'
 
 export interface ZoneGfx {
   layers: { kind: ZoneKind; paths: TerrainPaths }[]
+  /** the areas of every street look: the town streets are drawn inside these (the same paths as the layer when a kind has one look only) */
+  streets: { kind: UrbanKind; look: StreetLook; paths: TerrainPaths }[]
   /** edges between two different zones (e.g. between districts), in cell coordinates */
   borders: Path2D
   labels: { name: string; kind: ZoneKind; x: number; y: number; cells: number }[]
@@ -35,6 +39,8 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
   if (!grid || !zones.length) return null
   const size = doc.size
   const kindOf = new Map(zones.map((z) => [z.id, z.kind]))
+  const zoneOf = new Map(zones.map((z) => [z.id, z]))
+  const lookMasks = new Map<string, { kind: UrbanKind; look: StreetLook; mask: Uint8Array }>()
   const masks: Record<ZoneKind, Uint8Array | null> = { city: null, suburb: null, airport: null, forest: null, mountain: null }
   const sums = new Map<number, { x: number; y: number; n: number; x0: number; y0: number; x1: number; y1: number }>()
   const borders = new Path2D()
@@ -45,6 +51,13 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
       const kind = kindOf.get(id)
       if (!kind) continue
       ;(masks[kind] ??= new Uint8Array(size * size))[y * size + x] = 1
+      if (kind === 'city' || kind === 'suburb') {
+        const look = lookOf(zoneOf.get(id))
+        const lk = `${kind}|${lookKey(look)}`
+        let e = lookMasks.get(lk)
+        if (!e) lookMasks.set(lk, (e = { kind, look, mask: new Uint8Array(size * size) }))
+        e.mask[y * size + x] = 1
+      }
       const s = sums.get(id) ?? { x: 0, y: 0, n: 0, x0: x, y0: y, x1: x, y1: y }
       s.x += x + 0.5
       s.y += y + 0.5
@@ -71,6 +84,13 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
     }
   }
   const layers = DRAW_ORDER.filter((k) => masks[k]).map((kind) => ({ kind, paths: buildTerrainPaths(masks[kind]!, size) }))
+  const perKind = new Map<string, number>()
+  for (const e of lookMasks.values()) perKind.set(e.kind, (perKind.get(e.kind) ?? 0) + 1)
+  const streets = [...lookMasks.values()].map((e) => ({
+    kind: e.kind,
+    look: e.look,
+    paths: perKind.get(e.kind) === 1 ? layers.find((l) => l.kind === e.kind)!.paths : buildTerrainPaths(e.mask, size),
+  }))
   const labels = zones
     .filter((z) => sums.has(z.id))
     .map((z) => {
@@ -93,7 +113,7 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
   }
   const painted: Partial<Record<ZoneKind, Uint8Array>> = {}
   for (const k of DRAW_ORDER) if (masks[k]) painted[k] = masks[k]!
-  return layers.length ? { layers, borders, labels, airports, soft, masks: painted } : null
+  return layers.length ? { layers, streets, borders, labels, airports, soft, masks: painted } : null
 }
 
 /** Names of districts, suburbs and airports (screen space, drawn when zoomed in far enough). */

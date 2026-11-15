@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { lotsOf } from '../editor2d/streets'
+import { lookKey, lookOf, lotsOf } from '../editor2d/streets'
+import type { StreetLook } from '../editor2d/streets'
 import { urbanAlpha } from '../editor2d/zoneSoft'
 import type { UrbanKind } from '../editor2d/streets'
 import type { CityDoc } from '../model/types'
@@ -69,6 +70,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
   const { size, zoneGrid, zones } = doc
   if (!zoneGrid || !zones?.length) return []
   const kindOf = new Map(zones.map((z) => [z.id, z.kind]))
+  const lookById = new Map(zones.map((z) => [z.id, lookOf(z)]))
   const half = size / 2
   const blocked = blockedCells(doc, net)
   const soft = urbanAlpha(doc)
@@ -91,10 +93,28 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
     }
     return n / t
   }
+  /** the street look of the area at a point */
+  const lookAt = (x: number, y: number): StreetLook | null => {
+    const cx = Math.floor(x)
+    const cy = Math.floor(y)
+    if (cx < 0 || cy < 0 || cx >= size || cy >= size) return null
+    return lookById.get(zoneGrid[cy * size + cx]) ?? null
+  }
+  // every street look that is used by an area of the kind
+  const looksOf = (kind: UrbanKind): StreetLook[] => {
+    const seen = new Map<string, StreetLook>()
+    for (const z of zones) if (z.kind === kind) seen.set(lookKey(lookOf(z)), lookOf(z))
+    return [...seen.values()]
+  }
   const out: Building[] = []
   for (const kind of ['city', 'suburb'] as UrbanKind[]) {
-    for (const lot of lotsOf(kind, size)) {
+    for (const look of looksOf(kind)) {
+      const lk = lookKey(look)
+      for (const lot of lotsOf(kind, size, look)) {
       if (cellKind(lot.x, lot.y) !== kind) continue
+      // the lot belongs to the street look of the area it stands in
+      const here = lookAt(lot.x, lot.y)
+      if (!here || lookKey(here) !== lk) continue
       // the whole lot must lie inside the area, on land and clear of the tracks
       const ca = Math.cos(lot.angle)
       const sa = Math.sin(lot.angle)
@@ -140,6 +160,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
         shade: Math.floor(((lot.rand * 13) % 1) * 2.99) as 0 | 1 | 2,
         kind,
       })
+      }
     }
   }
   return out

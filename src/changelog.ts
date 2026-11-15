@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.15.0',
+    date: '2026-11-16',
+    headline: 'Jede Stadt mit eigenem Straßenbild',
+    changes: [
+      {
+        title: 'Straßenraster pro Bezirk und Vorort',
+        what: 'Bezirke und Vororte können jetzt ihr eigenes Straßenbild haben: gewachsen (wie bisher), Schachbrett mit lauter geraden Straßen, dicht mit kleinen Blöcken, weitläufig mit großen Blöcken oder Strahlen, bei denen die Straßen auf die Kartenmitte zulaufen.',
+        how: 'Unter Gebiete einen Bezirk oder Vorort wählen, dann unter „Straßenbild“ den Stil antippen. „Anderes Muster“ würfelt ein neues Aussehen im gleichen Stil, so sehen zwei Städte mit dem gleichen Stil trotzdem verschieden aus.',
+        benefit: 'Mehrere Städte auf einer Karte wirken wie verschiedene Orte. Karte, 3D-Häuser und die Strecken der Straßenbahn richten sich nach dem Straßenbild. Bestehende Städte bleiben genau wie sie sind.',
+      },
+    ],
+  },
+  {
     version: '0.14.0',
     date: '2026-11-16',
     headline: 'Ringlinien, Express und Ausläufer',
