@@ -4,6 +4,7 @@ import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
+import { useZoneLook } from '../editor2d/zoneLook'
 import { buildZoneGfx } from '../editor2d/zoneGfx'
 import { makeSampler } from '../model/terrainField'
 import type { CityDoc } from '../model/types'
@@ -160,7 +161,9 @@ function Terrain({ doc, net, see }: { doc: CityDoc; net: Network3D; see: boolean
     [mountains, net],
   )
   const { geo, skirt } = useMemo(() => buildTerrain(doc, net.field, net.carve, rise), [doc.size, net.field, net.carve, rise]) // eslint-disable-line react-hooks/exhaustive-deps
-  const tex = useMemo(() => buildTexture(doc), [doc.terrain, doc.zoneGrid, doc.zones, doc.size]) // eslint-disable-line react-hooks/exhaustive-deps
+  const zoneWeight = useZoneLook((s) => s.weight)
+  const zoneOutline = useZoneLook((s) => s.outline)
+  const tex = useMemo(() => buildTexture(doc), [doc.terrain, doc.zoneGrid, doc.zones, doc.size, zoneWeight, zoneOutline]) // eslint-disable-line react-hooks/exhaustive-deps
   const water = useMemo(() => buildWater(doc.size, net.field), [doc.size, net.field])
   return (
     <group>

@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { useEffect } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
@@ -11,6 +12,7 @@ import { groupOf } from '../store/editorStore'
 import type { Tool, ToolGroup } from '../store/editorStore'
 import { POI_STYLE } from '../editor2d/drawPoi'
 import { ZONE_STYLE } from '../editor2d/zoneGfx'
+import { useZoneLook } from '../editor2d/zoneLook'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import { ColorPicker, CommitInput, Slider, spring, StationGlyph } from './primitives'
@@ -363,6 +365,14 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   const renameZone = useEditor((s) => s.renameZone)
   const rerollZone = useEditor((s) => s.rerollZoneName)
   const removeZone = useEditor((s) => s.removeZone)
+  const pick = useEditor((s) => s.pickZone)
+  const setPick = useEditor((s) => s.setPickZone)
+  const weight = useZoneLook((s) => s.weight)
+  const setWeight = useZoneLook((s) => s.setWeight)
+  const outline = useZoneLook((s) => s.outline)
+  const setOutline = useZoneLook((s) => s.setOutline)
+  // the picker is only on while this panel is open
+  useEffect(() => () => setPick(false), [setPick])
   const zones = (doc.zones ?? []).filter((z) => z.kind === kind)
   const current = zones.find((z) => z.id === active)
   const L = ZONE_LABEL[kind]
@@ -375,6 +385,18 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
           <span className="text-sm font-bold tabular-nums">{brush}</span>
         </div>
         <Slider value={brush} min={2} max={24} onChange={setBrush} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip active={pick} onClick={() => setPick(!pick)}>
+          <Icon name="pipette" size={16} />
+          {pick ? 'Tippe auf eine Fläche' : 'Fläche wählen'}
+        </Chip>
+        <Chip active={weight === 'light'} onClick={() => setWeight(weight === 'light' ? 'strong' : 'light')}>
+          Leichte Flächen
+        </Chip>
+        <Chip active={outline} onClick={() => setOutline(!outline)}>
+          Umriss
+        </Chip>
       </div>
       <div>
         <div className="eyebrow mb-2">{ZONE_PLURAL[kind]}</div>

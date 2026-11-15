@@ -199,7 +199,36 @@ function storedMode(): Mode {
   return v === 'dark' || v === 'light' || v === 'auto' ? v : 'dark'
 }
 
+const GRADIENTS_KEY = 'lineforge-gradients'
+/** How many own gradients can be kept */
+export const MAX_SAVED = 8
+
+/** The gradients the person saved: [first colour, second colour] */
+export type SavedGradient = [string, string]
+
+function storedGradients(): SavedGradient[] {
+  const raw = read(GRADIENTS_KEY)
+  if (!raw) return []
+  try {
+    const list: unknown = JSON.parse(raw)
+    if (!Array.isArray(list)) return []
+    return list.filter((g): g is SavedGradient => Array.isArray(g) && g.length === 2 && HEX.test(String(g[0])) && HEX.test(String(g[1]))).slice(0, MAX_SAVED)
+  } catch {
+    return []
+  }
+}
+
+const sameHex = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+/** Is this blend one of the ready-made ones or one of the saved ones? */
+export const isKnownGradient = (a: string, b: string, saved: SavedGradient[]): boolean =>
+  [...GRADIENTS.map((g) => [g.a, g.b] as SavedGradient), ...saved].some(([x, y]) => sameHex(x, a) && sameHex(y, b))
+
 interface ThemeState {
+  /** own gradients, newest first */
+  saved: SavedGradient[]
+  saveGradient: (a: string, b: string) => void
+  removeGradient: (a: string, b: string) => void
   accent: string
   /** the second colour of a gradient, or null for a single colour */
   accent2: string | null
@@ -214,6 +243,18 @@ interface ThemeState {
 const initialMode = storedMode()
 
 export const useTheme = create<ThemeState>((set, get) => ({
+  saved: storedGradients(),
+  saveGradient: (a, b) => {
+    if (!HEX.test(a) || !HEX.test(b) || isKnownGradient(a, b, get().saved)) return
+    const saved = [[a, b] as SavedGradient, ...get().saved].slice(0, MAX_SAVED)
+    write(GRADIENTS_KEY, JSON.stringify(saved))
+    set({ saved })
+  },
+  removeGradient: (a, b) => {
+    const saved = get().saved.filter(([x, y]) => !(sameHex(x, a) && sameHex(y, b)))
+    write(GRADIENTS_KEY, JSON.stringify(saved))
+    set({ saved })
+  },
   accent: stored(),
   accent2: storedAccent2(),
   mode: initialMode,

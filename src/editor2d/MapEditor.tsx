@@ -10,6 +10,7 @@ import type { Tool } from '../store/editorStore'
 import { drawPoi, drawPoiReach, POI_STYLE } from './drawPoi'
 import { useTheme, getAccent } from '../ui/theme'
 import { penActive, pointerRole, usePen } from '../ui/pen'
+import { useZoneLook } from './zoneLook'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
 import { drawWaterLabels } from './waterLabels'
@@ -170,6 +171,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
   const accent = useTheme((s) => s.accent) // a new accent colour repaints the map
   const scheme = useTheme((s) => s.scheme) // so does light / dark (the backdrop around the map)
+  const zoneWeight = useZoneLook((s) => s.weight) // and the look of the painted areas
+  const zoneOutline = useZoneLook((s) => s.outline)
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -527,7 +530,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme])
+  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
 
   useEffect(() => {
     userMoved.current = false
@@ -793,6 +796,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       // pen mode: a finger only moves (and with two fingers zooms) the map, whatever tool is chosen
       hover.current = null
       g.kind = 'pan'
+    } else if (useEditor.getState().pickZone && isPaintTool(t) && t !== 'water' && t !== 'erase' && t !== 'zoneErase') {
+      // area picker: the area under the finger becomes the one to paint with
+      const c = toCell(p)
+      if (!useEditor.getState().pickZoneAt(c.x, c.y)) flash('Hier ist kein Gebiet. Tippe auf eine bemalte Fläche.')
+      g.kind = 'none'
     } else if (isPaintTool(t)) {
       if (t === 'water' || t === 'erase') useEditor.getState().checkpoint()
       else zoneId.current = useEditor.getState().beginZonePaint()

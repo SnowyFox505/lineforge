@@ -28,6 +28,37 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-11-16',
+    headline: 'Ruhigere Flächen und eigene Verläufe',
+    changes: [
+      {
+        title: 'Leichtere Flächen',
+        what: 'Bezirke, Vororte, Wälder und Gebirge stechen nicht mehr so stark hervor. Ihre Farbe ist durchscheinend, sodass Gras und Straßen durchkommen.',
+        how: 'Das gilt sofort für alle Städte, in Karte und 3D. Wer die kräftige Farbe lieber mag: Terraforming → Gebiete, dann „Leichte Flächen“ ausschalten.',
+        benefit: 'Die Karte wirkt ruhiger, und Linien und Stationen sind besser zu sehen.',
+      },
+      {
+        title: 'Umriss um Flächen',
+        what: 'Auf Wunsch bekommt jede Fläche eine Linie als Rand.',
+        how: 'Terraforming → Gebiete, dann „Umriss“ antippen. Das wirkt auf der Karte und in 3D.',
+        benefit: 'Du siehst genau, wo ein Bezirk, ein Wald oder der Flughafen aufhört.',
+      },
+      {
+        title: 'Fläche wählen',
+        what: 'Statt in der Liste nach einem Bezirk zu suchen, tippst du ihn auf der Karte an und malst gleich damit weiter.',
+        how: 'In den Gebiets-Werkzeugen auf „Fläche wählen“ tippen, dann auf eine bemalte Fläche tippen. Das passende Werkzeug (Stadt, Vorort, Flughafen, Wald, Gebirge) schaltet sich von selbst ein.',
+        benefit: 'Du erweiterst oder änderst einen Bezirk in zwei Tippern.',
+      },
+      {
+        title: 'Eigene Verläufe',
+        what: 'Du kannst Farbverläufe aus zwei Farben selbst bauen und behalten.',
+        how: 'Darstellung → beim Verlauf auf das bunte Rad tippen, Farbe 1 und Farbe 2 einstellen und „Verlauf speichern“ antippen. Gespeicherte Verläufe stehen danach neben den fertigen. Mit „Gespeicherten Verlauf entfernen“ wirfst du einen wieder raus.',
+        benefit: 'Dein Look gehört dir, und du kannst zwischen deinen Lieblingsverläufen wechseln.',
+      },
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-11-16',
     headline: 'Hell, bunt und für den Stift',

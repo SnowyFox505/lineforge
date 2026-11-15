@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accentFill, accentFromHue, ACCENT_INK, accentText, contrast, DEFAULT_ACCENT, GRADIENTS, hexToRgb, hslToHex, hueOf, luminance, PRESETS, rgbToHsl, shades } from './theme'
+import { accentFill, accentFromHue, ACCENT_INK, accentText, contrast, DEFAULT_ACCENT, GRADIENTS, hexToRgb, isKnownGradient, MAX_SAVED, useTheme, hslToHex, hueOf, luminance, PRESETS, rgbToHsl, shades } from './theme'
 
 const BACKGROUND = '#0a0e14'
 
@@ -82,5 +82,27 @@ describe('accent as text', () => {
       const dark = accentText(accentFromHue(h), 'light')
       expect(Math.abs(hueOf(dark) - h)).toBeLessThanOrEqual(6)
     }
+  })
+})
+
+describe('saved gradients', () => {
+  it('keeps own gradients, newest first, without doubles or ready-made ones', () => {
+    const t = () => useTheme.getState()
+    t().saveGradient('#ff0000', '#00ff00')
+    t().saveGradient('#0000ff', '#ffff00')
+    t().saveGradient('#0000ff', '#ffff00')
+    t().saveGradient(GRADIENTS[0].a, GRADIENTS[0].b)
+    expect(t().saved).toEqual([
+      ['#0000ff', '#ffff00'],
+      ['#ff0000', '#00ff00'],
+    ])
+    expect(isKnownGradient('#FF0000', '#00FF00', t().saved)).toBe(true)
+    t().removeGradient('#ff0000', '#00ff00')
+    expect(t().saved).toEqual([['#0000ff', '#ffff00']])
+  })
+
+  it('keeps at most as many as allowed', () => {
+    for (let i = 0; i < MAX_SAVED + 3; i++) useTheme.getState().saveGradient(accentFromHue(i * 7), accentFromHue(i * 7 + 90))
+    expect(useTheme.getState().saved.length).toBe(MAX_SAVED)
   })
 })

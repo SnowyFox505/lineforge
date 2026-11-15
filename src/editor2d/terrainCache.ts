@@ -1,6 +1,7 @@
 import { drawTerrain } from './terrainRender'
 import type { TerrainPaths } from './terrainRender'
 import type { ZoneGfx } from './zoneGfx'
+import { zoneLookKey } from './zoneLook'
 
 /**
  * The map's ground (land, water, towns with their streets, shore glow) is expensive to paint and does not move
@@ -20,6 +21,8 @@ export interface TerrainCache {
   /** what the picture was made from */
   paths: TerrainPaths | null
   zones: ZoneGfx | null
+  /** the look of the areas (see zoneLook.ts) the picture was painted with */
+  look: string
   size: number
   vw: number
   vh: number
@@ -28,7 +31,7 @@ export interface TerrainCache {
   force: boolean
 }
 
-export const newTerrainCache = (): TerrainCache => ({ force: false, canvas: null, ox: 0, oy: 0, s: 1, mx: 0, my: 0, paths: null, zones: null, size: 0, vw: 0, vh: 0, dpr: 1 })
+export const newTerrainCache = (): TerrainCache => ({ force: false, canvas: null, ox: 0, oy: 0, s: 1, mx: 0, my: 0, paths: null, zones: null, look: '', size: 0, vw: 0, vh: 0, dpr: 1 })
 
 /** Largest picture, in device pixels, we are willing to keep (iOS limits canvases to about 16.7 million) */
 const MAX_PIXELS = 12_000_000
@@ -45,7 +48,7 @@ export function drawTerrainCached(
   cache: TerrainCache,
   onScaled: () => void,
 ) {
-  const fresh = !cache.force && cache.canvas && cache.paths === paths && cache.zones === zones && cache.size === size && cache.vw === vw && cache.vh === vh && cache.dpr === dpr
+  const fresh = !cache.force && cache.canvas && cache.paths === paths && cache.zones === zones && cache.look === zoneLookKey() && cache.size === size && cache.vw === vw && cache.vh === vh && cache.dpr === dpr
   if (fresh) {
     const k = view.s / cache.s
     const dx = view.ox + (-cache.mx - cache.ox) * k
@@ -85,6 +88,7 @@ export function drawTerrainCached(
   cache.my = my
   cache.paths = paths
   cache.zones = zones
+  cache.look = zoneLookKey()
   cache.size = size
   cache.vw = vw
   cache.vh = vh

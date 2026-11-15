@@ -2,6 +2,7 @@ import { buildField, WATER_THRESHOLD } from '../model/terrainField'
 import { airportLayout } from '../model/airport'
 import { streetPaths } from './streets'
 import { ZONE_STYLE } from './zoneGfx'
+import { fillStrength, getZoneLook, OUTLINE } from './zoneLook'
 import type { ZoneGfx } from './zoneGfx'
 
 export interface TerrainPaths {
@@ -405,6 +406,7 @@ export function drawTerrain(
     ctx.lineJoin = 'round'
     ctx.lineCap = 'butt'
     const cell = ctx.getTransform()
+    const look = getZoneLook()
     for (const layer of zones.layers) {
       const st = ZONE_STYLE[layer.kind]
       const soft = (layer.kind === 'city' || layer.kind === 'suburb') && zones.soft
@@ -418,7 +420,7 @@ export function drawTerrain(
         c.lineJoin = 'round'
         c.lineCap = 'butt'
       }
-      c.globalAlpha = st.alpha
+      c.globalAlpha = st.alpha * fillStrength(layer.kind, look.weight)
       c.fillStyle = st.fill
       c.fill(layer.paths.water)
       c.globalAlpha = 1
@@ -446,8 +448,15 @@ export function drawTerrain(
         ctx.lineWidth = Math.max(0.1, 1.3 / s)
         ctx.stroke(layer.paths.coast)
       }
+      if (look.outline) {
+        // the outline of the whole area, drawn on top of the (faded) edge
+        ctx.strokeStyle = OUTLINE[layer.kind]
+        ctx.lineWidth = Math.max(0.12, 2 / s)
+        ctx.setLineDash([])
+        ctx.stroke(layer.paths.coast)
+      }
     }
-    ctx.strokeStyle = 'rgba(60,70,84,0.45)'
+    ctx.strokeStyle = look.outline ? 'rgba(60,70,84,0.7)' : 'rgba(60,70,84,0.45)'
     ctx.lineWidth = Math.max(0.08, 1.1 / s)
     ctx.setLineDash([Math.max(0.5, 5 / s), Math.max(0.35, 3 / s)])
     ctx.stroke(zones.borders)

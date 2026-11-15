@@ -71,6 +71,8 @@ interface EditorState {
   selectedWaypoint: { lineId: string; k: number; j: number } | null
   /** Zone that the area tools currently paint with, per kind (0 = none yet) */
   activeZone: Record<ZoneKind, number>
+  /** the area picker is on: the next tap on the map chooses the area under it to paint with */
+  pickZone: boolean
   poiKind: PoiKind
   selectedPoiId: string | null
   /** id of the named body of water that is selected (tool 'waterName') */
@@ -127,6 +129,9 @@ interface EditorState {
   rerollZoneName: (id: number) => void
   removeZone: (id: number) => void
   setActiveZone: (kind: ZoneKind, id: number) => void
+  setPickZone: (on: boolean) => void
+  /** Chooses the area at this cell: its tool is switched on and it becomes the one painted with. False when no area is there. */
+  pickZoneAt: (x: number, y: number) => boolean
   setPoiKind: (kind: PoiKind) => void
   selectPoi: (id: string | null) => void
   /** Tap on the map with the water-name tool: names the water at the cell (if it has no name yet) and selects it; on land it selects nothing. */
@@ -198,6 +203,7 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedStationId: null,
     selectedWaypoint: null,
     activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 },
+    pickZone: false,
     poiKind: 'stadium',
     selectedPoiId: null,
     selectedWaterId: null,
@@ -411,6 +417,16 @@ export const useEditor = create<EditorState>((set, get) => {
       commit({ ...doc, zones: (doc.zones ?? []).filter((z) => z.id !== id), zoneGrid: grid }, { activeZone: Object.fromEntries(Object.entries(activeZone).map(([k, v]) => [k, v === id ? 0 : v])) as Record<ZoneKind, number> })
     },
     setActiveZone: (kind, id) => set({ activeZone: { ...get().activeZone, [kind]: id } }),
+    setPickZone: (on) => set({ pickZone: on }),
+    pickZoneAt: (x, y) => {
+      const { doc, activeZone } = get()
+      if (x < 0 || y < 0 || x >= doc.size || y >= doc.size) return false
+      const id = doc.zoneGrid?.[y * doc.size + x]
+      const zone = id ? doc.zones?.find((z) => z.id === id) : undefined
+      if (!zone) return false
+      set({ activeZone: { ...activeZone, [zone.kind]: zone.id }, tool: zone.kind, pickZone: false })
+      return true
+    },
     setPoiKind: (poiKind) => set({ poiKind }),
     selectPoi: (selectedPoiId) => set({ selectedPoiId }),
     tapWater: (x, y) => {
