@@ -14,6 +14,7 @@ import { penActive, pointerRole, usePen } from '../ui/pen'
 import { useZoneLook } from './zoneLook'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
+import { stationLabel } from '../model/outside'
 import { buildCountyGfx, drawCountyLabels, drawCounties } from './countyGfx'
 import { drawWaterLabels } from './waterLabels'
 import { buildTerrainPaths } from './terrainRender'
@@ -495,7 +496,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       }
       drawStation(ctx, types[st.id] ?? st.type, px, py, r, st.id === selectedStationId, k)
       if (s >= 3 && k > 0.8 && labelHolder(doc, st.id) === st.id) {
-        const label = st.name
+        const label = stationLabel(st)
         const fs = Math.round(Math.min(15, Math.max(11, 9 + s * 0.4)))
         ctx.font = `600 ${fs}px 'Space Grotesk Variable', system-ui, sans-serif`
         const tw = ctx.measureText(label).width

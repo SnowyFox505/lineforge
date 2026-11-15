@@ -65,6 +65,11 @@ export const SEA_NAMES: string[] = [
   'Nebelmeer', 'Silbermeer', 'Weitmeer', 'Morgenmeer', 'Sturmmeer', 'Möwenmeer', 'Dünenmeer', 'Salzmeer', 'Wellenmeer', 'Leuchtturmsee', 'Nordstrandmeer', 'Bernsteinmeer', 'Ankermeer', 'Seglermeer', 'Gezeitenmeer', 'Windmeer',
 ]
 
+/** Far-away cities a connection to the outside world leads to */
+export const FAR_NAMES: string[] = [
+  'Nordhafen', 'Königsfurt', 'Alt-Weidenau', 'Silberstadt', 'Rothenbruck', 'Meerbusch-Süd', 'Goldenbach', 'Hohenfels', 'Wolkenburg', 'Eisental', 'Sonnenhafen', 'Tannenberg', 'Kranichstadt', 'Mondscheinau', 'Brückenau', 'Falkenhorst', 'Lindwurmstein', 'Perlenbucht', 'Schwanenfurt', 'Donnerberg', 'Ostwind', 'Kupferstadt', 'Weißenmoor', 'Adlerhorst',
+]
+
 export const COUNTY_NAMES: string[] = [
   'Nordmark', 'Altmark', 'Hochwaldgau', 'Elbtal', 'Seegau', 'Goldmark', 'Heidegau', 'Kornland', 'Lindengau', 'Marschland', 'Bruchland', 'Quellmark', 'Birkengau', 'Weinhang', 'Steinfurt-Land', 'Rabengau', 'Hügelmark', 'Moorgau', 'Auenland', 'Sonnental', 'Frankenhöhe', 'Burggrafenmark', 'Salzgau', 'Wiesengrund', 'Fennland', 'Sandmark', 'Dünengau', 'Hopfenland', 'Eisenmark', 'Kupfergau', 'Ährenland', 'Schlehengau', 'Oberbruch', 'Unterland', 'Mittelmark', 'Westgau', 'Ostmark', 'Südhang', 'Waldmark', 'Glockengau',
 ]

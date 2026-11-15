@@ -65,6 +65,8 @@ export interface Station {
   underground?: boolean
   /** Position of the station in the network plan, set by hand (plan cells, see plan/schematic.ts); without it the plan places the station */
   planPin?: Pt
+  /** Connection to the outside world: the far-away destination trains from here go to (only regional and long-distance lines may serve it) */
+  outside?: string
 }
 
 export interface Line {

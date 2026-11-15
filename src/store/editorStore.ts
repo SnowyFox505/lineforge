@@ -2,6 +2,7 @@ import { produce, setAutoFreeze } from 'immer'
 import { create } from 'zustand'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
+import { farDestination, outsideBlockers } from '../model/outside'
 import { addCounty as addCountyTo, divideIntoCounties } from '../model/counties'
 import { applyMap } from '../model/mapGen'
 import type { MapPreset } from '../model/mapGen'
@@ -197,6 +198,8 @@ interface EditorState {
   updateStation: (id: string, patch: Partial<Omit<Station, 'id'>>) => void
   /** Make a station the main station of the city (there is only one); the same station again, or null, takes the mark away. */
   setMainStation: (id: string | null) => void
+  /** Make the station a connection to the outside world (a far-away destination) or take it away again */
+  setStationOutside: (id: string, on: boolean) => void
   removeStation: (id: string) => void
   /** link two stations as one interchange (or unlink them again) */
   toggleLink: (a: string, b: string) => void
@@ -696,6 +699,16 @@ export const useEditor = create<EditorState>((set, get) => {
         { selectedStationId: id },
       )
       return id
+    },
+    setStationOutside: (id, on) => {
+      const { doc } = get()
+      const st = doc.stations[id]
+      if (!st || st.type === 'tramstop') return
+      if (on && outsideBlockers(doc, id).length) return
+      commit(produce(doc, (d) => {
+        if (on) d.stations[id].outside = farDestination(d)
+        else delete d.stations[id].outside
+      }))
     },
     setMainStation: (id) => {
       const { doc } = get()

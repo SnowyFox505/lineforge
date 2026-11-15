@@ -13,6 +13,7 @@ import { layoutLines } from './layout'
 import { schematize } from './schematic'
 import { stopsAt } from '../model/stops'
 import { labelHolder } from '../model/links'
+import { stationLabel } from '../model/outside'
 
 const TARGET_W = 500 // px the longer side of the network is scaled to
 const MIN_U = 10
@@ -416,7 +417,7 @@ export default function PlanView() {
     const labels = placeLabels(
       stations.filter((st) => labelHolder(pd, st.id) === st.id).map((st) => ({
         stationId: st.id,
-        text: st.name,
+        text: stationLabel(st),
         cx: px(st.x),
         cy: py(st.y),
         radius: markerRadius(types[st.id]),

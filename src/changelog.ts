@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.18.0',
+    date: '2026-11-16',
+    headline: 'Anschluss an die weite Welt',
+    changes: [
+      {
+        title: 'Anschluss nach außen',
+        what: 'Eine Bahn-Haltestelle kann jetzt die Verbindung deiner Stadt zur Außenwelt sein. Sie bekommt ein fernes Ziel, zum Beispiel „Nordhafen“, das auf der Karte und im Netzplan hinter dem Stationsnamen steht („Hauptbahnhof → Nordhafen“).',
+        how: 'Eine Bahn-Haltestelle antippen und „Anschluss nach außen“ wählen. Das Ziel wird ausgedacht, du kannst es daneben umbenennen. Nur Regional- und Fernverkehr dürfen dort halten; S-Bahn, U-Bahn und Tram werden abgelehnt. Solange so eine Linie noch dort hält, siehst du einen Hinweis und kannst den Anschluss nicht anschalten.',
+        benefit: 'Deine Stadt hängt sichtbar am Rest der Welt, und du erkennst sofort, wo Reisende ankommen und abfahren.',
+      },
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-11-16',
     headline: 'Landkreise für große Karten',

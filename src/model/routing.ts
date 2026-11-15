@@ -2,6 +2,7 @@ import { octilinearPath } from '../plan/octilinear'
 import { legCurve, nearestOnCurve, pointsFromRoute, routeHints } from './geo'
 import { Heap } from './heap'
 import { streetFoot, streetViaPoints } from './streetNet'
+import { canServeOutside } from './outside'
 import { WATER } from './types'
 import type { CityDoc, Line, Pt } from './types'
 
@@ -489,6 +490,8 @@ function onStreet(doc: CityDoc, line: Line, stationId: string): CityDoc {
 export function appendStation(input: CityDoc, lineId: string, stationId: string): CityDoc {
   const base = input.lines[lineId]
   if (!base || !input.stations[stationId] || base.loop) return input
+  // a connection to the outside world is only served by regional and long-distance trains
+  if (input.stations[stationId].outside && !canServeOutside(base.operator)) return input
   const doc = onStreet(input, base, stationId)
   if (base.stations[base.stations.length - 1] === stationId) return doc
   const line = shape(base)

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { STREET_STYLES } from '../editor2d/streets'
 import { branchIsBare } from '../model/lineKinds'
+import { outsideBlockers } from '../model/outside'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
 import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
@@ -121,7 +122,9 @@ function StationCard() {
   const select = useEditor((s) => s.selectStation)
   const doc = useEditor((s) => s.doc)
   const setMain = useEditor((s) => s.setMainStation)
+  const setOutside = useEditor((s) => s.setStationOutside)
   if (!st) return null
+  const blockers = outsideBlockers(doc, st.id)
   const nearby = poisServedBy(doc, st)
   // two lines at one stop make it an interchange by themselves; the airport follows from the grounds
   const effective = effectiveTypes(doc)[st.id] ?? st.type
@@ -169,6 +172,22 @@ function StationCard() {
       {st.type !== 'tramstop' && effective !== 'standard' && (
         <p className="mt-1 text-xs text-white/55">
           {STATION_TYPES[effective].label}: {STATION_TYPES[effective].hint}
+        </p>
+      )}
+      {st.type !== 'tramstop' && (
+        <div className="mt-2 flex items-center gap-2">
+          <Chip active={!!st.outside} onClick={() => (st.outside || !blockers.length) && setOutside(st.id, !st.outside)}>
+            <Icon name="arrow" size={16} />
+            {st.outside ? 'Anschluss nach außen ✓' : 'Anschluss nach außen'}
+          </Chip>
+          {st.outside && <CommitInput value={st.outside} onCommit={(outside) => update(st.id, { outside: outside.trim() || st.outside })} className="min-w-0 flex-1 !py-2" />}
+        </div>
+      )}
+      {st.type !== 'tramstop' && (st.outside || blockers.length > 0) && (
+        <p className={`mt-1 text-xs ${blockers.length ? 'text-amber-300' : 'text-white/55'}`}>
+          {blockers.length
+            ? `Nur Regional- und Fernverkehr fahren nach außen. Hier halten noch ${blockers.map((l) => l.name).join(', ')}.`
+            : 'Züge von hier fahren in die weite Welt: nur Regional- und Fernverkehr können diese Station bedienen.'}
         </p>
       )}
       {nearby.length > 0 && (
