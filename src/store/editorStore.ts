@@ -2,6 +2,8 @@ import { produce, setAutoFreeze } from 'immer'
 import { create } from 'zustand'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
+import { applyMap } from '../model/mapGen'
+import type { MapPreset } from '../model/mapGen'
 import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
@@ -131,7 +133,7 @@ interface EditorState {
 
   loadDoc: (doc: CityDoc) => void
   /** `nameQueues`: names the player wants for the next districts, suburbs, waters and landscapes */
-  newCity: (name: string, mode: GameMode, size?: number, nameQueues?: CityDoc['nameQueues']) => void
+  newCity: (name: string, mode: GameMode, size?: number, nameQueues?: CityDoc['nameQueues'], map?: { preset: MapPreset; seed: number }) => void
   setNameQueues: (queues: NonNullable<CityDoc['nameQueues']>) => void
   /** Enlarge the map around its centre; terrain and stations keep their place. */
   resizeMap: (newSize: number) => void
@@ -382,9 +384,9 @@ export const useEditor = create<EditorState>((set, get) => {
         }
       })
     },
-    newCity: (name, mode, size, nameQueues) =>
+    newCity: (name, mode, size, nameQueues, map) =>
       set({
-        doc: { ...createCity(name, mode, size), ...(nameQueues ? { nameQueues } : {}) },
+        doc: applyMap({ ...createCity(name, mode, size), ...(nameQueues ? { nameQueues } : {}) }, map?.preset ?? 'leer', map?.seed ?? 1),
         past: [],
         future: [],
         activeLineId: null,

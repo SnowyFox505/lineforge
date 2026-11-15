@@ -5,6 +5,7 @@ export const MAP_SIZES = [
   { label: 'Klein', size: 128 },
   { label: 'Mittel', size: 256 },
   { label: 'Groß', size: 384 },
+  { label: 'Riesig', size: 512 },
 ]
 
 /**

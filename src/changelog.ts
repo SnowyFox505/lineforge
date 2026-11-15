@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.16.0',
+    date: '2026-11-16',
+    headline: 'Riesige Karten und fertige Landschaften',
+    changes: [
+      {
+        title: 'Riesige Karte',
+        what: 'Zu Klein, Mittel und Groß gibt es jetzt „Riesig“ mit 512 × 512 Feldern, genug Platz für mehrere Städte nebeneinander.',
+        how: 'Beim Gründen einer Stadt die Kartengröße „Riesig“ wählen. Eine bestehende Stadt lässt sich in den Stadt-Einstellungen vergrößern.',
+        benefit: 'Auch auf der größten Karte läuft die 3D-Ansicht flüssig.',
+      },
+      {
+        title: 'Fertige Landschaften',
+        what: 'Neue Städte können mit einer fertigen Landschaft starten: Seenland, Flusstal, Küste, Inseln oder Bergland. Seen, Flüsse und Meer sind schon da, dazu Wälder und Gebirge mit eigenen Namen.',
+        how: 'Beim Gründen unter „Landschaft“ eine Art wählen. Das Vorschaubild zeigt, wie die Karte aussieht. „Andere Karte würfeln“ gibt eine neue Variante derselben Art. Die Namen kommen aus deiner Namens-Wunschliste, sonst sind sie ausgedacht.',
+        benefit: 'Du musst nicht bei einer leeren Wiese anfangen, und jede Stadt sieht anders aus.',
+      },
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-11-16',
     headline: 'Jede Stadt mit eigenem Straßenbild',

@@ -1,7 +1,10 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { renderThumb } from '../editor2d/thumbnail'
 import { MAP_SIZES } from '../model/constants'
+import { applyMap, MAP_PRESETS } from '../model/mapGen'
+import type { MapPreset } from '../model/mapGen'
+import { createCity } from '../model/factory'
 import type { CityDoc, GameMode } from '../model/types'
 import { exportCityJson, importCityJson, listCityDocs, saveCity } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
@@ -236,6 +239,19 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
   )
 }
 
+/** A small picture of the landscape that the new city will start with. */
+function MapPreview({ size, preset, seed, queues }: { size: number; preset: MapPreset; seed: number; queues: Partial<NameQueues> }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  const doc = useMemo(() => {
+    const base = createCity('Vorschau', 'creative', size)
+    return applyMap({ ...base, nameQueues: undefined }, preset, seed)
+  }, [size, preset, seed])
+  useEffect(() => {
+    if (ref.current) renderThumb(ref.current, doc, 112, 112)
+  }, [doc, queues])
+  return <canvas ref={ref} className="h-[112px] w-[112px] shrink-0 rounded-2xl" />
+}
+
 function NewCity({ back }: { back: () => void }) {
   const newCity = useEditor((s) => s.newCity)
   const [name, setName] = useState('')
@@ -243,6 +259,8 @@ function NewCity({ back }: { back: () => void }) {
   const [mode, setMode] = useState<GameMode>('normal')
   const [size, setSize] = useState(256)
   const [queues, setQueues] = useState<Partial<NameQueues>>({})
+  const [preset, setPreset] = useState<MapPreset>('leer')
+  const [seed, setSeed] = useState(() => 1 + Math.floor(Math.random() * 9999))
 
   const modes: { id: GameMode; icon: IconName }[] = [
     { id: 'normal', icon: 'alert' },
@@ -298,6 +316,33 @@ function NewCity({ back }: { back: () => void }) {
         </div>
 
         <div>
+          <div className="eyebrow mb-2">Landschaft</div>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+            {MAP_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPreset(p.id)}
+                className={`shrink-0 rounded-2xl border px-3 py-2 text-sm font-semibold transition-all active:scale-95 ${preset === p.id ? 'border-accent/70 bg-accent/15 text-white' : 'border-white/8 bg-white/5 text-white/80'}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <MapPreview size={size} preset={preset} seed={seed} queues={queues} />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs leading-snug text-white/55">{MAP_PRESETS.find((p) => p.id === preset)?.text}</p>
+              {preset !== 'leer' && (
+                <button className="btn-soft mt-2 flex items-center gap-2 rounded-xl px-3 py-2 text-xs" onClick={() => setSeed((s) => s + 1 + Math.floor(Math.random() * 99))}>
+                  <Icon name="refresh" size={16} />
+                  Andere Karte würfeln
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div>
           <div className="eyebrow mb-2">Namen vorgeben (freiwillig)</div>
           <p className="mb-3 text-xs text-white/50">Schreibe dir schöne Namen auf. Neue Bezirke, Vororte, Gewässer und Landschaften nehmen sie der Reihe nach. Ohne Wünsche wählt das Spiel zufällig.</p>
           <NameQueuesEditor value={queues} onChange={setQueues} />
@@ -306,7 +351,7 @@ function NewCity({ back }: { back: () => void }) {
 
       <motion.button
         whileTap={{ scale: 0.97 }}
-        onClick={() => newCity(name.trim() || placeholder, mode, size, Object.values(queues).some((q) => q?.length) ? queues : undefined)}
+        onClick={() => newCity(name.trim() || placeholder, mode, size, Object.values(queues).some((q) => q?.length) ? queues : undefined, { preset, seed })}
         className="btn-primary mx-auto mt-4 flex w-full max-w-md items-center justify-center gap-2 rounded-[22px] py-4 text-lg"
       >
         Stadt gründen <Icon name="arrow" size={20} stroke={2.4} />
