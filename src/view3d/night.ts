@@ -75,11 +75,12 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
           float len = alongX ? vWinSize.z : vWinSize.x;
           float u = (alongX ? vWinLocal.z : vWinLocal.x) + len * 0.5;
           float v = vWinLocal.y;
-          float mx = 0.07;
-          float yLow = 0.12;
-          float yHigh = vWinSize.y - 0.09;
-          float cols = max(1.0, floor((len - 2.0 * mx) / 0.17));
-          float rows = max(1.0, floor((yHigh - yLow) / 0.21));
+          // a window every 2.4 m and a floor every 3 m (one cell is 8 m); ground floor and cornice are a little taller
+          float mx = 0.12;
+          float yLow = 0.2;
+          float yHigh = vWinSize.y - 0.12;
+          float cols = max(1.0, floor((len - 2.0 * mx) / 0.3));
+          float rows = max(1.0, floor((yHigh - yLow) / 0.375));
           vec2 cell = vec2((u - mx) / ((len - 2.0 * mx) / cols), (v - yLow) / ((yHigh - yLow) / rows));
           vec2 fw = max(fwidth(cell), vec2(0.0001));
           float inRange = winBand(cell.x, 0.0, cols, max(fw.x, 0.02)) * winBand(cell.y, 0.0, rows, max(fw.y, 0.02));
