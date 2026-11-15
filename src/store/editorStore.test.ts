@@ -45,6 +45,28 @@ describe('editor store', () => {
     expect(S().addStation(30, 30)).toBeNull()
   })
 
+  it('has one main station: a new one takes over, the same one again takes the mark away', () => {
+    S().setStationType('standard')
+    const a = S().addStation(5, 5)!
+    const b = S().addStation(9, 5)!
+    S().setMainStation(a)
+    expect(S().doc.stations[a].type).toBe('hauptbahnhof')
+    S().setMainStation(b)
+    expect(S().doc.stations[a].type).toBe('standard')
+    expect(S().doc.stations[b].type).toBe('hauptbahnhof')
+    S().setMainStation(b)
+    expect(Object.values(S().doc.stations).some((s) => s.type === 'hauptbahnhof')).toBe(false)
+    S().undo()
+    expect(S().doc.stations[b].type).toBe('hauptbahnhof')
+  })
+
+  it('does not make a tram stop the main station', () => {
+    S().setStationType('tramstop')
+    const t = S().addStation(5, 5)!
+    S().setMainStation(t)
+    expect(S().doc.stations[t].type).toBe('tramstop')
+  })
+
   it('shows a plain stop shared by two lines as an interchange', () => {
     S().setStationType('standard')
     const a = S().addStation(5, 5)!

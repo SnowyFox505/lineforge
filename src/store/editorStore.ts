@@ -8,6 +8,7 @@ import { migrateGeo } from '../model/geo'
 import { migrateLandmarks } from '../model/migrate'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { applyStroke, moveStationTo, splitLegAt } from '../model/lineEdit'
+import { stationName, stationTypeAt } from '../model/stationType'
 import { addWaypoint, appendStation, moveWaypoint, popStation, removeStationEverywhere, removeWaypoint, healHooks, resetRoute, withRoutes } from '../model/routing'
 import type { CityDoc, GameMode, LegSettings, Line, OperatorId, Poi, PoiKind, Pt, Station, StationType, Zone, ZoneKind } from '../model/types'
 
@@ -122,6 +123,8 @@ interface EditorState {
   removePoi: (id: string) => void
   addStation: (x: number, y: number) => string | null
   updateStation: (id: string, patch: Partial<Omit<Station, 'id'>>) => void
+  /** Make a station the main station of the city (there is only one); the same station again, or null, takes the mark away. */
+  setMainStation: (id: string | null) => void
   removeStation: (id: string) => void
   /** link two stations as one interchange (or unlink them again) */
   toggleLink: (a: string, b: string) => void
@@ -390,19 +393,27 @@ export const useEditor = create<EditorState>((set, get) => {
       if (Object.values(doc.stations).some((s) => s.x === x && s.y === y)) return null
       const id = newId()
       const count = Object.keys(doc.stations).length + 1
-      const name =
-        stationType === 'airport'
-          ? `Flughafen ${count}`
-          : stationType === 'hauptbahnhof'
-            ? `Hauptbahnhof ${count}`
-            : `Station ${count}`
+      // the airport station follows from the place (on the airport grounds), the main station is set on the station later
+      const type = stationTypeAt(doc, x, y, stationType)
+      const name = stationName(type, count)
       mutate(
         (d) => {
-          d.stations[id] = { id, name, x, y, type: stationType }
+          d.stations[id] = { id, name, x, y, type }
         },
         { selectedStationId: id },
       )
       return id
+    },
+    setMainStation: (id) => {
+      const { doc } = get()
+      const st = id ? doc.stations[id] : undefined
+      if (id && (!st || st.type === 'tramstop')) return
+      const next = produce(doc, (d) => {
+        // there is one main station: a new one takes over, the old one is a plain stop again
+        for (const s of Object.values(d.stations)) if (s.type === 'hauptbahnhof' && s.id !== id) s.type = stationTypeAt(d, s.x, s.y, 'standard')
+        if (id && d.stations[id]) d.stations[id].type = d.stations[id].type === 'hauptbahnhof' ? stationTypeAt(d, d.stations[id].x, d.stations[id].y, 'standard') : 'hauptbahnhof'
+      })
+      commit(next)
     },
     updateStation: (id, patch) => {
       const { doc } = get()

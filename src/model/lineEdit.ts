@@ -2,6 +2,7 @@ import { newId } from './factory'
 import { legCurve, lineCurve, nearestOnCurve, nearestStation, pullEnd, smoothStroke, snapToCurves, strokeControlPoints, curveLength } from './geo'
 import { rerouteAt, shape, withLine } from './routing'
 import { followsStreets, streetFoot, streetViaPoints } from './streetNet'
+import { onAirport, stationName, stationTypeAt } from './stationType'
 import { LAND } from './types'
 import type { CityDoc, Line, Pt, Station, StationType } from './types'
 
@@ -36,11 +37,11 @@ function nearestFreeLand(doc: CityDoc, p: Pt, reach = 3): Pt | null {
   return best
 }
 
-function newStation(doc: CityDoc, at: Pt, type: StationType): Station {
+function newStation(doc: CityDoc, at: Pt, wanted: StationType): Station {
   const count = Object.keys(doc.stations).length + 1
   const id = newId()
-  const name = type === 'airport' ? `Flughafen ${count}` : type === 'hauptbahnhof' ? `Hauptbahnhof ${count}` : `Station ${count}`
-  return { id, name, x: at.x, y: at.y, type }
+  const type = stationTypeAt(doc, at.x, at.y, wanted)
+  return { id, name: stationName(type, count), x: at.x, y: at.y, type }
 }
 
 export interface EditOutcome {
@@ -234,7 +235,10 @@ export function moveStationTo(doc: CityDoc, id: string, x: number, y: number, re
     const w = (1 - d / reach) ** 2
     return roundPt({ x: p.x + dx * w, y: p.y + dy * w })
   }
-  let d: CityDoc = { ...doc, stations: { ...doc.stations, [id]: { ...st, x, y } } }
+  // a rail stop that is moved onto the airport grounds becomes the airport station, and back
+  // (an airport station placed by hand outside the grounds, as older cities have, stays one)
+  const type = st.type === 'standard' || (st.type === 'airport' && onAirport(doc, st.x, st.y)) ? stationTypeAt(doc, x, y, st.type) : st.type
+  let d: CityDoc = { ...doc, stations: { ...doc.stations, [id]: { ...st, x, y, type } } }
   for (const lineId of Object.keys(doc.lines)) {
     const line = doc.lines[lineId]
     if (!line.stations.includes(id)) continue

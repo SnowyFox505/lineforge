@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
+import { effectiveTypes } from '../plan/glyphs'
 import { isUndergroundStation, lookOf, STATION_LOOKS, UG_COVER, UG_LIFT } from '../model/profiles'
 import { RAIL } from '../model/scale'
 import { layoutStation, MAX_TRACKS, resolveDesign, stationOperators } from '../model/stationDesign'
@@ -275,6 +276,7 @@ function Panel({ id, level, setLevel }: { id: string; level: number; setLevel: (
 export default function StationEditor3D() {
   const id = useEditor((s) => s.editStationId)
   const setEdit = useEditor((s) => s.setEditStation)
+  const setMain = useEditor((s) => s.setMainStation)
   const doc = useEditor((s) => s.doc)
   const st = id ? doc.stations[id] : undefined
   const [level, setLevel] = useState(0)
@@ -344,9 +346,18 @@ export default function StationEditor3D() {
             <div className="glass pointer-events-auto min-w-0 flex-1 rounded-full px-4 py-1.5">
               <div className="truncate text-[15px] font-bold leading-tight">{st.name}</div>
               <div className="truncate text-[11px] leading-tight text-white/50">
-                Bahnhof-Editor · {STATION_TYPES[st.type].label} · {design.tracks} {design.tracks === 1 ? 'Gleis' : 'Gleise'}
+                Bahnhof-Editor · {STATION_TYPES[effectiveTypes(doc)[st.id] ?? st.type].label} · {design.tracks} {design.tracks === 1 ? 'Gleis' : 'Gleise'}
               </div>
             </div>
+            {st.type !== 'tramstop' && st.type !== 'airport' && (
+              <button
+                onClick={() => setMain(st.id)}
+                aria-pressed={st.type === 'hauptbahnhof'}
+                className={`glass pointer-events-auto shrink-0 rounded-full px-4 py-3 text-xs font-bold active:scale-95 ${st.type === 'hauptbahnhof' ? 'text-accent' : 'text-white/85'}`}
+              >
+                {st.type === 'hauptbahnhof' ? 'Hauptbahnhof ✓' : 'Zum Hbf machen'}
+              </button>
+            )}
           </div>
 
           <motion.div

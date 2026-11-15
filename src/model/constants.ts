@@ -23,11 +23,11 @@ export const OPERATORS: Record<
 }
 
 export const STATION_TYPES: Record<StationType, { label: string; hint: string }> = {
-  standard: { label: 'Haltestelle', hint: 'Normaler Halt' },
-  interchange: { label: 'Umsteigen', hint: 'Großer Umsteigeplatz' },
+  standard: { label: 'Bahn-Haltestelle', hint: 'S-Bahn, U-Bahn, Nah- und Fernverkehr; mit zwei Linien wird daraus ein Umsteigebahnhof' },
+  interchange: { label: 'Umsteigebahnhof', hint: 'Mehrere Linien halten hier' },
   tramstop: { label: 'Tram-Haltestelle', hint: 'Kleine Haltestelle der Straßenbahn' },
-  hauptbahnhof: { label: 'Hauptbahnhof', hint: 'Zentraler Knoten' },
-  airport: { label: 'Flughafen', hint: 'Anbindung an die Welt' },
+  hauptbahnhof: { label: 'Hauptbahnhof', hint: 'Zentraler Knoten der Stadt' },
+  airport: { label: 'Flughafen', hint: 'Liegt auf dem Flughafengelände' },
 }
 
 /** Free line colour palette (works on dark and light backgrounds). */

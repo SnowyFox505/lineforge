@@ -1,8 +1,10 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { stopsAt } from '../model/stops'
+import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
+import { effectiveTypes } from '../plan/glyphs'
 import { poiModel, poiRadius, poiStations, poisServedBy, POI_MODELS, POI_RADIUS_MAX, POI_RADIUS_MIN, stationsInReach } from '../model/poi'
-import type { OperatorId, PoiKind, StationType, ZoneKind } from '../model/types'
+import type { OperatorId, PoiKind, ZoneKind } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import { groupOf } from '../store/editorStore'
 import type { Tool, ToolGroup } from '../store/editorStore'
@@ -107,8 +109,13 @@ function StationCard() {
   const remove = useEditor((s) => s.removeStation)
   const select = useEditor((s) => s.selectStation)
   const doc = useEditor((s) => s.doc)
+  const setMain = useEditor((s) => s.setMainStation)
   if (!st) return null
   const nearby = poisServedBy(doc, st)
+  // two lines at one stop make it an interchange by themselves; the airport follows from the grounds
+  const effective = effectiveTypes(doc)[st.id] ?? st.type
+  const isMain = st.type === 'hauptbahnhof'
+  const canBeMain = st.type !== 'tramstop' && st.type !== 'airport'
   return (
     <motion.div
       key={st.id}
@@ -120,6 +127,15 @@ function StationCard() {
       <div className="mb-2 flex items-center gap-2">
         <span className="eyebrow shrink-0">Station</span>
         <CommitInput value={st.name} onCommit={(name) => update(st.id, { name })} className="min-w-0 flex-1 !py-2" />
+        {canBeMain && (
+          <button
+            className={`shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition-all active:scale-95 ${isMain ? 'border-accent/70 bg-accent/15 text-white' : 'border-white/8 bg-white/5 text-white/80'}`}
+            onClick={() => setMain(st.id)}
+            aria-pressed={isMain}
+          >
+            {isMain ? 'Hauptbahnhof ✓' : 'Zum Hbf machen'}
+          </button>
+        )}
         <button className="btn-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl text-red-300" onClick={() => remove(st.id)} aria-label="Station löschen">
           <Icon name="trash" size={18} />
         </button>
@@ -128,13 +144,22 @@ function StationCard() {
         </button>
       </div>
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {(Object.keys(STATION_TYPES) as StationType[]).map((t) => (
-          <Chip key={t} active={st.type === t} onClick={() => update(st.id, { type: t })}>
-            <StationGlyph type={t} size={22} />
-            {STATION_TYPES[t].label}
-          </Chip>
-        ))}
+        {BUILD_TYPES.map((t) => {
+          // every station that is not a tram stop is a rail stop (the main station and the airport are rail stops too)
+          const active = t === 'tramstop' ? st.type === 'tramstop' : st.type !== 'tramstop'
+          return (
+            <Chip key={t} active={active} onClick={() => !active && update(st.id, { type: stationTypeAt(doc, st.x, st.y, t) })}>
+              <StationGlyph type={t === 'standard' ? effective : t} size={22} />
+              {STATION_TYPES[t].label}
+            </Chip>
+          )
+        })}
       </div>
+      {st.type !== 'tramstop' && effective !== 'standard' && (
+        <p className="mt-1 text-xs text-white/55">
+          {STATION_TYPES[effective].label}: {STATION_TYPES[effective].hint}
+        </p>
+      )}
       {nearby.length > 0 && (
         <p className="mt-2 text-xs text-white/55">
           Ziel für {nearby.map((p) => `${POI_STYLE[p.kind].label} „${p.name}“`).join(', ')}
@@ -502,7 +527,7 @@ export default function ToolDock() {
                 <div>
                   <div className="eyebrow mb-2">Tippe auf die Karte, um zu bauen</div>
                   <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                    {(Object.keys(STATION_TYPES) as StationType[]).map((t) => (
+                    {BUILD_TYPES.map((t) => (
                       <Chip key={t} active={stationType === t} onClick={() => setStationType(t)}>
                         <StationGlyph type={t} size={22} />
                         {STATION_TYPES[t].label}
