@@ -139,7 +139,7 @@ export interface Poi {
   /** The stations (inside the catchment) that people use to get here. Without a choice it is the nearest station in reach. */
   stations?: string[]
   /** Look of the 3D model (see POI_MODELS in model/poi.ts); defaults to the first one of its kind */
-  model?: 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower'
+  model?: 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower' | 'cathedral' | 'church' | 'townhall' | 'cemetery' | 'castle'
 }
 
 /** What a body of water is: the player decides, the map suggests one (see model/waters.ts). */

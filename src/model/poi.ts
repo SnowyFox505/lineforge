@@ -34,7 +34,7 @@ export function poisServedBy(doc: CityDoc, st: Station): Poi[] {
 }
 
 /** The 3D models a point of interest can have; each kind has a few to choose from. */
-export type PoiModel = 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower'
+export type PoiModel = 'football' | 'arena' | 'wheel' | 'tvtower' | 'dome' | 'gate' | 'clocktower' | 'cathedral' | 'church' | 'townhall' | 'cemetery' | 'castle'
 
 export const POI_MODELS: Record<PoiKind, { id: PoiModel; label: string }[]> = {
   stadium: [
@@ -49,6 +49,11 @@ export const POI_MODELS: Record<PoiKind, { id: PoiModel; label: string }[]> = {
   landmark: [
     { id: 'gate', label: 'Stadttor' },
     { id: 'clocktower', label: 'Uhrturm' },
+    { id: 'cathedral', label: 'Dom' },
+    { id: 'church', label: 'Kirche' },
+    { id: 'townhall', label: 'Rathaus' },
+    { id: 'cemetery', label: 'Friedhof' },
+    { id: 'castle', label: 'Schloss / Burg' },
   ],
 }
 
@@ -59,4 +64,4 @@ export function poiModel(p: Poi): PoiModel {
 }
 
 /** Half the footprint (world units) a model occupies: nothing else is built there */
-export const POI_FOOTPRINT: Record<PoiModel, number> = { football: 2, arena: 2, wheel: 1.4, tvtower: 0.9, dome: 1.5, gate: 1.4, clocktower: 0.9 }
+export const POI_FOOTPRINT: Record<PoiModel, number> = { football: 2, arena: 2, wheel: 1.4, tvtower: 0.9, dome: 1.5, gate: 1.4, clocktower: 0.9, cathedral: 1.4, church: 0.9, townhall: 1.3, cemetery: 1.3, castle: 1.5 }

@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.19.0',
+    date: '2026-11-16',
+    headline: 'Dom, Kirche, Rathaus, Friedhof und Schloss',
+    changes: [
+      {
+        title: 'Fünf neue Wahrzeichen',
+        what: 'Zu Stadttor und Uhrturm kommen fünf Gebäude hinzu, die jede Stadt prägen: ein Dom mit zwei Türmen, eine Dorfkirche, ein Rathaus mit Turm und Fahnen, ein Friedhof mit Mauer, Kapelle und Grabsteinen sowie ein Schloss mit Mauer, Ecktürmen und Bergfried.',
+        how: 'Unter „Sehenswürdigkeiten“ ein Wahrzeichen setzen, antippen und bei „Aussehen in 3D“ das Gebäude wählen. In der 3D-Ansicht stehen sie dann an dieser Stelle, und nachts leuchten ihre Fenster.',
+        benefit: 'Deine Stadt bekommt ein erkennbares Zentrum, und die Stationen daneben haben ein Ziel, zu dem die Leute fahren.',
+      },
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-11-16',
     headline: 'Anschluss an die weite Welt',

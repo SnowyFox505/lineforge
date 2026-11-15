@@ -7,6 +7,7 @@ import type { Poi } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import { clockHands, gameTime } from '../sim/clock'
 import type { Network3D } from './network3d'
+import { Castle, Cathedral, Cemetery, Church, TownHall } from './Landmarks3D'
 
 /** Small, minimal models of the points of interest: easy to recognise, plain in form. */
 
@@ -466,6 +467,16 @@ function Model({ model, poi, accent }: { model: PoiModel; poi: Poi; accent: stri
       return <CityGate />
     case 'clocktower':
       return <ClockTower />
+    case 'cathedral':
+      return <Cathedral />
+    case 'church':
+      return <Church />
+    case 'townhall':
+      return <TownHall />
+    case 'cemetery':
+      return <Cemetery />
+    case 'castle':
+      return <Castle />
   }
 }
 
