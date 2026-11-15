@@ -9,6 +9,7 @@ import { useEditor } from '../store/editorStore'
 import type { Tool } from '../store/editorStore'
 import { drawPoi, drawPoiReach, POI_STYLE } from './drawPoi'
 import { useTheme, getAccent } from '../ui/theme'
+import { penActive, pointerRole, usePen } from '../ui/pen'
 import { drawStation } from './drawStation'
 import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
 import { drawWaterLabels } from './waterLabels'
@@ -87,6 +88,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const insetsRef = useRef(insets)
   insetsRef.current = insets
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  /** the pen that is on the screen right now (pen mode: fingers are ignored meanwhile, like a resting palm) */
+  const penId = useRef<number | null>(null)
   const hover = useRef<{ x: number; y: number } | null>(null)
   const gesture = useRef<{
     kind: Gesture
@@ -95,6 +98,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     lastCell: { x: number; y: number } | null
     lastDist: number
   }>({ kind: 'none', startX: 0, startY: 0, lastCell: null, lastDist: 0 })
+
+  if (import.meta.env.DEV) (window as unknown as { __map: unknown }).__map = { gesture, pointers, view, penId }
 
   // Animation bookkeeping (kept out of React state: it changes every frame)
   const lineAnim = useRef(new Map<string, Anim>())
@@ -164,6 +169,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   }, [doc.size, doc.stations])
 
   const accent = useTheme((s) => s.accent) // a new accent colour repaints the map
+  const scheme = useTheme((s) => s.scheme) // so does light / dark (the backdrop around the map)
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -186,8 +192,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
     // Backdrop
     const bg = ctx.createRadialGradient(w / 2, h * 0.4, 20, w / 2, h * 0.4, Math.max(w, h) * 0.9)
-    bg.addColorStop(0, '#111a24')
-    bg.addColorStop(1, '#06080c')
+    bg.addColorStop(0, scheme === 'light' ? '#f3f6fa' : '#111a24')
+    bg.addColorStop(1, scheme === 'light' ? '#d9e0ea' : '#06080c')
     ctx.fillStyle = bg
     ctx.fillRect(0, 0, w, h)
 
@@ -521,7 +527,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent])
+  }, [doc, terrainPaths, zoneGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme])
 
   useEffect(() => {
     userMoved.current = false
@@ -752,11 +758,21 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const fadeMenu = () => useDockFade.getState().setDrawing(true)
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'pen') usePen.getState().markSeen()
+    const penMode = penActive()
+    // pen mode: a hand resting on the screen while the pen is down must not move the map
+    if (penMode && e.pointerType === 'touch' && penId.current !== null) return
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = local(e)
+    const g = gesture.current
+    if (penMode && e.pointerType === 'pen') {
+      // the pen takes over: a finger gesture that was under way is dropped
+      penId.current = e.pointerId
+      pointers.current.clear()
+      g.kind = 'none'
+    }
     pointers.current.set(e.pointerId, p)
     hover.current = p
-    const g = gesture.current
     if (pointers.current.size >= 2) {
       // two fingers came down almost together: the first one was the start of a pinch, so the dab it painted is taken back
       if (g.kind === 'paint' && performance.now() - strokeStart.current < 350) useEditor.getState().cancelStroke()
@@ -773,7 +789,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     g.startY = p.y
     g.lastCell = null
     const t = useEditor.getState().tool
-    if (isPaintTool(t)) {
+    if (pointerRole(e.pointerType, penMode) === 'move') {
+      // pen mode: a finger only moves (and with two fingers zooms) the map, whatever tool is chosen
+      hover.current = null
+      g.kind = 'pan'
+    } else if (isPaintTool(t)) {
       if (t === 'water' || t === 'erase') useEditor.getState().checkpoint()
       else zoneId.current = useEditor.getState().beginZonePaint()
       g.kind = 'paint'
@@ -805,6 +825,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === 'pen') usePen.getState().markSeen()
+    if (e.pointerType === 'touch' && penId.current !== null && penActive()) return
     const p = local(e)
     const prev = pointers.current.get(e.pointerId)
     if (!prev) {
@@ -878,6 +900,12 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   }
 
   const onPointerUp = (e: React.PointerEvent) => {
+    // a finger that lifts while the pen is still drawing is none of the stroke's business
+    if (e.pointerType === 'touch' && penId.current !== null) {
+      pointers.current.delete(e.pointerId)
+      return
+    }
+    if (e.pointerId === penId.current) penId.current = null
     const p = local(e)
     const g = gesture.current
     pointers.current.delete(e.pointerId)

@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.11.0',
+    date: '2026-11-16',
+    headline: 'Hell, bunt und für den Stift',
+    changes: [
+      {
+        title: 'Heller Modus',
+        what: 'Die App gibt es jetzt auch hell. Menüs, Fenster, Startbildschirm, Ladebildschirm und Netzplan werden hell. Die Karte, das Netz und die 3D-Ansicht behalten ihre Farben.',
+        how: 'Tippe im Startmenü oben auf das Farbpalette-Symbol (in der Stadt: Einstellungen, dann „Darstellung und Stift“) und wähle „Hell“, „Dunkel“ oder „Wie Gerät“. Bei „Wie Gerät“ wechselt die App mit deinem Handy oder Computer zwischen Tag und Nacht.',
+        benefit: 'Bei Tageslicht ist die App besser lesbar, und du kannst den Look wählen, der dir gefällt.',
+      },
+      {
+        title: 'Farben mit Verlauf',
+        what: 'Zusätzlich zu den vier Akzentfarben gibt es vier Farbverläufe (Lagune, Sonnenuntergang, Ozean, Beere). Du kannst auch einen eigenen bauen: eine Farbe wählen und eine zweite dazunehmen.',
+        how: 'Unter „Darstellung“ tippe auf einen Verlauf. Für einen eigenen wählst du „Eigene Farbe“, stellst den Farbton ein und schaltest „Zweite Farbe (Verlauf)“ an. Eine Vorschau zeigt, wie Knöpfe aussehen. Das gilt auch ohne Konto; mit Konto folgt die Farbe dir auf jedes Gerät.',
+        benefit: 'Knöpfe, aktive Tabs und Markierungen bekommen deinen eigenen Look. Die Schrift bleibt dabei immer lesbar.',
+      },
+      {
+        title: 'Apple Pencil',
+        what: 'Auf dem iPad zeichnet der Stift, und Finger bewegen nur die Karte. Mit zwei Fingern zoomst du.',
+        how: 'Du musst nichts einstellen: Sobald der Apple Pencil das Display berührt, schaltet sich der Stiftmodus ein. Unter „Darstellung“ kannst du ihn auf „Immer“ oder „Aus“ stellen. Liegt die Hand beim Zeichnen auf dem Display, wird sie ignoriert.',
+        benefit: 'Du kannst genau zeichnen, ohne dass die Karte wegrutscht, und trotzdem mit dem Finger verschieben und zoomen.',
+      },
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-11-16',
     headline: 'Wald und Gebirge',

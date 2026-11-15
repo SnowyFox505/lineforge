@@ -28,6 +28,17 @@
     <meta name="twitter:title" content="LineForge – Liniennetze für fiktive Städte" />
     <meta name="twitter:description" content="Gründe fiktive Städte und zeichne ihre Liniennetze – von der S-Bahn bis zum Fernverkehr." />
     <meta name="twitter:image" content="https://lineforge-app.vercel.app/og-preview.png" />
+    <!-- light / dark before the first paint (the same choice ui/theme.ts reads later) -->
+    <script>
+      try {
+        var m = localStorage.getItem('lineforge-mode')
+        var light = m === 'light' || (m === 'auto' && matchMedia('(prefers-color-scheme: light)').matches)
+        if (light) {
+          document.documentElement.dataset.theme = 'light'
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#eef1f5')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

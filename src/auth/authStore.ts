@@ -34,7 +34,7 @@ interface AuthState {
   adoptLocalCities: () => Promise<number>
   syncNow: () => Promise<void>
   /** remembers the accent colour in the account (it follows the person to every device) */
-  saveAccent: (hex: string) => void
+  saveAccent: (hex: string, hex2?: string | null) => void
   signOut: (force?: boolean) => Promise<'ok' | 'unsynced'>
   removeCity: (id: string) => Promise<void>
 }
@@ -104,7 +104,7 @@ export const useAuth = create<AuthState>((set, get) => {
       void doSync(u.uid)
       // the colour chosen on another device
       void pullSettings(u.uid)
-        .then((s) => s.accent && useTheme.getState().setAccent(s.accent))
+        .then((s) => s.accent && useTheme.getState().setAccent(s.accent, s.accent2 || null))
         .catch(() => undefined)
     } else {
       setOwner(GUEST)
@@ -198,11 +198,11 @@ export const useAuth = create<AuthState>((set, get) => {
       return moved.length
     },
 
-    saveAccent: (hex) => {
+    saveAccent: (hex, hex2) => {
       const uid = get().user?.uid
       if (!uid) return
       clearTimeout(accentTimer)
-      accentTimer = setTimeout(() => void pushSettings(uid, { accent: hex }).catch(() => undefined), 700)
+      accentTimer = setTimeout(() => void pushSettings(uid, { accent: hex, accent2: hex2 ?? '' }).catch(() => undefined), 700)
     },
 
     syncNow: async () => {

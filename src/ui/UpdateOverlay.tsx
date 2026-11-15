@@ -58,7 +58,7 @@ export default function UpdateOverlay() {
   return (
     <motion.div
       className="fixed inset-0 z-[60] grid place-items-center"
-      style={{ background: 'radial-gradient(ellipse at 50% 42%, #14202e 0%, #080b10 62%, #05070a 100%)' }}
+      style={{ background: 'var(--splash-bg)' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -76,15 +76,15 @@ export default function UpdateOverlay() {
             <g key={l.d}>
               <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={13} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} filter="url(#upd-glow)" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
               <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
-              <circle r={5} fill="#fff" opacity={0}>
+              <circle r={5} fill="var(--splash-ink, #fff)" opacity={0}>
                 <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="1.6s" begin={`${1.0 + i * 0.22}s`} fill="freeze" />
                 <animateMotion dur="1.6s" begin={`${1.0 + i * 0.22}s`} fill="freeze" path={l.d} />
               </circle>
             </g>
           ))}
           {/* the station all lines run into, with a progress ring */}
-          <circle className="pop-dot" cx={200} cy={200} r={26} fill="#0a0e14" stroke="#fff" strokeWidth={9} style={{ animationDelay: '1.1s' }} />
-          <circle cx={200} cy={200} r={43} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={5} />
+          <circle className="pop-dot" cx={200} cy={200} r={26} fill="var(--splash-dot, #0a0e14)" stroke="var(--splash-ink, #fff)" strokeWidth={9} style={{ animationDelay: '1.1s' }} />
+          <circle cx={200} cy={200} r={43} fill="none" stroke="var(--splash-ring, rgba(255,255,255,0.12))" strokeWidth={5} />
           <circle className="update-ring" cx={200} cy={200} r={43} fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={5} strokeLinecap="round" pathLength={1} strokeDasharray="1 2" transform="rotate(-90 200 200)" />
           {done && (
             <motion.path d="M 187 201 l 9 9 l 18 -20" fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4 }} />

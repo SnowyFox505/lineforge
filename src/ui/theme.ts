@@ -91,46 +91,146 @@ export function shades(hex: string): { hi: string; lo: string } {
   return { hi: hslToHex(h, Math.min(1, s), Math.min(0.92, l + 0.07)), lo: hslToHex(h, Math.min(1, s + 0.03), Math.max(0.3, l - 0.09)) }
 }
 
+// --- gradients ----------------------------------------------------------------------------------
+
+/** Two colours that blend into each other (buttons, active tabs and so on). Both stay readable like the single colours. */
+export interface GradientPreset {
+  id: string
+  label: string
+  a: string
+  b: string
+}
+
+export const GRADIENTS: GradientPreset[] = [
+  { id: 'lagoon', label: 'Lagune', a: '#c4f03a', b: '#35d8ff' },
+  { id: 'sunset', label: 'Sonnenuntergang', a: '#ffa83a', b: '#ff6fae' },
+  { id: 'ocean', label: 'Ozean', a: '#35d8ff', b: accentFromHue(270) },
+  { id: 'berry', label: 'Beere', a: '#ff6fae', b: accentFromHue(275) },
+]
+
+/** The fill of buttons and active controls: a vertical sheen for one colour, a diagonal blend for two */
+export function accentFill(hex: string, hex2: string | null): string {
+  if (hex2) return `linear-gradient(135deg, ${hex}, ${hex2})`
+  const { hi, lo } = shades(hex)
+  return `linear-gradient(180deg, ${hi}, ${lo})`
+}
+
+// --- light and dark -----------------------------------------------------------------------------
+
+/** What the person chose: follow the device, or always dark / always light */
+export type Mode = 'auto' | 'dark' | 'light'
+export type Scheme = 'dark' | 'light'
+
+/** The page colour behind everything in each scheme (the light one is also the background of light panels) */
+export const SCHEME_BG: Record<Scheme, string> = { dark: '#06080c', light: '#eef1f5' }
+
+const MODE_KEY = 'lineforge-mode'
+const ACCENT2_KEY = 'lineforge-accent2'
+
+const systemScheme = (): Scheme => (typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+export const resolveScheme = (mode: Mode): Scheme => (mode === 'auto' ? systemScheme() : mode)
+
+/**
+ * The accent as text colour: on the dark background the accent itself, on the light one the same hue made
+ * darker until it can be read (lime text on white would vanish).
+ */
+export function accentText(hex: string, scheme: Scheme): string {
+  if (scheme === 'dark') return hex
+  const [h, s] = rgbToHsl(hexToRgb(hex))
+  for (let l = 0.5; l >= 0.12; l -= 0.01) {
+    const c = hslToHex(h, Math.max(0.55, s * 0.9), l)
+    if (contrast(c, '#ffffff') >= 4.6) return c
+  }
+  return '#1b2430'
+}
+
 // --- applying -----------------------------------------------------------------------------------
 
-export function applyAccent(hex: string) {
+const HEX = /^#[0-9a-f]{6}$/i
+
+export function applyTheme(hex: string, hex2: string | null, scheme: Scheme) {
   if (typeof document === 'undefined') return
-  const root = document.documentElement.style
+  const el = document.documentElement
+  const root = el.style
   const { hi, lo } = shades(hex)
   root.setProperty('--color-accent', hex)
   root.setProperty('--accent', hex)
   root.setProperty('--accent-hi', hi)
   root.setProperty('--accent-lo', lo)
+  root.setProperty('--accent-2', hex2 ?? hex)
+  root.setProperty('--accent-fill', accentFill(hex, hex2))
+  root.setProperty('--accent-text', accentText(hex, scheme))
   root.setProperty('--accent-rgb', hexToRgb(hex).join(', '))
   root.setProperty('--color-accent-ink', ACCENT_INK)
+  el.dataset.theme = scheme
+  el.style.colorScheme = scheme
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', SCHEME_BG[scheme])
+}
+
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function write(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key)
+    else localStorage.setItem(key, value)
+  } catch {
+    // private mode: the choice is just not remembered
+  }
 }
 
 function stored(): string {
-  try {
-    const v = localStorage.getItem(KEY)
-    return v && /^#[0-9a-f]{6}$/i.test(v) ? v : DEFAULT_ACCENT
-  } catch {
-    return DEFAULT_ACCENT
-  }
+  const v = read(KEY)
+  return v && HEX.test(v) ? v : DEFAULT_ACCENT
+}
+
+function storedAccent2(): string | null {
+  const v = read(ACCENT2_KEY)
+  return v && HEX.test(v) ? v : null
+}
+
+function storedMode(): Mode {
+  const v = read(MODE_KEY)
+  return v === 'dark' || v === 'light' || v === 'auto' ? v : 'dark'
 }
 
 interface ThemeState {
   accent: string
-  /** sets and remembers the colour; `save: false` is for values that come from the cloud */
-  setAccent: (hex: string) => void
+  /** the second colour of a gradient, or null for a single colour */
+  accent2: string | null
+  mode: Mode
+  /** what `mode` means right now */
+  scheme: Scheme
+  /** sets and remembers the colour; without a second colour the gradient is switched off */
+  setAccent: (hex: string, hex2?: string | null) => void
+  setMode: (mode: Mode) => void
 }
 
-export const useTheme = create<ThemeState>((set) => ({
+const initialMode = storedMode()
+
+export const useTheme = create<ThemeState>((set, get) => ({
   accent: stored(),
-  setAccent: (hex) => {
-    if (!/^#[0-9a-f]{6}$/i.test(hex)) return
-    applyAccent(hex)
-    try {
-      localStorage.setItem(KEY, hex)
-    } catch {
-      // private mode: the colour is just not remembered
-    }
-    set({ accent: hex })
+  accent2: storedAccent2(),
+  mode: initialMode,
+  scheme: resolveScheme(initialMode),
+  setAccent: (hex, hex2 = null) => {
+    if (!HEX.test(hex)) return
+    const second = hex2 && HEX.test(hex2) ? hex2 : null
+    applyTheme(hex, second, get().scheme)
+    write(KEY, hex)
+    write(ACCENT2_KEY, second)
+    set({ accent: hex, accent2: second })
+  },
+  setMode: (mode) => {
+    const scheme = resolveScheme(mode)
+    applyTheme(get().accent, get().accent2, scheme)
+    write(MODE_KEY, mode)
+    set({ mode, scheme })
   },
 }))
 
@@ -140,4 +240,14 @@ export function getAccent(): { hex: string; rgb: string } {
   return { hex, rgb: hexToRgb(hex).join(',') }
 }
 
-applyAccent(useTheme.getState().accent)
+{
+  const s = useTheme.getState()
+  applyTheme(s.accent, s.accent2, s.scheme)
+  // "automatic" follows the device while the app is open
+  if (typeof matchMedia !== 'undefined') {
+    matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+      const t = useTheme.getState()
+      if (t.mode === 'auto') t.setMode('auto')
+    })
+  }
+}

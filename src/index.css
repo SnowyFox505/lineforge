@@ -13,6 +13,11 @@
 :root {
   color-scheme: dark;
   --bg: #07090d;
+  --ring-gap: #11151c;
+  --splash-bg: radial-gradient(ellipse at 50% 42%, #14202e 0%, #080b10 62%, #05070a 100%);
+  --splash-dot: #0a0e14;
+  --splash-ink: #fff;
+  --splash-ring: rgba(255, 255, 255, 0.12);
   --text: #eef2f6;
   --accent: #c4f03a;
   --accent-hi: #d6fb5c;
@@ -81,7 +86,7 @@ canvas {
   }
 
   .btn-primary {
-    background: linear-gradient(180deg, var(--accent-hi), var(--accent-lo));
+    background: var(--accent-fill, linear-gradient(180deg, var(--accent-hi), var(--accent-lo)));
     color: var(--color-accent-ink);
     font-weight: 700;
     box-shadow:
@@ -118,6 +123,11 @@ canvas {
     border-color: rgba(var(--accent-rgb), 0.7);
     box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.12);
   }
+}
+
+/* Filled controls (tabs, switches, dots) follow the accent gradient too; with one colour it is a soft sheen */
+.bg-accent {
+  background-image: var(--accent-fill, none);
 }
 
 /* Range slider with accent fill */
@@ -313,4 +323,93 @@ input[type='range'].hue-slider::-webkit-slider-thumb {
 .dock-fade.dock-hidden,
 .dock-fade.dock-hidden * {
   pointer-events: none !important;
+}
+
+/* ------------------------------------------------------------------------------------------------
+   Light mode (data-theme="light" on <html>, see ui/theme.ts). The dark look is the base; here the colours that
+   Tailwind reads from variables are turned around: every "white" veil and text becomes ink, so panels, borders and
+   text of all screens follow without touching them. Colours that must stay white (on coloured chips) are written as
+   hex in the components. This block has to stay at the end so it wins over the rules above.
+   ------------------------------------------------------------------------------------------------ */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef1f5;
+  --ring-gap: #ffffff;
+  --splash-bg: radial-gradient(ellipse at 50% 42%, #ffffff 0%, #eaeff5 62%, #dde4ee 100%);
+  --splash-dot: #ffffff;
+  --splash-ink: #0f1823;
+  --splash-ring: rgba(15, 24, 35, 0.12);
+  --text: #121821;
+  --color-ink: #e6eaf0;
+  --color-night: #eef1f5;
+  --color-muted: #566173;
+  --color-line: rgba(15, 24, 35, 0.1);
+  --color-white: #0f1823;
+}
+
+:root[data-theme='light'] .glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(243, 246, 250, 0.9));
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid rgba(15, 24, 35, 0.1);
+  box-shadow:
+    0 14px 32px -14px rgba(20, 30, 45, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+:root[data-theme='light'] .menu-flat .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 251, 0.95));
+}
+@media (hover: none), (pointer: coarse) {
+  :root[data-theme='light'] .glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 247, 251, 0.96));
+    box-shadow: 0 6px 16px -8px rgba(20, 30, 45, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+}
+:root[data-theme='light'] .glass.sheet,
+:root[data-theme='light'] .menu-flat .glass.sheet {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: linear-gradient(180deg, #ffffff, #f1f4f8);
+}
+:root[data-theme='light'] .card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6));
+  border: 1px solid rgba(15, 24, 35, 0.09);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 2px 8px -4px rgba(20, 30, 45, 0.18);
+}
+:root[data-theme='light'] .btn-soft {
+  background: rgba(15, 24, 35, 0.06);
+  border: 1px solid rgba(15, 24, 35, 0.08);
+}
+:root[data-theme='light'] .field {
+  background: rgba(15, 24, 35, 0.05);
+  border: 1px solid rgba(15, 24, 35, 0.12);
+}
+:root[data-theme='light'] input[type='range'].slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, var(--accent) var(--p, 50%), rgba(15, 24, 35, 0.16) var(--p, 50%));
+}
+:root[data-theme='light'] input[type='range'].slider::-moz-range-track {
+  background: rgba(15, 24, 35, 0.16);
+}
+:root[data-theme='light'] input[type='range'].slider::-webkit-slider-thumb {
+  box-shadow: 0 2px 8px rgba(15, 24, 35, 0.35), 0 0 0 4px rgba(var(--accent-rgb), 0.35);
+}
+:root[data-theme='light'] input[type='range'].slider::-moz-range-thumb {
+  box-shadow: 0 2px 8px rgba(15, 24, 35, 0.35), 0 0 0 4px rgba(var(--accent-rgb), 0.35);
+}
+:root[data-theme='light'] input[type='range'].hue-slider::-webkit-slider-runnable-track {
+  background: var(--track);
+}
+/* the accent as text needs a darker shade on light surfaces */
+:root[data-theme='light'] .text-accent {
+  color: var(--accent-text);
+}
+:root[data-theme='light'] .bg-black\/30 {
+  background-color: rgba(15, 24, 35, 0.07);
+}
+:root[data-theme='light'] .bg-black\/60 {
+  background-color: rgba(20, 28, 40, 0.38);
 }

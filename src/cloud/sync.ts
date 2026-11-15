@@ -57,6 +57,8 @@ async function pullCity(uid: string, id: string): Promise<CityDoc> {
 /** Personal settings (for now the accent colour) live in users/{uid}/settings/profile and follow the person to every device. */
 export interface CloudSettings {
   accent?: string
+  /** second colour of a gradient; missing or empty = single colour */
+  accent2?: string
 }
 
 export async function pullSettings(uid: string): Promise<CloudSettings> {

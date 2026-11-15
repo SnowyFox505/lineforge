@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/authStore'
 import Icon from './Icon'
 import { Segmented, Sheet } from './primitives'
-import { accentFromHue, hueOf, PRESETS, useTheme } from './theme'
+import { AccentPicker } from './AppearanceSheet'
 
 type Tab = 'in' | 'up'
 
@@ -71,93 +71,6 @@ function Celebrate({ headline, sub }: { headline: string; sub: string }) {
         {sub}
       </motion.div>
     </motion.div>
-  )
-}
-
-const RAINBOW = `linear-gradient(to right, ${[0, 60, 120, 180, 240, 300, 359].map((h) => accentFromHue(h)).join(', ')})`
-
-/** Four ready-made accent colours (all checked for readability) and a slider for your own. */
-function AccentPicker() {
-  const accent = useTheme((s) => s.accent)
-  const setAccent = useTheme((s) => s.setAccent)
-  const save = useAuth((s) => s.saveAccent)
-  const isPreset = PRESETS.some((p) => p.hex.toLowerCase() === accent.toLowerCase())
-  const [custom, setCustom] = useState(!isPreset)
-  const hue = hueOf(accent)
-  const pick = (hex: string) => {
-    setAccent(hex)
-    save(hex)
-  }
-  return (
-    <div>
-      <span className="eyebrow mb-2 block">Akzentfarbe</span>
-      <div className="flex items-center gap-3">
-        {PRESETS.map((p) => {
-          const on = !custom && p.hex.toLowerCase() === accent.toLowerCase()
-          return (
-            <motion.button
-              key={p.id}
-              whileTap={{ scale: 0.85 }}
-              aria-label={p.label}
-              aria-pressed={on}
-              onClick={() => {
-                setCustom(false)
-                pick(p.hex)
-              }}
-              className="relative grid h-11 w-11 place-items-center rounded-full"
-              style={{ background: p.hex, boxShadow: on ? `0 0 0 2px #11151c, 0 0 0 4px ${p.hex}` : 'inset 0 0 0 1px rgba(255,255,255,0.18)' }}
-            >
-              <AnimatePresence>
-                {on && (
-                  <motion.span key="c" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }}>
-                    <Icon name="check" size={20} stroke={3} className="text-[#0d1300]" />
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.button>
-          )
-        })}
-        <motion.button
-          whileTap={{ scale: 0.85 }}
-          aria-label="Eigene Farbe"
-          aria-pressed={custom}
-          onClick={() => {
-            setCustom(true)
-            pick(accentFromHue(hue))
-          }}
-          className="relative grid h-11 w-11 place-items-center rounded-full"
-          style={{ background: 'conic-gradient(from 0deg, #ff5470, #ffc233, #a6e03c, #17c3b2, #5b7cff, #e055c4, #ff5470)', boxShadow: custom ? '0 0 0 2px #11151c, 0 0 0 4px #fff' : 'inset 0 0 0 1px rgba(255,255,255,0.18)' }}
-        >
-          <AnimatePresence>
-            {custom && (
-              <motion.span key="c" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 500, damping: 22 }}>
-                <Icon name="check" size={20} stroke={3} className="text-white drop-shadow" />
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.button>
-      </div>
-      <AnimatePresence initial={false}>
-        {custom && (
-          <motion.div key="hue" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={SOFT} style={{ overflow: 'hidden' }}>
-            <div className="pt-4">
-              <input
-                type="range"
-                className="slider hue-slider"
-                min={0}
-                max={359}
-                step={1}
-                value={hue}
-                aria-label="Farbton"
-                style={{ ['--track' as string]: RAINBOW }}
-                onChange={(e) => pick(accentFromHue(Number(e.target.value)))}
-              />
-              <p className="mt-2 text-xs text-white/45">Die Helligkeit passt sich dem Farbton an, damit Schrift immer lesbar bleibt.</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
   )
 }
 
@@ -337,7 +250,7 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
               <motion.button
                 variants={rise}
                 whileTap={{ scale: 0.97 }}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-[15px] font-semibold text-[#1f1f1f] disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#ffffff] px-4 py-3.5 text-[15px] font-semibold text-[#1f1f1f] disabled:opacity-50"
                 disabled={a.busy}
                 onClick={() => {
                   justSignedUp.current = false

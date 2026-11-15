@@ -80,7 +80,7 @@ const TOOLBOXES: Toolbox[] = [
 export function LineBadge({ name, color, operator, active }: { name: string; color: string; operator: OperatorId; active?: boolean }) {
   return (
     <span
-      className="inline-flex min-w-[2.4rem] items-center justify-center px-2.5 py-1 text-sm font-bold text-white"
+      className="inline-flex min-w-[2.4rem] items-center justify-center px-2.5 py-1 text-sm font-bold text-[#fff]"
       style={{
         background: color,
         borderRadius: Math.min(OPERATORS[operator].badgeRadius, 14),

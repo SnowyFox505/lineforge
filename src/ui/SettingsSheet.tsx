@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { MAP_SIZES } from '../model/constants'
 import type { GameMode } from '../model/types'
 import { exportCityJson } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
+import AppearanceSheet from './AppearanceSheet'
 import Icon from './Icon'
 import NameQueuesEditor from './NameQueues'
 import { CommitInput, Segmented, Sheet } from './primitives'
@@ -27,10 +29,20 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   const resizeMap = useEditor((s) => s.resizeMap)
   const setNameQueues = useEditor((s) => s.setNameQueues)
   const bigger = MAP_SIZES.filter((m) => m.size > doc.size)
+  const [look, setLook] = useState(false)
 
   return (
+    <>
     <Sheet open={open} onClose={onClose} title="Stadt-Einstellungen">
       <div className="space-y-5">
+        <button className="btn-soft flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm" onClick={() => setLook(true)}>
+          <Icon name="palette" size={20} />
+          <span className="flex-1">
+            <span className="block font-semibold">Darstellung und Stift</span>
+            <span className="block text-xs text-white/55">Hell oder dunkel, Farben mit Verlauf, Apple Pencil</span>
+          </span>
+        </button>
+
         <div>
           <div className="eyebrow mb-2">Name</div>
           <CommitInput value={doc.name} onCommit={renameCity} className="w-full" />
@@ -80,5 +92,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
         </button>
       </div>
     </Sheet>
+    <AppearanceSheet open={look} onClose={() => setLook(false)} />
+    </>
   )
 }

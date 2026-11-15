@@ -4,6 +4,7 @@ import { OPERATORS } from '../model/constants'
 import type { StationType } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
+import { useTheme } from '../ui/theme'
 import { downloadBlob } from '../ui/SettingsSheet'
 import { effectiveTypes, planePath } from './glyphs'
 import { placeLabels } from './labels'
@@ -115,7 +116,10 @@ export default function PlanView() {
   const doc = useEditor((s) => s.doc)
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [theme, setTheme] = useState<ThemeName>('dark')
+  // the plan follows the light / dark choice of the app; the sun/moon button flips it for the plan only (until the app's choice changes)
+  const scheme = useTheme((s) => s.scheme)
+  const [flip, setFlip] = useState<{ scheme: string; theme: ThemeName } | null>(null)
+  const theme: ThemeName = flip && flip.scheme === scheme ? flip.theme : scheme
   const [box, setBox] = useState({ w: 0, h: 0 })
   const T = THEMES[theme]
   const hasStations = Object.keys(doc.stations).length > 0
@@ -658,7 +662,7 @@ export default function PlanView() {
           { icon: 'zoomout' as const, on: () => zoomAt(1 / 1.4, centre().x, centre().y), label: 'Verkleinern' },
           { icon: 'fit' as const, on: resetView, label: 'Einpassen' },
           ...(anyPin ? [{ icon: 'refresh' as const, on: () => useEditor.getState().clearPins(), label: 'Plan neu berechnen' }] : []),
-          { icon: (theme === 'dark' ? 'sun' : 'moon') as 'sun' | 'moon', on: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), label: 'Hell/Dunkel' },
+          { icon: (theme === 'dark' ? 'sun' : 'moon') as 'sun' | 'moon', on: () => setFlip({ scheme, theme: theme === 'dark' ? 'light' : 'dark' }), label: 'Hell/Dunkel' },
           { icon: 'download' as const, on: exportSvg, label: 'SVG exportieren' },
           { icon: 'image' as const, on: exportPng, label: 'PNG exportieren' },
         ].map((b) => (

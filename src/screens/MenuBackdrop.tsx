@@ -197,6 +197,8 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
     }
   }, [])
 
+  // the veils that keep text readable take the colour of the page: dark in dark mode, light in light mode
+  const veil = useTheme((s) => s.scheme) === 'light' ? '238,241,245' : '7,9,13'
   return (
     <div className="absolute inset-0 overflow-hidden" data-dim={dim}>
       {/* drifting colour glows: plain gradients moved with transform only (no blur filter) */}
@@ -212,10 +214,10 @@ export default function MenuBackdrop({ dim = false }: { dim?: boolean }) {
       <canvas ref={lightRef} className="absolute inset-0 h-full w-full md:left-auto md:w-[58%]" aria-hidden />
 
       {/* sub-screens: calm the background so forms stay readable (a plain dark veil, no live blur) */}
-      <div className="absolute inset-0 transition-opacity duration-[400ms]" style={{ background: 'rgba(7,9,13,0.84)', opacity: dim ? 1 : 0 }} />
+      <div className="absolute inset-0 transition-opacity duration-[400ms]" style={{ background: `rgba(${veil},0.84)`, opacity: dim ? 1 : 0 }} />
 
       {/* fade so text and buttons stay readable */}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,9,13,0.55) 0%, rgba(7,9,13,0.15) 30%, rgba(7,9,13,0.55) 62%, rgba(7,9,13,0.96) 100%)' }} />
+      <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(${veil},0.55) 0%, rgba(${veil},0.15) 30%, rgba(${veil},0.55) 62%, rgba(${veil},0.96) 100%)` }} />
     </div>
   )
 }

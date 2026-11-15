@@ -129,7 +129,7 @@ export default function LoadingScreen({ title, ready, minMs = 3000, onDone }: { 
   }, [minMs])
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[70]" style={{ opacity: 0, background: 'radial-gradient(ellipse at 50% 42%, #14202e 0%, #080b10 62%, #05070a 100%)' }} role="status" aria-live="polite">
+    <div ref={rootRef} className="fixed inset-0 z-[70]" style={{ opacity: 0, background: 'var(--splash-bg)' }} role="status" aria-live="polite">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       <div ref={textRef} className="pointer-events-none absolute inset-x-0 bottom-[calc(14%+var(--safe-bottom))] text-center">
         <div className="eyebrow">Stadt wird geladen</div>

@@ -9,6 +9,7 @@ import Icon from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
 import AccountSheet, { WELCOME_KEY } from '../ui/AccountSheet'
+import AppearanceSheet from '../ui/AppearanceSheet'
 import UpdateOverlay from '../ui/UpdateOverlay'
 import WhatsNew from '../ui/WhatsNew'
 import NameQueuesEditor from '../ui/NameQueues'
@@ -72,6 +73,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number; go: (v: View) => void; onContinue: () => void }) {
   const [updating, setUpdating] = useState(false)
   const [account, setAccount] = useState(false)
+  const [look, setLook] = useState(false)
   const [welcome, setWelcome] = useState(false)
   const status = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
@@ -140,11 +142,14 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
           >
             <span className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-xs font-bold">
               {user ? user.name.slice(0, 1).toUpperCase() : <Icon name="user" size={16} />}
-              {user && <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0f131b] ${sync === 'error' ? 'bg-red-400' : sync === 'syncing' ? 'bg-amber-300' : 'bg-accent'}`} />}
+              {user && <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--bg)] ${sync === 'error' ? 'bg-red-400' : sync === 'syncing' ? 'bg-amber-300' : 'bg-accent'}`} />}
             </span>
             <span className="truncate">{user ? user.name : 'Anmelden'}</span>
           </motion.button>
         )}
+        <motion.button variants={item} whileTap={{ scale: 0.94 }} onClick={() => setLook(true)} className="glass grid h-10 w-10 place-items-center rounded-full" aria-label="Darstellung">
+          <Icon name="palette" size={18} stroke={2.1} />
+        </motion.button>
         {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
         <motion.button
           variants={item}
@@ -155,11 +160,12 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
         >
           <Icon name="refresh" size={16} stroke={2.2} />
           <span className="hidden min-[360px]:inline">Aktualisieren</span>
-          {updateAvailable && <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#0f131b] bg-accent" />}
+          {updateAvailable && <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[color:var(--bg)] bg-accent" />}
         </motion.button>
       </div>
       {updating && <UpdateOverlay />}
       <WhatsNew open={!!notes} releases={notes?.releases ?? []} title={notes?.title} onClose={closeNotes} />
+      <AppearanceSheet open={look} onClose={() => setLook(false)} />
       <AccountSheet open={account} onClose={() => setAccount(false)} welcome={welcome && !user} />
 
       <div>
@@ -188,7 +194,7 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
           onClick={latest ? onContinue : () => go('new')}
           className="btn-primary flex w-full items-center gap-4 rounded-[26px] p-4 text-left"
         >
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0d1300] text-accent">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0d1300] text-[color:var(--accent)]">
             <Icon name={latest ? 'play' : 'plus'} size={22} stroke={2.2} />
           </span>
           <span className="min-w-0 flex-1">
@@ -389,7 +395,7 @@ function Cities({ items, back, onOpen, refresh }: { items: Saved[]; back: () => 
                 </button>
                 {confirm === c.id ? (
                   <button
-                    className="grid h-10 w-10 place-items-center rounded-full bg-red-500/90 text-white"
+                    className="grid h-10 w-10 place-items-center rounded-full bg-red-500/90 text-[#fff]"
                     aria-label="Wirklich löschen"
                     onClick={async () => {
                       await useAuth.getState().removeCity(c.id)
