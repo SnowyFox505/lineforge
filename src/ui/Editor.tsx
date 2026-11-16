@@ -49,6 +49,7 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
   const canUndo = useEditor((s) => s.past.length > 0)
   const canRedo = useEditor((s) => s.future.length > 0)
   const setScreen = useEditor((s) => s.setScreen)
+  const tab = useEditor((s) => s.tab)
   const stations = Object.keys(doc.stations).length
   const lines = Object.keys(doc.lines).length
 
@@ -75,14 +76,16 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
         <GameClock />
         <Icon name="sliders" size={18} className="shrink-0 text-white/60" />
       </button>
-      <div className="glass pointer-events-auto flex shrink-0 rounded-full p-1">
+      {tab === 'map' && (
+        <div className="glass pointer-events-auto flex shrink-0 rounded-full p-1">
           <button onClick={undo} disabled={!canUndo} className="grid h-10 w-10 place-items-center rounded-full transition-opacity active:scale-90 disabled:opacity-25" aria-label="Rückgängig">
             <Icon name="undo" size={20} />
           </button>
           <button onClick={redo} disabled={!canRedo} className="grid h-10 w-10 place-items-center rounded-full transition-opacity active:scale-90 disabled:opacity-25" aria-label="Wiederholen">
             <Icon name="redo" size={20} />
           </button>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

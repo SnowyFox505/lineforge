@@ -38,12 +38,6 @@ export const RELEASES: Release[] = [
         how: 'Stadt-Einstellungen öffnen und „Auf N×N verkleinern“ wählen. Du siehst in 3D einen rot atmenden Bereich, der gelöscht würde. Unten steht, was verloren geht, und du bestätigst oder brichst ab.',
         benefit: 'Du kannst zu große Karten wieder kleiner machen und siehst vorher genau, was verschwindet. Rückgängig holt die alte Karte zurück.',
       },
-      {
-        title: 'Rückgängig und Wiederholen immer sichtbar',
-        what: 'Die Pfeile oben rechts waren in 3D und im Netzplan versteckt.',
-        how: 'Sie sind jetzt in allen Ansichten da.',
-        benefit: 'Auch auf dem iPhone kommst du in jeder Ansicht einen Schritt zurück.',
-      },
     ],
   },
   {
