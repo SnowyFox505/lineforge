@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.21.1',
+    date: '2026-11-16',
+    headline: 'Unterirdische Strecken bleiben unten, wo sie sich kreuzen',
+    changes: [
+      {
+        title: 'Gleise folgen dem unterirdischen Bahnhof',
+        what: 'Kreuzte eine Strecke im Tunnel eine andere, wurde sie über die ganze Länge zurück an die Oberfläche gehoben. Der Bahnhof lag dann zwar unter der Erde, die Gleise aber oben, und die Züge hielten oben ohne Bahnhof.',
+        how: 'Du musst nichts tun. Lade die Stadt einfach neu: Die Gleise tauchen jetzt zum unterirdischen Bahnhof ab, fahren im Tunnel und kommen hinter ihm wieder hoch.',
+        benefit: 'Unterirdische Bahnhöfe, zum Beispiel am Flughafen, funktionieren auch, wenn sich Linien in der Tiefe kreuzen.',
+      },
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-11-16',
     headline: 'Sehenswürdigkeiten verschieben, Straßenbahn auf Straßen, Flughafen am Stadtrand',

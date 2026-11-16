@@ -108,4 +108,23 @@ describe('track profiles', () => {
     expect(lookOf({ ...base, type: 'standard', look: 'zelt' })).toBe('zelt')
     expect(new Set(STATION_LOOKS.map((l) => l.id)).size).toBe(STATION_LOOKS.length)
   })
+
+  it('keeps a tunnel deep where it crosses another tunnel (the crossing hump does not lift the whole line)', () => {
+    // a long east-west metro line and a north-south one that crosses it while still on its way down
+    let d = createCity('T', 'creative', 200)
+    for (const [id, x, y] of [['a', 20, 100], ['b', 180, 100], ['c', 70, 20], ['e', 70, 180]] as [string, number, number][]) {
+      d = { ...d, stations: { ...d.stations, [id]: { id, name: id, x, y, type: 'standard' } } }
+    }
+    d = { ...d, lines: { H: { id: 'H', name: 'H', operator: 'ubahn', color: '#fff', stations: [], via: [], segs: [] }, V: { id: 'V', name: 'V', operator: 'ubahn', color: '#f00', stations: [], via: [], segs: [] } } }
+    for (const s of ['a', 'b']) d = appendStation(d, 'H', s)
+    for (const s of ['c', 'e']) d = appendStation(d, 'V', s)
+    const net = buildNetwork3D(d)
+    for (const ln of net.lines) {
+      // the platforms of every stop lie at full depth
+      for (const stop of ln.stops) {
+        const j = ln.cum.findIndex((c) => c >= stop.d)
+        expect(ln.cy[j]).toBeLessThanOrEqual(UG_LIFT + 0.05)
+      }
+    }
+  })
 })

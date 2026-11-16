@@ -882,7 +882,8 @@ export function separateCrossings(lines: LineNet[]) {
       for (let j = 0; j < ln.n; j++) {
         const dd = Math.abs(ln.cum[j] - bump.d)
         const wgt = smooth01(1 - Math.min(1, Math.max(0, (dd - bump.flat) / RAMP_PER_LEVEL)))
-        ln.cy[j] = Math.max(ln.cy[j], bump.h * wgt)
+        // the track rises towards the bump height from where it runs (a line in a tunnel stays down away from the crossing)
+        ln.cy[j] += Math.max(0, bump.h - ln.cy[j]) * wgt
       }
     }
     for (let j = 0; j < ln.n; j++) {
