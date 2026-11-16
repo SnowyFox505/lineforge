@@ -108,7 +108,10 @@ export function applyStroke(doc: CityDoc, lineId: string, raw: Pt[], opts: Strok
   const stationsOut = { ...doc.stations }
   const created: string[] = []
   // a tram stroke along streets: new stops sit on the street, not beside it
-  const onStreets = line.operator === 'tram' && followsStreets(doc, dense)
+  // (also a rough stroke from street to street: it is laid on the streets in between, unless that would be a huge detour)
+  const strokeOnStreets = line.operator === 'tram' && followsStreets(doc, dense)
+  const endsAtStreets = line.operator === 'tram' && !!streetFoot(doc, dense[0], 3) && !!streetFoot(doc, dense[dense.length - 1], 3)
+  const onStreets = strokeOnStreets || endsAtStreets
   const place = (existing: string | null, at: Pt): Station | null => {
     if (existing) return stationsOut[existing]
     const foot = onStreets ? streetFoot(doc, at, 3) : null
@@ -128,7 +131,10 @@ export function applyStroke(doc: CityDoc, lineId: string, raw: Pt[], opts: Strok
   // the stroke in the order of the line (a drawn-towards-the-line stroke is turned around)
   const path = plan.reverse ? [...dense].reverse() : dense
   // a tram stroke that runs along streets follows them; one that leaves the streets (or lies outside the towns) stays as drawn
-  const ctrl = (onStreets ? streetViaPoints(doc, plan.reverse ? b : a, plan.reverse ? a : b, { guide: path }) : null) ?? strokeControlPoints(path)
+  let onRoad = onStreets ? streetViaPoints(doc, plan.reverse ? b : a, plan.reverse ? a : b, { guide: path }) : null
+  // a stroke that did not follow the streets only moves onto them when the way along them is not much longer
+  if (onRoad && !strokeOnStreets && polyLength([path[0], ...onRoad, path[path.length - 1]]) > polyLength(path) * 2.2 + 6) onRoad = null
+  const ctrl = onRoad ?? strokeControlPoints(path)
 
   let next: Line
   switch (plan.mode) {
@@ -311,6 +317,8 @@ export function smoothLine(doc: CityDoc, lineId: string, rounds = 1): CityDoc | 
   for (let k = 0; k < n - 1; k++) d = smoothLeg(d ?? doc, lineId, k, rounds) ?? d
   return d
 }
+
+const polyLength = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) : 0), 0)
 
 /** Throw away the waypoints of a stretch and lay it again (the way another line of its kind takes, or a fresh route). */
 export function rebuildLeg(doc: CityDoc, lineId: string, k: number): CityDoc | null {

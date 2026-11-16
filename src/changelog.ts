@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.21.0',
+    date: '2026-11-16',
+    headline: 'Sehenswürdigkeiten verschieben, Straßenbahn auf Straßen, Flughafen am Stadtrand',
+    changes: [
+      {
+        title: 'Sehenswürdigkeiten verschieben',
+        what: 'Stadien, Attraktionen und Wahrzeichen lassen sich jetzt auf der Karte an eine andere Stelle ziehen. Außerdem stehen sie in 3D nicht mehr mitten in einem Bahnhof: Was auf einer Station lag, rückt von selbst daneben, und neue Sehenswürdigkeiten, die du auf eine Station setzt, ebenfalls.',
+        how: 'Unter „Sehenswürdigkeiten“ die Sehenswürdigkeit antippen und mit dem Finger oder der Maus verschieben. „Rückgängig“ holt sie zurück. Ältere Städte werden beim Öffnen einmal aufgeräumt.',
+        benefit: 'Du musst nichts mehr löschen und neu setzen, und die Gebäude stehen nicht mehr im Weg der Züge.',
+      },
+      {
+        title: 'Straßenbahn auf den Straßen',
+        what: 'Eine Straßenbahn folgt den Straßen der Stadt. Neu: Auch ein grob gezogener Strich von Straße zu Straße wird auf die Straßen gelegt, solange der Weg nicht viel länger wäre. Für bestehende Linien gibt es einen eigenen Knopf.',
+        how: 'Eine Straßenbahn-Linie wählen und „Auf Straßen legen“ antippen. Dann liegt die ganze Linie auf den weißen Straßen statt schräg über die Häuserblöcke. Einzelne Abschnitte legst du mit „Abschnitt neu verlegen“ neu.',
+        benefit: 'Die Straßenbahn sieht aus wie in einer echten Stadt, und die Stationen sitzen an Straßen.',
+      },
+      {
+        title: 'Flughafen passt sich der Stadt an',
+        what: 'Hast du eine Stadt über den Rand eines Flughafens gemalt, endet der Flughafen jetzt dort. Start- und Landebahnen, Terminal und Gebäude bleiben auf seinem eigenen Gelände, statt in die Stadt hineinzuragen.',
+        how: 'Du musst nichts tun. Male den Bezirk oder Vorort einfach über den Rand, der Flughafen zieht sich von selbst zurück.',
+        benefit: 'Flughafen und Stadt können ohne Nacharbeit direkt aneinandergrenzen.',
+      },
+    ],
+  },
+  {
     version: '0.20.1',
     date: '2026-11-16',
     headline: 'Fehler beim Malen von Gebirge, Wald und Landkreisen behoben',

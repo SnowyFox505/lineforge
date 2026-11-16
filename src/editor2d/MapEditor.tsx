@@ -38,7 +38,7 @@ const BRUSH_TINT: Record<'water' | 'erase' | 'city' | 'suburb' | 'airport' | 'fo
   zoneErase: ['rgba(255,120,120,0.2)', 'rgba(255,170,170,0.95)'],
 }
 
-type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag'
+type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag' | 'poiDrag'
 
 interface Anim {
   from: number
@@ -147,6 +147,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   /** the stroke being drawn (lattice coordinates); `moved` once the finger has left the tap radius */
   const stroke = useRef<{ pts: { x: number; y: number }[]; moved: boolean } | null>(null)
   const stationDrag = useRef<{ id: string; moved: boolean } | null>(null)
+  const poiDrag = useRef<{ id: string; moved: boolean } | null>(null)
   /** short message on the map (for example when a stroke fitted nowhere) */
   const flashMsg = useRef<{ text: string; until: number } | null>(null)
 
@@ -849,6 +850,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       // a stroke that was only just started is dropped too: zooming never draws
       stroke.current = null
       stationDrag.current = null
+      poiDrag.current = null
       const [a, b] = [...pointers.current.values()]
       g.kind = 'pinch'
       g.lastDist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -894,6 +896,10 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       } else if (hitSt) {
         stationDrag.current = { id: hitSt, moved: false }
         g.kind = 'stationDrag'
+      } else if (t === 'poi' && hitPoi(p)) {
+        // a point of interest can be dragged to another place; a plain tap selects it
+        poiDrag.current = { id: hitPoi(p)!, moved: false }
+        g.kind = 'poiDrag'
       } else {
         g.kind = 'tap'
       }
@@ -969,6 +975,19 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         const y = Math.round(c.y)
         if (inMap({ x, y })) st.moveStation(d.id, x, y)
       }
+    } else if (g.kind === 'poiDrag' && poiDrag.current) {
+      const d = poiDrag.current
+      if (d.moved || Math.hypot(p.x - g.startX, p.y - g.startY) > 8) {
+        const st = useEditor.getState()
+        if (!d.moved) {
+          st.checkpoint()
+          d.moved = true
+          st.selectPoi(d.id)
+          fadeMenu()
+        }
+        const c = toCell(p)
+        st.movePoi(d.id, c.x, c.y)
+      }
     } else if (g.kind === 'tap') {
       if (Math.hypot(p.x - g.startX, p.y - g.startY) > 8) g.kind = 'pan'
     }
@@ -1007,6 +1026,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     if (g.kind === 'stationDrag') {
       const d = stationDrag.current
       stationDrag.current = null
+      if (d && !d.moved) handleTap(p)
+    }
+    if (g.kind === 'poiDrag') {
+      const d = poiDrag.current
+      poiDrag.current = null
       if (d && !d.moved) handleTap(p)
     }
     if (pointers.current.size === 0) g.kind = 'none'

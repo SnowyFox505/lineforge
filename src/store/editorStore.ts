@@ -10,6 +10,7 @@ import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
 import { migrateLandmarks } from '../model/migrate'
+import { freePoiSpot, poiOnStation, separatePois } from '../model/poi'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { addStationOnLines, applyStroke, closeRing, moveStationTo, openRing, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
 import { endExpress, flipBranch, makeBranch, makeExpress } from '../model/lineKinds'
@@ -193,6 +194,8 @@ interface EditorState {
   removeWaterName: (id: string) => void
   addPoi: (x: number, y: number) => string | null
   updatePoi: (id: string, patch: Partial<Omit<Poi, 'id'>>) => void
+  /** Move a point of interest to a cell (call checkpoint() once before a drag; this does not touch the undo stack) */
+  movePoi: (id: string, x: number, y: number) => void
   removePoi: (id: string) => void
   addStation: (x: number, y: number) => string | null
   updateStation: (id: string, patch: Partial<Omit<Station, 'id'>>) => void
@@ -272,7 +275,7 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, activeCounty: 0, countyErase: false, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: separatePois(migrateGeo(migrateLandmarks(healHooks(withRoutes(doc))))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, activeCounty: 0, countyErase: false, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
     setTool: (tool) => set({ tool, selectedLeg: null, branchPick: null }),
     setBrush: (brush) => set({ brush }),
@@ -370,7 +373,7 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     loadDoc: (doc) =>
-      set({ doc: migrateGeo(migrateLandmarks(healHooks(withRoutes(doc)))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
+      set({ doc: separatePois(migrateGeo(migrateLandmarks(healHooks(withRoutes(doc))))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null }),
     resizeMap: (newSize) => {
       const old = get().doc.size
       if (newSize <= old) return
@@ -670,8 +673,17 @@ export const useEditor = create<EditorState>((set, get) => {
       const n = pois.filter((p) => p.kind === poiKind).length + 1
       const label = poiKind === 'stadium' ? 'Stadion' : poiKind === 'landmark' ? 'Wahrzeichen' : 'Attraktion'
       const id = newId()
-      commit({ ...doc, pois: [...pois, { id, kind: poiKind, name: `${label} ${n}`, x, y }] }, { selectedPoiId: id })
+      // on a station (or its platforms) the model would stand in the way: take the free spot next to it
+      const spot = poiOnStation(doc, { x, y }) ? freePoiSpot(doc, x, y) : null
+      commit({ ...doc, pois: [...pois, { id, kind: poiKind, name: `${label} ${n}`, x: spot?.x ?? x, y: spot?.y ?? y }] }, { selectedPoiId: id })
       return id
+    },
+    movePoi: (id, x, y) => {
+      const { doc } = get()
+      if (x < 0 || y < 0 || x >= doc.size || y >= doc.size || doc.terrain[y * doc.size + x] !== LAND) return
+      const p = (doc.pois ?? []).find((q) => q.id === id)
+      if (!p || (p.x === x && p.y === y)) return
+      set({ doc: { ...doc, pois: (doc.pois ?? []).map((q) => (q.id === id ? { ...q, x, y } : q)) } })
     },
     updatePoi: (id, patch) => {
       const { doc } = get()

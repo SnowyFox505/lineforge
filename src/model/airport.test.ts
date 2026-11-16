@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { airportBoxes, airportLayout, airportToCell } from './airport'
+import { airportBoxes, airportLayout, airportToCell, trimForeign } from './airport'
 import { createCity } from './factory'
 
 describe('airport layout', () => {
@@ -106,5 +106,28 @@ describe('airport layout', () => {
     }
     expect(l.taxiV).toBeLessThan(l.apron!.v0)
     expect(l.taxiV).toBeGreaterThan(Math.max(...l.runways.map((r) => r.v + r.w / 2)))
+  })
+
+  it('keeps to its own ground when a town was painted over a corner', () => {
+    const d = createCity('T', 'creative', 64)
+    d.zones = [{ id: 1, kind: 'airport', name: 'F' }, { id: 2, kind: 'city', name: 'S' }]
+    for (let y = 10; y < 30; y++) for (let x = 20; x < 60; x++) d.zoneGrid![y * 64 + x] = 1
+    // a town painted over the upper left half of the area (a diagonal cut)
+    for (let y = 10; y < 30; y++) for (let x = 20; x < 60; x++) if (x - 20 + (y - 10) * 2 < 30) d.zoneGrid![y * 64 + x] = 2
+    const [box] = airportBoxes(d)
+    let foreign = 0
+    for (let y = box.y0; y < box.y1; y++) for (let x = box.x0; x < box.x1; x++) if (d.zoneGrid![y * 64 + x] === 2) foreign++
+    expect(foreign / ((box.x1 - box.x0) * (box.y1 - box.y0))).toBeLessThanOrEqual(0.02)
+    // still a decent airport, not shrunk to nothing
+    expect(box.x1 - box.x0).toBeGreaterThanOrEqual(20)
+  })
+
+  it('does not cut an area without foreign cells, and never below a minimum', () => {
+    const grid = new Array(64 * 64).fill(1)
+    expect(trimForeign(grid, 64, 1, { x0: 0, y0: 0, x1: 64, y1: 64 })).toEqual({ x0: 0, y0: 0, x1: 64, y1: 64 })
+    const other = new Array(64 * 64).fill(2)
+    const t = trimForeign(other, 64, 1, { x0: 10, y0: 10, x1: 30, y1: 30 })
+    expect(t.x1 - t.x0).toBeGreaterThanOrEqual(6)
+    expect(t.y1 - t.y0).toBeGreaterThanOrEqual(6)
   })
 })

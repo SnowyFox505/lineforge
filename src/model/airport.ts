@@ -94,9 +94,57 @@ export function airportBoxes(doc: CityDoc): AirportBox[] {
       }
       if (!best || c.n > best.n) best = c
     }
-    if (best) out.push({ zoneId: z.id, name: z.name, x0: best.x0, y0: best.y0, x1: best.x1, y1: best.y1 })
+    if (best) out.push({ zoneId: z.id, name: z.name, ...trimForeign(zoneGrid, size, z.id, best) })
   }
   return out
+}
+
+/** The share of other areas (a town painted over the edge) the box of an airport may still hold */
+const FOREIGN_TOLERANCE = 0.02
+/** An airport box is never cut smaller than this (cells) */
+const MIN_SIDE = 6
+
+/**
+ * Cut the box of an airport back where other areas were painted over it: the side strip with the largest share of
+ * foreign cells goes first, until (almost) nothing else lies inside. The runways and buildings then stay on the
+ * airport's own ground instead of reaching into the neighbouring town.
+ */
+export function trimForeign(grid: ArrayLike<number>, size: number, id: number, box: { x0: number; y0: number; x1: number; y1: number }) {
+  let { x0, y0, x1, y1 } = box
+  const foreign = (x: number, y: number) => {
+    const v = grid[y * size + x]
+    return v !== 0 && v !== id
+  }
+  const col = (x: number) => {
+    let n = 0
+    for (let y = y0; y < y1; y++) if (foreign(x, y)) n++
+    return n
+  }
+  const row = (y: number) => {
+    let n = 0
+    for (let x = x0; x < x1; x++) if (foreign(x, y)) n++
+    return n
+  }
+  let total = 0
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (foreign(x, y)) total++
+  while (total > (x1 - x0) * (y1 - y0) * FOREIGN_TOLERANCE) {
+    const h = y1 - y0
+    const w = x1 - x0
+    const sides = [
+      { s: 'l', n: col(x0), len: h, ok: w > MIN_SIDE },
+      { s: 'r', n: col(x1 - 1), len: h, ok: w > MIN_SIDE },
+      { s: 't', n: row(y0), len: w, ok: h > MIN_SIDE },
+      { s: 'b', n: row(y1 - 1), len: w, ok: h > MIN_SIDE },
+    ].filter((c) => c.ok && c.n > 0)
+    if (!sides.length) break
+    const cut = sides.reduce((a, c) => (c.n / c.len > a.n / a.len ? c : a))
+    total -= cut.n
+    if (cut.s === 'l') x0++
+    else if (cut.s === 'r') x1--
+    else if (cut.s === 't') y0++
+    else y1--
+  }
+  return { x0, y0, x1, y1 }
 }
 
 /**

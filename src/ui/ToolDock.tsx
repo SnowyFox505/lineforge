@@ -428,11 +428,15 @@ function LinePanel() {
                   Glätten
                 </button>
               )}
-              {(active.via ?? []).some((v) => v.length > 0) && (
-                <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => resetRoute(active.id)}>
-                  Automatisch
+              {(active.operator === 'tram' && active.stations.length >= 2) || (active.via ?? []).some((v) => v.length > 0) ? (
+                <button
+                  className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs"
+                  onClick={() => resetRoute(active.id)}
+                  title={active.operator === 'tram' ? 'Legt die ganze Straßenbahn auf die Straßen der Stadt' : 'Verlegt die ganze Linie automatisch'}
+                >
+                  {active.operator === 'tram' ? 'Auf Straßen legen' : 'Automatisch'}
                 </button>
-              )}
+              ) : null}
             </div>
           </motion.div>
         )}
@@ -728,7 +732,7 @@ function PoiPanel() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-white/55">
-        {poi ? POI_STYLE[poi.kind].hint : `Tippe auf die Karte, um ${POI_STYLE[poiKind].label === 'Attraktion' ? 'eine' : 'ein'} ${POI_STYLE[poiKind].label} zu setzen. ${POI_STYLE[poiKind].hint}`}
+        {poi ? `${POI_STYLE[poi.kind].hint} Zum Verschieben ziehen.` : `Tippe auf die Karte, um ${POI_STYLE[poiKind].label === 'Attraktion' ? 'eine' : 'ein'} ${POI_STYLE[poiKind].label} zu setzen. ${POI_STYLE[poiKind].hint}`}
       </p>
       {poi && (
         <div className="card space-y-2 rounded-2xl p-3">
