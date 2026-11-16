@@ -8,6 +8,7 @@ import { createCity } from '../model/factory'
 import type { CityDoc, GameMode } from '../model/types'
 import { exportCityJson, importCityJson, listCityDocs, saveCity } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
+import { BetaNote, useNotYet } from '../ui/NotYet'
 import Icon from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
@@ -256,7 +257,8 @@ function NewCity({ back }: { back: () => void }) {
   const newCity = useEditor((s) => s.newCity)
   const [name, setName] = useState('')
   const [placeholder] = useState(() => NAMES[Math.floor(Math.random() * NAMES.length)])
-  const [mode, setMode] = useState<GameMode>('normal')
+  const [mode, setMode] = useState<GameMode>('creative')
+  const notYet = useNotYet()
   const [size, setSize] = useState(256)
   const [queues, setQueues] = useState<Partial<NameQueues>>({})
   const [preset, setPreset] = useState<MapPreset>('leer')
@@ -295,13 +297,15 @@ function NewCity({ back }: { back: () => void }) {
                 <motion.button
                   key={m.id}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setMode(m.id)}
-                  className={`card relative rounded-[24px] p-4 text-left transition-colors ${active ? '!border-accent/70' : ''}`}
+                  animate={m.id === 'normal' ? notYet.controls : undefined}
+                  onClick={() => (m.id === 'normal' ? notYet.poke() : setMode(m.id))}
+                  className={`card relative rounded-[24px] p-4 text-left transition-colors ${active ? '!border-accent/70' : ''} ${m.id === 'normal' && notYet.shown ? '!border-red-400/80' : ''}`}
                   style={active ? { boxShadow: '0 0 0 1px rgba(var(--accent-rgb),0.4), 0 14px 40px -12px rgba(var(--accent-rgb),0.35)' } : undefined}
                 >
                   <span className={`mb-3 grid h-10 w-10 place-items-center rounded-full ${active ? 'bg-accent text-accent-ink' : 'bg-white/8'}`}>
                     <Icon name={m.icon} size={20} />
                   </span>
+                  {m.id === 'normal' && <BetaNote show={notYet.shown} className="absolute right-3 top-3" />}
                   <span className="block text-base font-bold">{MODE_INFO[m.id].label}</span>
                   <span className="mt-1 block text-xs leading-snug text-white/55">{MODE_INFO[m.id].text}</span>
                 </motion.button>

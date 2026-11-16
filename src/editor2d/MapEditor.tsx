@@ -23,6 +23,7 @@ import TrainLayer from './TrainLayer'
 import { useDockFade } from '../ui/dockFade'
 import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
+import { loadView, saveMapView } from '../ui/viewMemory'
 
 const isPaintTool = (t: Tool) => t === 'county' || t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 /** Colour of the brush circle per paint tool (fill, rim); every paint tool needs an entry, a missing one would crash the map on hover */
@@ -91,6 +92,10 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const userMoved = useRef(false)
   const fitMode = useRef<'content' | 'all'>('content')
   const needsFit = useRef(true)
+  /** the view the player left this city with is put back once, when the city opens */
+  const restoreView = useRef(true)
+  /** size of the map area as last drawn (the element is already gone when the city is left) */
+  const dims = useRef({ w: 0, h: 0 })
   const lastTick = useRef(0)
   const drawRef = useRef<() => void>(() => {})
   const insetsRef = useRef(insets)
@@ -160,6 +165,16 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     const { top, bottom } = insetsRef.current
     const availH = Math.max(100, h - top - bottom)
     const whole = (Math.min(w, availH) / doc.size) * 0.94
+    if (restoreView.current) {
+      restoreView.current = false
+      const saved = loadView(doc.id).map
+      if (saved) {
+        const s = Math.min(60, Math.max(whole * 0.5, saved.s))
+        view.current = { s, ox: w / 2 - saved.cx * s, oy: top + availH / 2 - saved.cy * s }
+        userMoved.current = true
+        return
+      }
+    }
     const sts = Object.values(doc.stations)
     let s = whole
     let cx = doc.size / 2
@@ -178,7 +193,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       }
     }
     view.current = { s, ox: w / 2 - cx * s, oy: top + availH / 2 - cy * s }
-  }, [doc.size, doc.stations])
+  }, [doc.id, doc.size, doc.stations])
 
   const accent = useTheme((s) => s.accent) // a new accent colour repaints the map
   const scheme = useTheme((s) => s.scheme) // so does light / dark (the backdrop around the map)
@@ -191,6 +206,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     const dpr = window.devicePixelRatio || 1
     const w = wrap.clientWidth
     const h = wrap.clientHeight
+    dims.current = { w, h }
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr)
       canvas.height = Math.round(h * dpr)
@@ -574,8 +590,34 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     }
   }, [doc, terrainPaths, zoneGfx, countyGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
 
+  /** Remember where the player is looking (zoom and the cell in the middle of the free area) */
+  const rememberView = useCallback(() => {
+    const { w, h } = dims.current
+    if (!userMoved.current || w <= 0) return
+    const { top, bottom } = insetsRef.current
+    const v = view.current
+    const availH = Math.max(100, h - top - bottom)
+    saveMapView(doc.id, { s: v.s, cx: (w / 2 - v.ox) / v.s, cy: (top + availH / 2 - v.oy) / v.s })
+  }, [doc.id])
+  const rememberRef = useRef(rememberView)
+  useEffect(() => {
+    rememberRef.current = rememberView
+  }, [rememberView])
+  // ...when the city is left, and whenever the app goes to the background
+  useEffect(() => {
+    const save = () => rememberRef.current()
+    document.addEventListener('visibilitychange', save)
+    window.addEventListener('pagehide', save)
+    return () => {
+      document.removeEventListener('visibilitychange', save)
+      window.removeEventListener('pagehide', save)
+      save()
+    }
+  }, [doc.id])
+
   useEffect(() => {
     userMoved.current = false
+    restoreView.current = true
     lineAnim.current.clear()
     stationBorn.current.clear()
     seeded.current = false
@@ -1028,6 +1070,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       stationDrag.current = null
       if (d && !d.moved) handleTap(p)
     }
+    // the player let go of the map: this is the view to come back to
+    rememberRef.current()
     if (g.kind === 'poiDrag') {
       const d = poiDrag.current
       poiDrag.current = null

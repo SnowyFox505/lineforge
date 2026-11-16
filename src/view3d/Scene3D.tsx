@@ -1,7 +1,8 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { AnimatePresence } from 'motion/react'
 import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { loadView, saveCamView } from '../ui/viewMemory'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
 import { useZoneLook } from '../editor2d/zoneLook'
@@ -250,6 +251,9 @@ function Stations({ net }: { net: Network3D }) {
 /** Initial camera: frame the network (or a patch of the map if empty), taking the screen aspect into account. */
 function useInitialCamera(doc: CityDoc) {
   return useMemo(() => {
+    // where the player left the camera last time
+    const saved = loadView(doc.id).cam
+    if (saved) return { target: saved.t, position: saved.p }
     const half = doc.size / 2
     const sts = Object.values(doc.stations)
     let cx = 0
@@ -270,6 +274,30 @@ function useInitialCamera(doc: CityDoc) {
     }
     // Computed once per mounted scene; the user owns the camera afterwards.
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** Remembers the camera of the city (when a drag ends, and when the 3D view is left) so it opens the same way next time. */
+function CamMemory({ cityId }: { cityId: string }) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as unknown as { target: { x: number; y: number; z: number }; addEventListener: (t: string, f: () => void) => void; removeEventListener: (t: string, f: () => void) => void } | null
+  useEffect(() => {
+    if (!controls) return
+    const save = () => {
+      // a camera that follows a train is not the one to come back to
+      if (useEditor.getState().followId) return
+      const p = camera.position
+      const t = controls.target
+      saveCamView(cityId, { p: [p.x, p.y, p.z], t: [t.x, t.y, t.z] })
+    }
+    controls.addEventListener('end', save)
+    document.addEventListener('visibilitychange', save)
+    return () => {
+      controls.removeEventListener('end', save)
+      document.removeEventListener('visibilitychange', save)
+      save()
+    }
+  }, [camera, controls, cityId])
+  return null
 }
 
 /** Dev only: lets scripted browser tests place the camera. */
@@ -317,6 +345,7 @@ export default function Scene3D() {
         <Pois3D net={net} />
         <Trains3D net={net} />
         <DevCam />
+        <CamMemory cityId={doc.id} />
         <TouchRig onGesture={stopAuto} />
         <FollowCam />
         <OrbitControls

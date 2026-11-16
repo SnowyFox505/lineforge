@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { MAP_SIZES } from '../model/constants'
+import { motion } from 'motion/react'
+import { BetaNote, useNotYet } from './NotYet'
 import type { GameMode } from '../model/types'
 import { exportCityJson } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
@@ -26,6 +28,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   const doc = useEditor((s) => s.doc)
   const renameCity = useEditor((s) => s.renameCity)
   const setMode = useEditor((s) => s.setMode)
+  const notYet = useNotYet()
   const resizeMap = useEditor((s) => s.resizeMap)
   const setNameQueues = useEditor((s) => s.setNameQueues)
   const bigger = MAP_SIZES.filter((m) => m.size > doc.size)
@@ -50,15 +53,20 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
 
         <div>
           <div className="eyebrow mb-2">Spielmodus</div>
+          <motion.div animate={notYet.controls}>
           <Segmented
             value={doc.mode}
-            onChange={setMode}
+            onChange={(m) => (m === 'normal' ? notYet.poke() : setMode(m))}
             options={[
               { value: 'normal', label: 'Normal' },
               { value: 'creative', label: 'Kreativ' },
             ]}
           />
-          <p className="mt-2 text-sm text-white/55">{MODE_INFO[doc.mode].text}</p>
+          </motion.div>
+          <div className="mt-2 flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-sm text-white/55">{MODE_INFO[doc.mode].text}</p>
+            <BetaNote show={notYet.shown} className="shrink-0" />
+          </div>
         </div>
 
         <div>

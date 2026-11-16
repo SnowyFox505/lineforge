@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.22.0',
+    date: '2026-11-16',
+    headline: 'Die Stadt öffnet sich, wie du sie verlassen hast',
+    changes: [
+      {
+        title: 'Ansicht wird gemerkt',
+        what: 'Zoom und Ausschnitt der Karte und die Kamera in 3D werden pro Stadt gemerkt. Öffnest du die Stadt wieder, schaust du genau dorthin, wo du aufgehört hast, statt dass sie neu in die Mitte gesetzt wird.',
+        how: 'Du musst nichts tun. Zoome oder verschiebe die Karte, drehe die 3D-Kamera und verlasse die Stadt oder wechsle die Ansicht: Beim nächsten Öffnen ist alles wie vorher. „Zentrieren“ stellt die Übersicht wieder her.',
+        benefit: 'Du musst dich nach jedem Öffnen nicht mehr neu hinzoomen.',
+      },
+      {
+        title: 'Normaler Modus ist noch gesperrt',
+        what: 'Der Normale Modus ist noch nicht fertig. Neue Städte starten jetzt im Kreativ-Modus, und „Normal“ lässt sich nicht mehr anwählen.',
+        how: 'Tippst du in „Neue Stadt“ oder in den Stadt-Einstellungen auf „Normal“, wackelt die Auswahl rot, und ein Hinweis „Beta“ blendet kurz ein und wieder aus.',
+        benefit: 'Du kannst nicht mehr versehentlich in einem Modus landen, der noch nichts Eigenes kann.',
+      },
+    ],
+  },
+  {
     version: '0.21.2',
     date: '2026-11-16',
     headline: 'Schnelleres Speichern in der Cloud',
