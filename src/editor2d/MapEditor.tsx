@@ -25,14 +25,18 @@ import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
 
 const isPaintTool = (t: Tool) => t === 'county' || t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
-const BRUSH_TINT = {
+/** Colour of the brush circle per paint tool (fill, rim); every paint tool needs an entry, a missing one would crash the map on hover */
+const BRUSH_TINT: Record<'water' | 'erase' | 'city' | 'suburb' | 'airport' | 'forest' | 'mountain' | 'county' | 'zoneErase', readonly [string, string]> = {
   water: ['rgba(90,190,255,0.18)', 'rgba(150,220,255,0.9)'],
   erase: ['rgba(170,230,120,0.18)', 'rgba(200,245,150,0.9)'],
   city: ['rgba(190,196,205,0.3)', 'rgba(235,239,244,0.95)'],
   suburb: ['rgba(205,210,217,0.3)', 'rgba(245,247,250,0.95)'],
   airport: ['rgba(70,76,86,0.4)', 'rgba(200,206,214,0.95)'],
+  forest: ['rgba(60,150,80,0.28)', 'rgba(140,220,150,0.95)'],
+  mountain: ['rgba(140,130,120,0.35)', 'rgba(220,210,200,0.95)'],
+  county: ['rgba(255,194,51,0.18)', 'rgba(255,214,110,0.95)'],
   zoneErase: ['rgba(255,120,120,0.2)', 'rgba(255,170,170,0.95)'],
-} as const
+}
 
 type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag'
 
@@ -555,7 +559,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       const rad = (brush - 1 + 0.6) * s
       ctx.beginPath()
       ctx.arc(ox + (cell.x + 0.5) * s, oy + (cell.y + 0.5) * s, Math.max(4, rad), 0, Math.PI * 2)
-      const tint = BRUSH_TINT[tool as keyof typeof BRUSH_TINT]
+      const tint = BRUSH_TINT[tool as keyof typeof BRUSH_TINT] ?? BRUSH_TINT.city
       ctx.fillStyle = tint[0]
       ctx.strokeStyle = tint[1]
       ctx.lineWidth = 1.5

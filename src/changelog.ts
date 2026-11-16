@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.20.1',
+    date: '2026-11-16',
+    headline: 'Fehler beim Malen von Gebirge, Wald und Landkreisen behoben',
+    changes: [
+      {
+        title: 'Kein schwarzer Bildschirm mehr beim Malen',
+        what: 'Sobald man mit dem Gebirge-, Wald- oder Landkreis-Werkzeug über die Karte fuhr, wurde der Bildschirm schwarz und die Karte war weg.',
+        how: 'Du musst nichts tun: Aktualisiere die App („Aktualisieren“ im Menü), dann kannst du wie gewohnt malen. Der Pinsel zeigt jetzt auch für diese Werkzeuge einen farbigen Kreis.',
+        benefit: 'Gebirge, Wälder und Landkreise lassen sich wieder ganz normal zeichnen.',
+      },
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-11-16',
     headline: 'Erhöhte und abgesenkte Bahnhöfe',
