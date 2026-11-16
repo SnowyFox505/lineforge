@@ -24,6 +24,7 @@ import { useDockFade } from '../ui/dockFade'
 import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
 import { loadView, saveMapView } from '../ui/viewMemory'
+import { keptSquare } from '../model/shrink'
 
 const isPaintTool = (t: Tool) => t === 'county' || t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 /** Colour of the brush circle per paint tool (fill, rim); every paint tool needs an entry, a missing one would crash the map on hover */
@@ -147,6 +148,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const selectedWaypoint = useEditor((s) => s.selectedWaypoint)
   const selectedLeg = useEditor((s) => s.selectedLeg)
   const selectedPoiId = useEditor((s) => s.selectedPoiId)
+  const shrinkTo = useEditor((s) => s.shrinkTo)
   const selectedWaterId = useEditor((s) => s.selectedWaterId)
   const wpDrag = useRef<{ lineId: string; k: number; j: number; moved: boolean } | null>(null)
   /** the stroke being drawn (lattice coordinates); `moved` once the finger has left the tap radius */
@@ -569,6 +571,23 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       drawPoi(ctx, poi.kind, px, py, Math.max(6, Math.min(13, s * 0.6)), poi.id === selectedPoiId, s >= 3 ? poi.name : undefined)
     }
 
+    // --- Shrinking: what would be deleted lies under a red cover that breathes ----------------
+    if (shrinkTo) {
+      const k = keptSquare(doc.size, shrinkTo)
+      const breath = 0.5 + 0.5 * Math.sin(now / 420)
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(ox, oy, doc.size * s, doc.size * s)
+      ctx.rect(ox + k.x0 * s, oy + k.y0 * s, shrinkTo * s, shrinkTo * s)
+      ctx.fillStyle = `rgba(255,59,59,${0.18 + 0.25 * breath})`
+      ctx.fill('evenodd')
+      ctx.strokeStyle = '#ff5a5a'
+      ctx.lineWidth = 3
+      ctx.strokeRect(ox + k.x0 * s, oy + k.y0 * s, shrinkTo * s, shrinkTo * s)
+      ctx.restore()
+      animating = true
+    }
+
     // --- Brush cursor -------------------------------------------------------
     const hv = hover.current
     if (isPaintTool(tool) && hv) {
@@ -588,7 +607,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       cancelAnimationFrame(raf.current)
       raf.current = requestAnimationFrame(draw)
     }
-  }, [doc, terrainPaths, zoneGfx, countyGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline])
+  }, [doc, terrainPaths, zoneGfx, countyGfx, linePaths, types, bridges, selectedStationId, selectedWaypoint, selectedLeg, selectedPoiId, selectedWaterId, activeLineId, tool, brush, fit, accent, scheme, zoneWeight, zoneOutline, shrinkTo])
 
   /** Remember where the player is looking (zoom and the cell in the middle of the free area) */
   const rememberView = useCallback(() => {

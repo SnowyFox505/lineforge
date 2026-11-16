@@ -32,6 +32,8 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   const resizeMap = useEditor((s) => s.resizeMap)
   const setNameQueues = useEditor((s) => s.setNameQueues)
   const bigger = MAP_SIZES.filter((m) => m.size > doc.size)
+  const smaller = MAP_SIZES.filter((m) => m.size < doc.size)
+  const startShrink = useEditor((s) => s.startShrink)
   const [look, setLook] = useState(false)
 
   return (
@@ -84,7 +86,19 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
           ) : (
             <p className="text-sm text-white/55">Größer geht es nicht.</p>
           )}
-          <p className="mt-2 text-xs text-white/40">Beim Erweitern bleibt alles in der Mitte erhalten. Rückgängig ist möglich.</p>
+          {smaller.length > 0 && (
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                {smaller.map((m) => (
+                  <button key={m.size} className="flex-1 rounded-2xl border border-red-400/40 bg-red-500/10 py-3 text-sm font-semibold text-red-300 active:scale-95" onClick={() => { onClose(); startShrink(m.size) }}>
+                    Auf {m.size}×{m.size} verkleinern
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-red-300/80">Achtung: Beim Verkleinern wird alles außerhalb der neuen Größe gelöscht. Du siehst es vorher in 3D und kannst abbrechen.</p>
+            </div>
+          )}
+          <p className="mt-2 text-xs text-white/40">Beim Erweitern und Verkleinern bleibt die Mitte erhalten. Rückgängig ist möglich.</p>
         </div>
 
         <div>

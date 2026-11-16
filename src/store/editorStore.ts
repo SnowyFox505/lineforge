@@ -10,6 +10,7 @@ import { LAND, WATER } from '../model/types'
 import type { FollowMode } from '../view3d/follow'
 import { migrateGeo } from '../model/geo'
 import { migrateLandmarks } from '../model/migrate'
+import { shrinkDoc } from '../model/shrink'
 import { freePoiSpot, poiOnStation, separatePois } from '../model/poi'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { addStationOnLines, applyStroke, closeRing, moveStationTo, openRing, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
@@ -194,6 +195,11 @@ interface EditorState {
   removeWaterName: (id: string) => void
   addPoi: (x: number, y: number) => string | null
   updatePoi: (id: string, patch: Partial<Omit<Poi, 'id'>>) => void
+  /** The size the map is being cut down to (the player looks at what would be lost, then confirms or cancels), or null */
+  shrinkTo: number | null
+  startShrink: (size: number) => void
+  cancelShrink: () => void
+  confirmShrink: () => void
   /** Move a point of interest to a cell (call checkpoint() once before a drag; this does not touch the undo stack) */
   movePoi: (id: string, x: number, y: number) => void
   removePoi: (id: string) => void
@@ -260,6 +266,7 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedWaypoint: null,
     activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 },
     pickZone: false,
+    shrinkTo: null,
     activeCounty: 0,
     countyErase: false,
     poiKind: 'stadium',
@@ -677,6 +684,17 @@ export const useEditor = create<EditorState>((set, get) => {
       const spot = poiOnStation(doc, { x, y }) ? freePoiSpot(doc, x, y) : null
       commit({ ...doc, pois: [...pois, { id, kind: poiKind, name: `${label} ${n}`, x: spot?.x ?? x, y: spot?.y ?? y }] }, { selectedPoiId: id })
       return id
+    },
+    startShrink: (size) => {
+      if (size >= get().doc.size) return
+      // the 3D view shows what would go
+      set({ shrinkTo: size, tab: 'view3d', editStationId: null, followId: null })
+    },
+    cancelShrink: () => set({ shrinkTo: null }),
+    confirmShrink: () => {
+      const { doc, shrinkTo } = get()
+      if (!shrinkTo || shrinkTo >= doc.size) return
+      commit(shrinkDoc(doc, shrinkTo), { shrinkTo: null, selectedStationId: null, selectedPoiId: null, activeLineId: null, selectedWaypoint: null, selectedLeg: null, lastLeg: null })
     },
     movePoi: (id, x, y) => {
       const { doc } = get()

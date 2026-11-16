@@ -2,6 +2,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { AnimatePresence } from 'motion/react'
 import { OrbitControls, AdaptiveDpr } from '@react-three/drei'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ShrinkOverlay from './ShrinkOverlay'
 import { loadView, saveCamView } from '../ui/viewMemory'
 import * as THREE from 'three'
 import { buildTerrainPaths, drawTerrain } from '../editor2d/terrainRender'
@@ -284,7 +285,7 @@ function CamMemory({ cityId }: { cityId: string }) {
     if (!controls) return
     const save = () => {
       // a camera that follows a train is not the one to come back to
-      if (useEditor.getState().followId) return
+      if (useEditor.getState().followId || useEditor.getState().shrinkTo) return
       const p = camera.position
       const t = controls.target
       saveCamView(cityId, { p: [p.x, p.y, p.z], t: [t.x, t.y, t.z] })
@@ -346,6 +347,7 @@ export default function Scene3D() {
         <Trains3D net={net} />
         <DevCam />
         <CamMemory cityId={doc.id} />
+        <ShrinkOverlay />
         <TouchRig onGesture={stopAuto} />
         <FollowCam />
         <OrbitControls

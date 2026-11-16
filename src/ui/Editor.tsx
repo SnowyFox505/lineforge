@@ -13,6 +13,7 @@ import { spring } from './primitives'
 import { formatClock, gameTime } from '../sim/clock'
 import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
+import ShrinkBar from './ShrinkBar'
 import ToolDock from './ToolDock'
 
 // three.js is large; only load it when the 3D tab is opened.
@@ -43,7 +44,6 @@ function GameClock() {
 
 function TopBar({ onSettings }: { onSettings: () => void }) {
   const doc = useEditor((s) => s.doc)
-  const tab = useEditor((s) => s.tab)
   const undo = useEditor((s) => s.undo)
   const redo = useEditor((s) => s.redo)
   const canUndo = useEditor((s) => s.past.length > 0)
@@ -53,6 +53,7 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
   const lines = Object.keys(doc.lines).length
 
   const back = async () => {
+    useEditor.getState().cancelShrink()
     await saveCity(useEditor.getState().doc)
     // the cloud copy follows at once in the background, no waiting for the quiet period
     void flushUploads()
@@ -74,16 +75,14 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
         <GameClock />
         <Icon name="sliders" size={18} className="shrink-0 text-white/60" />
       </button>
-      {tab === 'map' && (
-        <div className="glass pointer-events-auto flex shrink-0 rounded-full p-1">
+      <div className="glass pointer-events-auto flex shrink-0 rounded-full p-1">
           <button onClick={undo} disabled={!canUndo} className="grid h-10 w-10 place-items-center rounded-full transition-opacity active:scale-90 disabled:opacity-25" aria-label="Rückgängig">
             <Icon name="undo" size={20} />
           </button>
           <button onClick={redo} disabled={!canRedo} className="grid h-10 w-10 place-items-center rounded-full transition-opacity active:scale-90 disabled:opacity-25" aria-label="Wiederholen">
             <Icon name="redo" size={20} />
           </button>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -218,6 +217,7 @@ function FadingDock({ children }: { children: React.ReactNode }) {
 export default function Editor() {
   const tab = useEditor((s) => s.tab)
   const editId = useEditor((s) => s.editStationId)
+  const shrinking = useEditor((s) => s.shrinkTo !== null)
   const [settings, setSettings] = useState(false)
   // load the station editor (and three.js) on first use, keep it mounted for its exit animation
   const [editorLoaded, setEditorLoaded] = useState(false)
@@ -249,14 +249,18 @@ export default function Editor() {
       <WorldSim />
       <TopBar onSettings={() => setSettings(true)} />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 px-3 pb-[calc(12px+var(--safe-bottom))]">
-        {tab === 'map' && (
-          <FadingDock>
-            <ToolDock />
-          </FadingDock>
-        )}
-        <TabPill />
-      </div>
+      {shrinking ? (
+        <ShrinkBar />
+      ) : (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 px-3 pb-[calc(12px+var(--safe-bottom))]">
+          {tab === 'map' && (
+            <FadingDock>
+              <ToolDock />
+            </FadingDock>
+          )}
+          <TabPill />
+        </div>
+      )}
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} />
 
