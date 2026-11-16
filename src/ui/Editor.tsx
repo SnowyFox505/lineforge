@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import MapEditor from '../editor2d/MapEditor'
 import { saveCity } from '../persistence/db'
+import { flushUploads } from '../cloud/sync'
 import PlanView from '../plan/PlanView'
 import { useEditor } from '../store/editorStore'
 import type { Tab } from '../store/editorStore'
@@ -53,6 +54,8 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
 
   const back = async () => {
     await saveCity(useEditor.getState().doc)
+    // the cloud copy follows at once in the background, no waiting for the quiet period
+    void flushUploads()
     setScreen('menu')
   }
 

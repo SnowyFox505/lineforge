@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.21.2',
+    date: '2026-11-16',
+    headline: 'Schnelleres Speichern in der Cloud',
+    changes: [
+      {
+        title: 'Kein Warten mehr beim Verlassen einer Stadt',
+        what: 'Deine Stadt wird schon beim Spielen immer wieder gesichert: auf dem Gerät nach jeder Änderung, in der Cloud kurz nach der letzten Änderung und bei längerem Spielen spätestens alle 15 Sekunden. Beim Verlassen der Stadt, beim Wechsel in eine andere App, beim Schließen und beim Aktualisieren geht der letzte Stand sofort in die Cloud, statt erst noch einige Sekunden zu warten.',
+        how: 'Du musst nichts tun. Der Punkt am Konto-Knopf im Menü zeigt weiter an, ob noch etwas unterwegs ist (gelb) oder alles gesichert ist (grün). Er sollte jetzt viel schneller grün werden.',
+        benefit: 'Du kannst die Stadt verlassen und direkt schließen oder aktualisieren, ohne zu warten, und verlierst nichts.',
+      },
+    ],
+  },
+  {
     version: '0.21.1',
     date: '2026-11-16',
     headline: 'Unterirdische Strecken bleiben unten, wo sie sich kreuzen',

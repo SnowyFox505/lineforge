@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { saveCity } from './persistence/db'
+import { flushUploads } from './cloud/sync'
 import Menu from './screens/Menu'
 import { useEditor } from './store/editorStore'
 import Editor from './ui/Editor'
@@ -51,12 +52,16 @@ export default function App() {
 
   // Flush when the app goes to the background (important on iPhone)
   useEffect(() => {
-    const onHide = () => {
+    const onHide = (e: Event) => {
       const st = useEditor.getState()
-      if (st.screen === 'editor' && document.visibilityState === 'hidden') void saveCity(st.doc)
+      if (st.screen === 'editor' && (document.visibilityState === 'hidden' || e.type === 'pagehide')) void saveCity(st.doc).then(() => flushUploads())
     }
     document.addEventListener('visibilitychange', onHide)
-    return () => document.removeEventListener('visibilitychange', onHide)
+    window.addEventListener('pagehide', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      window.removeEventListener('pagehide', onHide)
+    }
   }, [])
 
   // Keyboard shortcuts (desktop)

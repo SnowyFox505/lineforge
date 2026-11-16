@@ -1,3 +1,4 @@
+import { uploadDelay } from './schedule'
 import { firebase } from '../auth/firebase'
 import { clearOwner, listCityDocs, onCitySaved, putCityFromCloud } from '../persistence/db'
 import type { CityDoc } from '../model/types'
@@ -105,7 +106,7 @@ export async function syncAll(uid: string): Promise<SyncResult> {
 
 // --- uploads of single changes, a few seconds after the last change of a city ---
 
-const pending = new Map<string, { timer: ReturnType<typeof setTimeout>; doc: CityDoc; at: number }>()
+const pending = new Map<string, { timer: ReturnType<typeof setTimeout>; doc: CityDoc; at: number; first: number }>()
 let activeUid: string | null = null
 let onState: ((state: 'syncing' | 'idle' | 'error') => void) | null = null
 
@@ -135,7 +136,8 @@ export function startUploads(uid: string | null, stateCallback?: (s: 'syncing' |
           if (owner !== uid) return
           const old = pending.get(doc.id)
           if (old) clearTimeout(old.timer)
-          pending.set(doc.id, { doc, at, timer: setTimeout(() => void upload(doc.id), 4000) })
+          const first = old?.first ?? Date.now()
+          pending.set(doc.id, { doc, at, first, timer: setTimeout(() => void upload(doc.id), uploadDelay(first, Date.now())) })
           onState?.('syncing')
         }
       : null,

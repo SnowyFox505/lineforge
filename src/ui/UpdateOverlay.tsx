@@ -1,3 +1,4 @@
+import { flushUploads } from '../cloud/sync'
 import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 
@@ -42,6 +43,8 @@ export default function UpdateOverlay() {
       } catch {
         // clearing is best effort: the reload below still fetches the newest version
       }
+      // a city that is still on its way to the cloud goes first (but never hold the update up for long)
+      await Promise.race([flushUploads().catch(() => undefined), sleep(6000)])
       await sleep(Math.max(0, TOTAL - (Date.now() - t0)))
       if (!alive) return
       setDone(true)
