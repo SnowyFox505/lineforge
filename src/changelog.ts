@@ -28,13 +28,13 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
-    version: '0.24.3',
+    version: '0.24.4',
     date: '2026-11-17',
     headline: 'Kein Konfetti mehr nachts',
     changes: [
       {
-        title: 'Bunte Punkte in der Stadt behoben',
-        what: 'Nachts erschienen auf dem iPhone bunte Pünktchen über den Vorstadt-Vierteln. Sie kamen von sehr niedrigen Häusern, bei denen die Fensterberechnung ins Leere lief. Solche Häuser bekommen jetzt einfach keine Fenster mehr.',
+        title: 'Bunte Punkte um die Bahnhöfe behoben',
+        what: 'Nachts erschienen auf dem iPhone bunte Pünktchen im warmen Lichtschein rund um die Bahnhöfe. Der Lichtschein wird jetzt ohne Transparenz gezeichnet, dadurch bleibt er sauber und ruhig.',
         how: 'Du musst nichts tun. Stelle in 3D die Tageszeit auf Abend oder Nacht.',
         benefit: 'Die Stadt sieht nachts auch auf dem iPhone sauber aus.',
       },

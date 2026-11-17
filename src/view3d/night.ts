@@ -138,9 +138,13 @@ export function poolTexture(): THREE.CanvasTexture | null {
   const g = c.getContext('2d')
   if (!g) return null
   const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
-  grad.addColorStop(0, 'rgba(255,255,255,0.95)')
-  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)')
-  grad.addColorStop(1, 'rgba(255,255,255,0)')
+  // grey on black, fully opaque, used with additive blending (black adds nothing): a see-through gradient is stored
+  // premultiplied, and on the iPhone its faint edge turns into randomly coloured speckles
+  grad.addColorStop(0, 'rgb(242,242,242)')
+  grad.addColorStop(0.35, 'rgb(115,115,115)')
+  grad.addColorStop(1, 'rgb(0,0,0)')
+  g.fillStyle = '#000'
+  g.fillRect(0, 0, 128, 128)
   g.fillStyle = grad
   g.fillRect(0, 0, 128, 128)
   poolTex = new THREE.CanvasTexture(c)
