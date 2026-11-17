@@ -14,6 +14,7 @@ import { formatClock, gameTime } from '../sim/clock'
 import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
 import ShrinkBar from './ShrinkBar'
+import TimeDial from './TimeDial'
 import ToolDock from './ToolDock'
 
 // three.js is large; only load it when the 3D tab is opened.
@@ -27,7 +28,7 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 ]
 
 /** The game time as a digital clock (hh:mm); one real second is one game minute. */
-function GameClock() {
+function GameClock({ onTap }: { onTap?: () => void }) {
   const [text, setText] = useState(() => formatClock(gameTime.minutes))
   useEffect(() => {
     const tick = () => setText(formatClock(gameTime.minutes))
@@ -36,13 +37,26 @@ function GameClock() {
     return () => window.clearInterval(id)
   }, [])
   return (
-    <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[14px] font-bold leading-none tabular-nums tracking-wide text-white/90" aria-label="Spielzeit">
+    <span
+      className={`shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[14px] font-bold leading-none tabular-nums tracking-wide text-white/90 ${onTap ? 'ring-1 ring-white/25 active:scale-90' : ''}`}
+      aria-label={onTap ? 'Spielzeit einstellen' : 'Spielzeit'}
+      role={onTap ? 'button' : undefined}
+      onClick={
+        onTap
+          ? (e) => {
+              // the clock sits inside the title button: it opens the time dial, not the settings
+              e.stopPropagation()
+              onTap()
+            }
+          : undefined
+      }
+    >
       {text}
     </span>
   )
 }
 
-function TopBar({ onSettings }: { onSettings: () => void }) {
+function TopBar({ onSettings, onClock }: { onSettings: () => void; onClock: () => void }) {
   const doc = useEditor((s) => s.doc)
   const undo = useEditor((s) => s.undo)
   const redo = useEditor((s) => s.redo)
@@ -73,7 +87,7 @@ function TopBar({ onSettings }: { onSettings: () => void }) {
             {doc.mode === 'normal' ? 'Normal' : 'Kreativ'} · {stations} Stationen · {lines} Linien
           </span>
         </span>
-        <GameClock />
+        <GameClock onTap={doc.mode === 'normal' ? undefined : onClock} />
         <Icon name="sliders" size={18} className="shrink-0 text-white/60" />
       </button>
       {tab === 'map' && (
@@ -222,6 +236,7 @@ export default function Editor() {
   const editId = useEditor((s) => s.editStationId)
   const shrinking = useEditor((s) => s.shrinkTo !== null)
   const [settings, setSettings] = useState(false)
+  const [timeOpen, setTimeOpen] = useState(false)
   // load the station editor (and three.js) on first use, keep it mounted for its exit animation
   const [editorLoaded, setEditorLoaded] = useState(false)
   useEffect(() => {
@@ -250,10 +265,12 @@ export default function Editor() {
       </AnimatePresence>
 
       <WorldSim />
-      <TopBar onSettings={() => setSettings(true)} />
+      <TopBar onSettings={() => setSettings(true)} onClock={() => setTimeOpen((o) => !o)} />
 
       {shrinking ? (
         <ShrinkBar />
+      ) : timeOpen ? (
+        <TimeDial onClose={() => setTimeOpen(false)} />
       ) : (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-3 px-3 pb-[calc(12px+var(--safe-bottom))]">
           {tab === 'map' && (

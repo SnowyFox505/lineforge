@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.24.0',
+    date: '2026-11-17',
+    headline: 'Die Tageszeit selbst einstellen',
+    changes: [
+      {
+        title: 'Tageszeit-Rad',
+        what: 'Im Kreativ-Modus kannst du die Spielzeit selbst bestimmen: Ein Ring zeigt den ganzen Tag, darauf wandert eine Sonne und nachts ein Mond.',
+        how: 'Tippe oben in der Leiste auf die Uhr. Ziehe die Sonne um den Ring oder wähle Morgen, Mittag, Abend oder Nacht. Mit „Fertig“ geht es zurück, danach läuft die Zeit normal weiter.',
+        benefit: 'Du holst dir Sonnenaufgang, Mittagslicht oder Nacht mit leuchtenden Fenstern genau dann, wenn du sie sehen oder fotografieren willst. In 3D folgen Himmel und Licht sofort.',
+      },
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-11-16',
     headline: 'Karte verkleinern mit Vorschau',
