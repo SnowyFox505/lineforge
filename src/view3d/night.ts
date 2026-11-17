@@ -70,9 +70,11 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
       `#include <emissivemap_fragment>
       {
         vec3 an = abs(vWinN);
-        if (an.y < 0.5 && uNight > 0.01) {
-          bool alongX = an.x > 0.5;
-          float len = alongX ? vWinSize.z : vWinSize.x;
+        // the wall must be big enough for a window grid: a low or narrow house would divide by (nearly) zero below,
+        // and some phone GPUs turn that into coloured garbage pixels
+        bool alongX = an.x > 0.5;
+        float len = alongX ? vWinSize.z : vWinSize.x;
+        if (an.y < 0.5 && uNight > 0.01 && len > 0.3 && vWinSize.y > 0.4) {
           float u = (alongX ? vWinLocal.z : vWinLocal.x) + len * 0.5;
           float v = vWinLocal.y;
           float mx = 0.07;
@@ -102,7 +104,8 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
           // a little under the true mean: a whole city of walls glowing at the full mean looks like "every light is on"
           float average = 0.6 * 0.56 * frac * 0.6;
           float glow = mix(pane * litSoft, average, smoothstep(0.14, 0.4, fwMax)) * inRange;
-          totalEmissiveRadiance += tint * glow * uNight * 1.5;
+          glow = clamp(glow, 0.0, 1.0);
+          if (glow == glow) totalEmissiveRadiance += tint * glow * uNight * 1.5;
         }
       }`,
     )
