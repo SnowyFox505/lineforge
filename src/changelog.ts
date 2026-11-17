@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.24.2',
+    date: '2026-11-17',
+    headline: 'Ruhigere Stadt bei Nacht',
+    changes: [
+      {
+        title: 'Weniger Konfetti nachts',
+        what: 'Die Fenster der Häuser verschmelzen aus der Ferne früher zu einem ruhigen warmen Schimmer, statt als einzelne bunte Punkte auf dem Boden zu funkeln. Die blauen Fenster sind jetzt ebenfalls warm.',
+        how: 'Du musst nichts tun. Stelle in 3D die Tageszeit auf Abend oder Nacht und schau auf die Stadt.',
+        benefit: 'Die Stadt wirkt nachts ruhig und stimmig, besonders auf dem iPhone.',
+      },
+    ],
+  },
+  {
     version: '0.24.1',
     date: '2026-11-17',
     headline: 'Bahnhöfe leuchten nachts',

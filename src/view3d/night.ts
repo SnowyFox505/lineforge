@@ -94,14 +94,14 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
           // so a far-away city is a mix of darker and brighter houses and not one flat glow
           float frac = mix(0.1, 0.5, winHash(vec2(seed * 3.0 + 1.0, side)));
           float lit = step(1.0 - frac, h);
-          vec3 tint = mix(vec3(1.0, 0.76, 0.4), vec3(0.78, 0.9, 1.0), step(0.86, h));
+          vec3 tint = mix(vec3(1.0, 0.76, 0.4), vec3(1.0, 0.88, 0.68), step(0.9, h));
           // far away or at a grazing angle the panes are smaller than a pixel: show their average instead
           // (first the on/off pattern fades to its mean, then the panes to a flat glow)
           float fwMax = max(fw.x, fw.y);
-          float litSoft = mix(lit, frac, smoothstep(0.08, 0.3, fwMax));
+          float litSoft = mix(lit, frac, smoothstep(0.04, 0.16, fwMax));
           // a little under the true mean: a whole city of walls glowing at the full mean looks like "every light is on"
           float average = 0.6 * 0.56 * frac * 0.6;
-          float glow = mix(pane * litSoft, average, smoothstep(0.25, 0.6, fwMax)) * inRange;
+          float glow = mix(pane * litSoft, average, smoothstep(0.14, 0.4, fwMax)) * inRange;
           totalEmissiveRadiance += tint * glow * uNight * 1.5;
         }
       }`,
