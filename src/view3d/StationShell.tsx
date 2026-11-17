@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import type { StationLayout } from '../model/stationDesign'
 import type { StationLook } from '../model/types'
 import { LAND_Y, RAIL_Y } from './heights'
+import { LIT_KEY, litCompile } from './night'
 
 const PF = RAIL_Y + 0.1 // platform top
 
@@ -11,12 +12,18 @@ const STONE = '#c9cdd3'
 const SLATE = '#4c5661'
 const STEEL = '#93a6c0'
 
-function Mat({ color, opacity = 1, metal = 0.1, rough = 0.8 }: { color: string; opacity?: number; metal?: number; rough?: number }) {
-  return <meshStandardMaterial color={color} roughness={rough} metalness={metal} transparent={opacity < 1} opacity={opacity} side={opacity < 1 ? THREE.DoubleSide : THREE.FrontSide} depthWrite={opacity >= 1} />
+// lit from inside at night: windows of the reception building, clock faces, glass roofs and walls
+const WINDOW_LIT = litCompile('#ffd08a', 1.4)
+const CLOCK_LIT = litCompile('#fff1c4', 0.9)
+const GLASS_LIT = litCompile('#ffe6b0', 0.3)
+const SKY_LIT = litCompile('#ffe6b0', 0.45)
+
+function Mat({ color, opacity = 1, metal = 0.1, rough = 0.8, lit }: { color: string; opacity?: number; metal?: number; rough?: number; lit?: ReturnType<typeof litCompile> }) {
+  return <meshStandardMaterial color={color} roughness={rough} metalness={metal} transparent={opacity < 1} opacity={opacity} side={opacity < 1 ? THREE.DoubleSide : THREE.FrontSide} depthWrite={opacity >= 1} {...(lit ? { onBeforeCompile: lit, customProgramCacheKey: LIT_KEY } : {})} />
 }
 
 /** Half-pipe roof along x with ribs, optionally flattened. */
-function Barrel({ L, W, k, base, color, opacity = 1, ribs = true }: { L: number; W: number; k: number; base: number; color: string; opacity?: number; ribs?: boolean }) {
+function Barrel({ L, W, k, base, color, opacity = 1, ribs = true, lit }: { L: number; W: number; k: number; base: number; color: string; opacity?: number; ribs?: boolean; lit?: ReturnType<typeof litCompile> }) {
   const r = W / 2
   const geo = useMemo(() => {
     const g = new THREE.CylinderGeometry(r, r, L, 40, Math.min(48, Math.max(1, Math.ceil(L / 0.45))), true, 0, Math.PI)
@@ -31,7 +38,7 @@ function Barrel({ L, W, k, base, color, opacity = 1, ribs = true }: { L: number;
     <group position={[0, base, 0]}>
       <group scale={[1, k, 1]}>
         <mesh geometry={geo}>
-          <Mat color={color} opacity={opacity} metal={0.3} rough={0.5} />
+          <Mat color={color} opacity={opacity} metal={0.3} rough={0.5} lit={lit} />
         </mesh>
         {ribs &&
           ribXs.map((x) => (
@@ -46,13 +53,13 @@ function Barrel({ L, W, k, base, color, opacity = 1, ribs = true }: { L: number;
 }
 
 /** Side walls under a roof: a long box on both sides of the platforms. */
-function Walls({ L, W, h, color, opacity = 1, thick = 0.07 }: { L: number; W: number; h: number; color: string; opacity?: number; thick?: number }) {
+function Walls({ L, W, h, color, opacity = 1, thick = 0.07, lit }: { L: number; W: number; h: number; color: string; opacity?: number; thick?: number; lit?: ReturnType<typeof litCompile> }) {
   return (
     <>
       {[-1, 1].map((s) => (
         <mesh key={s} position={[0, PF + h / 2 - 0.02, (s * W) / 2]}>
           <boxGeometry args={[L, h, thick]} />
-          <Mat color={color} opacity={opacity} />
+          <Mat color={color} opacity={opacity} lit={lit} />
         </mesh>
       ))}
     </>
@@ -101,7 +108,7 @@ function Tower({ x, z, h, w }: { x: number; z: number; h: number; w: number }) {
       </mesh>
       <mesh position={[0, LAND_Y + h * 0.78, w / 2 + 0.005]}>
         <circleGeometry args={[w * 0.3, 20]} />
-        <meshStandardMaterial color="#f1eadb" />
+        <meshStandardMaterial color="#f1eadb" onBeforeCompile={CLOCK_LIT} customProgramCacheKey={LIT_KEY} />
       </mesh>
       <mesh position={[0, LAND_Y + h + w * 0.45, 0]} rotation={[0, Math.PI / 4, 0]}>
         <coneGeometry args={[w * 0.85, w * 0.9, 4]} />
@@ -123,7 +130,7 @@ function Hall({ L, side, len, dep, h, roof = true }: { L: number; side: number; 
       {Array.from({ length: Math.max(2, Math.floor(len / 0.7)) }, (_, i) => (
         <mesh key={i} position={[-len / 2 + (len * (i + 0.5)) / Math.max(2, Math.floor(len / 0.7)), LAND_Y + h * 0.55, (Math.sign(side) * dep) / 2 + 0.004]}>
           <boxGeometry args={[0.22, h * 0.45, 0.01]} />
-          <meshStandardMaterial color="#27384c" roughness={0.3} />
+          <meshStandardMaterial color="#27384c" roughness={0.3} onBeforeCompile={WINDOW_LIT} customProgramCacheKey={LIT_KEY} />
         </mesh>
       ))}
       {roof && (
@@ -153,7 +160,7 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
           {[-1, 1].map((s) => (
             <mesh key={s} position={[(s * L) / 2, PF + wallH, 0]} rotation={[0, (s * Math.PI) / 2, 0]} scale={[1, 0.55, 1]}>
               <circleGeometry args={[W / 2, 36, 0, Math.PI]} />
-              <Mat color="#9fd8ff" opacity={0.28} />
+              <Mat color="#9fd8ff" opacity={0.28} lit={GLASS_LIT} />
             </mesh>
           ))}
           <Hall L={L} side={side} len={Math.min(L * 0.42, 4.2)} dep={0.9} h={0.95} roof />
@@ -162,8 +169,8 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
     case 'glas':
       return (
         <group>
-          <Walls L={L} W={W} h={wallH} color="#9fd8ff" opacity={0.3} thick={0.04} />
-          <Barrel L={L} W={W} k={0.5} base={PF + wallH} color="#8fd2ff" opacity={0.3} />
+          <Walls L={L} W={W} h={wallH} color="#9fd8ff" opacity={0.3} thick={0.04} lit={GLASS_LIT} />
+          <Barrel L={L} W={W} k={0.5} base={PF + wallH} color="#8fd2ff" opacity={0.3} lit={GLASS_LIT} />
         </group>
       )
     case 'gruenderzeit':
@@ -192,7 +199,7 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
             <boxGeometry args={[L + 0.3, 0.02, W + 0.4]} />
             <Mat color="#2e6cd6" />
           </mesh>
-          <Walls L={L} W={W} h={0.8} color="#9fd8ff" opacity={0.3} thick={0.03} />
+          <Walls L={L} W={W} h={0.8} color="#9fd8ff" opacity={0.3} thick={0.03} lit={GLASS_LIT} />
           {Array.from({ length: Math.max(2, Math.round(L / 2.2)) + 1 }, (_, i) => (
             <group key={i}>
               {[-1, 1].map((s) => (
@@ -217,7 +224,7 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
               </mesh>
               <mesh position={[-0.75, 0.22, 0]}>
                 <boxGeometry args={[0.02, 0.4, W + 0.55]} />
-                <Mat color="#8fd2ff" opacity={0.6} />
+                <Mat color="#8fd2ff" opacity={0.6} lit={SKY_LIT} />
               </mesh>
             </group>
           ))}
@@ -240,7 +247,7 @@ export default function StationShell({ look, layout, annex = -1 }: { look: Stati
             <group key={i} position={[-L / 2 + w * (i + 0.5), 0, 0]}>
               <mesh position={[0, PF + 0.8 + 0.5, 0]} rotation={[0, Math.PI / 4, 0]}>
                 <coneGeometry args={[Math.hypot(w, W + 0.6) / 2.1, 1.0, 4]} />
-                <Mat color="#f4f1ea" opacity={0.92} rough={0.9} />
+                <Mat color="#f4f1ea" opacity={0.92} rough={0.9} lit={SKY_LIT} />
               </mesh>
               <mesh position={[0, PF + 1.05, 0]}>
                 <cylinderGeometry args={[0.025, 0.025, 2.1, 8]} />

@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.24.1',
+    date: '2026-11-17',
+    headline: 'Bahnhöfe leuchten nachts',
+    changes: [
+      {
+        title: 'Beleuchtete Bahnhofsfenster',
+        what: 'Nachts leuchten jetzt die Fenster der Empfangsgebäude warm von innen, die Uhr am Bahnhofsturm strahlt, und Glashallen, Oberlichter und Zelt-Bahnhöfe glimmen sanft.',
+        how: 'Du musst nichts tun. Stelle in 3D die Tageszeit auf Abend oder Nacht, zum Beispiel mit dem Zeit-Rad oben auf der Uhr.',
+        benefit: 'Bahnhöfe sind im Dunkeln gut zu erkennen und wirken belebt, statt als dunkle Klötze unterzugehen.',
+      },
+    ],
+  },
+  {
     version: '0.24.0',
     date: '2026-11-17',
     headline: 'Die Tageszeit selbst einstellen',

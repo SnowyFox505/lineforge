@@ -108,6 +108,24 @@ export function windowsCompile(shader: THREE.WebGLProgramParametersWithUniforms)
     )
 }
 
+/**
+ * onBeforeCompile for a material that is lit from inside at night (station hall windows, clock faces, glass roofs):
+ * `glow` is the light colour, `strength` how bright it gets at full night. By day it adds nothing. The compiled program is
+ * shared by all of them; colour and strength are uniforms of each material.
+ */
+export function litCompile(glow: THREE.ColorRepresentation, strength: number) {
+  const col = new THREE.Color(glow)
+  return (shader: THREE.WebGLProgramParametersWithUniforms) => {
+    shader.uniforms.uNight = night
+    shader.uniforms.uLitCol = { value: col }
+    shader.uniforms.uLitK = { value: strength }
+    shader.fragmentShader =
+      'uniform float uNight;\nuniform vec3 uLitCol;\nuniform float uLitK;\n' +
+      shader.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n        totalEmissiveRadiance += uLitCol * uLitK * uNight;')
+  }
+}
+export const LIT_KEY = () => 'lf-night-lit'
+
 /** Soft round light pool (white in the middle, fading out), made once. Null where there is no canvas (tests). */
 let poolTex: THREE.CanvasTexture | null = null
 export function poolTexture(): THREE.CanvasTexture | null {
