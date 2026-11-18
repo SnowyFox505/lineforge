@@ -1,5 +1,8 @@
 import type { VehicleSpec } from '../../model/vehicles'
+import { sbahn481 } from './sbahn481'
 import { sbahn484 } from './sbahn484'
+import { sbahnMuc1 } from './sbahnMuc1'
+import { sbahnMuc2 } from './sbahnMuc2'
 import type { ModelDef } from './types'
 
 /**
@@ -9,6 +12,9 @@ import type { ModelDef } from './types'
  */
 export const MODELS: Record<string, ModelDef> = {
   sbahn484,
+  sbahn481,
+  sbahn1420: sbahnMuc2,
+  sbahnm423: sbahnMuc1,
 }
 
 export const modelKey = (spec: Pick<VehicleSpec, 'kind' | 'model'>) => (spec.model ? `${spec.kind}${spec.model}` : spec.kind)

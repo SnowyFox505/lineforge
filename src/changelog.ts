@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.27.0',
+    date: '2026-11-18',
+    headline: 'Drei weitere S-Bahn-Modelle',
+    changes: [
+      {
+        title: 'S-Bahn Berlin BR 481, München BR 423 und ET 1420',
+        what: 'Neben der neuen Berliner BR 484 gibt es jetzt die klassische rot-gelbe BR 481 aus Berlin sowie zwei Münchner Züge: die rote BR 423 und den neuen grauen ET 1420. Alle haben Zielanzeige, Scheinwerfer, Türen, Fenster, Dachgeräte und Drehgestelle nach den Vorbildern.',
+        how: 'Öffne die Fahrzeug-Galerie (Adresse mit #fahrzeuge), wähle S-Bahn und tippe oben auf das gewünschte Modell. „Kopf“ zeigt die Front.',
+        benefit: 'Du siehst die Züge in Ruhe von allen Seiten. Welche Linie mit welchem Modell fährt, lässt sich bald im Spiel einstellen; bis dahin fahren alle S-Bahnen als BR 484.',
+      },
+    ],
+  },
+  {
     version: '0.26.0',
     date: '2026-11-18',
     headline: 'Neue S-Bahn nach Berliner Vorbild',
