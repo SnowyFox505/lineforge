@@ -13,7 +13,7 @@ import { useTheme, getAccent } from '../ui/theme'
 import { penActive, pointerRole, usePen } from '../ui/pen'
 import { useZoneLook } from './zoneLook'
 import { drawStation } from './drawStation'
-import { buildZoneGfx, drawZoneLabels } from './zoneGfx'
+import { buildZoneGfx, drawZoneLabels, ZONE_STYLE } from './zoneGfx'
 import { stationLabel } from '../model/outside'
 import { buildCountyGfx, drawCountyLabels, drawCounties } from './countyGfx'
 import { drawWaterLabels } from './waterLabels'
@@ -25,7 +25,12 @@ import { poiRadius, poiStations } from '../model/poi'
 import { labelHolder } from '../model/links'
 import { loadView, saveMapView } from '../ui/viewMemory'
 import { keptSquare } from '../model/shrink'
+import { OPERATORS } from '../model/constants'
+import { lineEnds, placeBadges } from './terminalBadges'
+import type { BadgeIn } from './terminalBadges'
 
+/** the tools that make or clear areas (they can work with a brush or with a drawn outline) */
+const isZoneTool = (t: Tool) => t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 const isPaintTool = (t: Tool) => t === 'county' || t === 'water' || t === 'erase' || t === 'city' || t === 'suburb' || t === 'airport' || t === 'forest' || t === 'mountain' || t === 'zoneErase'
 /** Colour of the brush circle per paint tool (fill, rim); every paint tool needs an entry, a missing one would crash the map on hover */
 const BRUSH_TINT: Record<'water' | 'erase' | 'city' | 'suburb' | 'airport' | 'forest' | 'mountain' | 'county' | 'zoneErase', readonly [string, string]> = {
@@ -40,7 +45,7 @@ const BRUSH_TINT: Record<'water' | 'erase' | 'city' | 'suburb' | 'airport' | 'fo
   zoneErase: ['rgba(255,120,120,0.2)', 'rgba(255,170,170,0.95)'],
 }
 
-type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag' | 'poiDrag'
+type Gesture = 'none' | 'pan' | 'paint' | 'pinch' | 'tap' | 'wp' | 'draw' | 'stationDrag' | 'poiDrag' | 'outline'
 
 interface Anim {
   from: number
@@ -153,6 +158,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const wpDrag = useRef<{ lineId: string; k: number; j: number; moved: boolean } | null>(null)
   /** the stroke being drawn (lattice coordinates); `moved` once the finger has left the tap radius */
   const stroke = useRef<{ pts: { x: number; y: number }[]; moved: boolean } | null>(null)
+  /** the outline of an area while it is being drawn (cell coordinates, not rounded) */
+  const outline = useRef<{ pts: { x: number; y: number }[] } | null>(null)
   const stationDrag = useRef<{ id: string; moved: boolean } | null>(null)
   const poiDrag = useRef<{ id: string; moved: boolean } | null>(null)
   /** short message on the map (for example when a stroke fitted nowhere) */
@@ -201,6 +208,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
   const scheme = useTheme((s) => s.scheme) // so does light / dark (the backdrop around the map)
   const zoneWeight = useZoneLook((s) => s.weight) // and the look of the painted areas
   const zoneOutline = useZoneLook((s) => s.outline)
+  const areaMode = useEditor((s) => s.areaMode)
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -252,7 +260,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     let animating = false
 
     // --- Lines (casing + glow + colour), animated draw-in ---------------------
-    for (const line of Object.values(doc.lines)) {
+    // a branch is drawn under its parent: on the stretch they share, the colour of the main line shows
+    for (const line of [...Object.values(doc.lines)].sort((a, b) => Number(!!b.branch) - Number(!!a.branch))) {
       const pts = linePaths[line.id]
       if (!pts || pts.length < 2) continue
       const total = polylineLength(pts)
@@ -449,6 +458,34 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       ctx.restore()
     }
 
+    // --- The outline of an area while it is drawn: closed by a straight line back to the start, filled lightly ---------------
+    const ol = outline.current
+    if (ol && ol.pts.length >= 2) {
+      const erase = tool === 'zoneErase'
+      ctx.save()
+      ctx.beginPath()
+      ol.pts.forEach((q, i) => {
+        const px = ox + q.x * s
+        const py = oy + q.y * s
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      })
+      ctx.closePath()
+      ctx.globalAlpha = 0.32
+      ctx.fillStyle = erase ? '#ff5a5a' : (ZONE_STYLE[tool as keyof typeof ZONE_STYLE]?.fill ?? '#c9ced6')
+      ctx.fill()
+      ctx.globalAlpha = 1
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.strokeStyle = 'rgba(5,8,12,0.6)'
+      ctx.lineWidth = 5.5
+      ctx.stroke()
+      ctx.strokeStyle = erase ? '#ffb0b0' : '#ffffff'
+      ctx.lineWidth = 2.5
+      ctx.stroke()
+      ctx.restore()
+    }
+
     // --- Short message ---------------------------------------------------------------
     const fm = flashMsg.current
     if (fm && fm.until > now) {
@@ -541,6 +578,36 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     }
     seeded.current = true
 
+    // --- Line badges at the ends of the lines, as on the network plan ---------------------
+    if (s >= 3) {
+      ctx.font = "700 11px 'Space Grotesk Variable', system-ui, sans-serif"
+      const items: BadgeIn[] = []
+      for (const e of lineEnds(doc, linePaths)) {
+        const st = doc.stations[e.station]
+        const line = doc.lines[e.line]
+        const bx = ox + (st.x + 0.5) * s
+        const by = oy + (st.y + 0.5) * s
+        if (bx < -80 || by < -80 || bx > w + 80 || by > h + 80) continue
+        items.push({ key: `${e.line}:${e.station}`, station: e.station, px: bx, py: by, dx: e.dx, dy: e.dy, w: Math.max(26, Math.ceil(ctx.measureText(line.name).width) + 12) })
+      }
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      for (const b of placeBadges(items, r, labelRects)) {
+        const line = doc.lines[b.key.split(':')[0]]
+        ctx.globalAlpha = tool === 'line' && activeLineId && activeLineId !== line.id ? 0.5 : 1
+        ctx.beginPath()
+        ctx.roundRect(b.cx - b.w / 2, b.cy - b.h / 2, b.w, b.h, Math.min(b.h / 2, OPERATORS[line.operator].badgeRadius))
+        ctx.lineWidth = 2.5
+        ctx.strokeStyle = 'rgba(6,10,14,0.85)'
+        ctx.stroke()
+        ctx.fillStyle = line.color
+        ctx.fill()
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(line.name, b.cx, b.cy + 0.5)
+      }
+      ctx.globalAlpha = 1
+    }
+
     // --- Points of interest ----------------------------------------------------
     // the catchment of each one: stations inside it are where people travel from
     for (const poi of doc.pois ?? []) {
@@ -590,7 +657,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
 
     // --- Brush cursor -------------------------------------------------------
     const hv = hover.current
-    if (isPaintTool(tool) && hv) {
+    if (isPaintTool(tool) && hv && !(isZoneTool(tool) && useEditor.getState().areaMode === 'outline')) {
       const cell = { x: Math.floor((hv.x - ox) / s), y: Math.floor((hv.y - oy) / s) }
       const rad = (brush - 1 + 0.6) * s
       ctx.beginPath()
@@ -845,8 +912,8 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       }
     } else if (st.tool === 'line') {
       if (st.branchPick) {
-        // starting a branch (Auslaeufer): the station where it leaves its parent line
-        if (!hit) flash('Tippe auf eine Station der Linie, an der der Ausläufer abzweigt')
+        // starting a branch (Auslaeufer): first the station where it begins, then the one where it leaves its parent line
+        if (!hit) flash(st.branchFrom ? 'Tippe jetzt die Station, an der der Ausläufer abzweigt' : 'Tippe die Station, an der der Ausläufer beginnt')
         else {
           const problem = st.makeBranchAt(hit)
           if (problem) flash(problem)
@@ -910,6 +977,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       if (g.kind === 'paint' && performance.now() - strokeStart.current < 350) useEditor.getState().cancelStroke()
       // a stroke that was only just started is dropped too: zooming never draws
       stroke.current = null
+      outline.current = null
       stationDrag.current = null
       poiDrag.current = null
       const [a, b] = [...pointers.current.values()]
@@ -931,6 +999,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       const c = toCell(p)
       if (!useEditor.getState().pickZoneAt(c.x, c.y)) flash('Hier ist kein Gebiet. Tippe auf eine bemalte Fläche.')
       g.kind = 'none'
+    } else if (isPaintTool(t) && isZoneTool(t) && useEditor.getState().areaMode === 'outline') {
+      // an area made by drawing its outline: the picture is filled when the finger lifts
+      outline.current = { pts: [{ x: (p.x - view.current.ox) / view.current.s, y: (p.y - view.current.oy) / view.current.s }] }
+      g.kind = 'outline'
+      fadeMenu()
     } else if (isPaintTool(t)) {
       if (t === 'water' || t === 'erase') useEditor.getState().checkpoint()
       else if (t === 'county') zoneId.current = useEditor.getState().beginCountyPaint()
@@ -998,6 +1071,11 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       userMoved.current = true
       v.ox += p.x - prev.x
       v.oy += p.y - prev.y
+    } else if (g.kind === 'outline' && outline.current) {
+      const pts = outline.current.pts
+      const c = { x: (p.x - v.ox) / v.s, y: (p.y - v.oy) / v.s }
+      const last = pts[pts.length - 1]
+      if (Math.hypot(c.x - last.x, c.y - last.y) >= 0.12) pts.push(c)
     } else if (g.kind === 'wp' && wpDrag.current) {
       const d = wpDrag.current
       if (d.moved || Math.hypot(p.x - g.startX, p.y - g.startY) > 8) {
@@ -1084,6 +1162,12 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         }
       }
     }
+    if (g.kind === 'outline' && outline.current) {
+      const pts = outline.current.pts
+      outline.current = null
+      const st = useEditor.getState()
+      if (pts.length < 3 || st.fillOutline(pts) === 0) flash('Zeichne mit dem Finger einmal rund um die Fläche')
+    }
     if (g.kind === 'stationDrag') {
       const d = stationDrag.current
       stationDrag.current = null
@@ -1101,7 +1185,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
     draw()
   }
 
-  const cursor = tool === 'pan' ? 'grab' : isPaintTool(tool) ? 'none' : 'crosshair'
+  const cursor = tool === 'pan' ? 'grab' : isPaintTool(tool) && !(isZoneTool(tool) && areaMode === 'outline') ? 'none' : 'crosshair'
 
   return (
     <div ref={wrapRef} className="absolute inset-0">

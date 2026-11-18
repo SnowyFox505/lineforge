@@ -28,6 +28,55 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.25.0',
+    date: '2026-11-18',
+    headline: 'Ausläufer, Umriss zeichnen, Verbindungen nach außerhalb',
+    changes: [
+      {
+        title: 'Ausläufer zwischen zwei Stationen',
+        what: 'Ein Ausläufer wird jetzt zwischen zwei Stationen der Hauptlinie angelegt: Du sagst, wo er beginnt und wo er abzweigt. Dazwischen fährt er genau auf der Strecke der Hauptlinie, auf der Karte und im Netzplan als ein und dieselbe Linie und nicht daneben. Er heißt wie die Hauptlinie plus eine Ziffer von 0 bis 9 (S70, S71, S72 ...).',
+        how: 'Wähle die Hauptlinie, tippe auf „Ausläufer“, dann zuerst die Station, an der der Ausläufer beginnt, und danach die Station, an der er abzweigt. Von dort ziehst du weiter oder lässt ihn dort enden.',
+        benefit: 'So entstehen Linien wie die S7 und die S75 in Berlin: gemeinsame Strecke, dann gehen sie getrennte Wege.',
+      },
+      {
+        title: 'Kreuzende Linien bleiben getrennt',
+        what: 'Linien, die sich nur kreuzen, werden nicht mehr zu einer gemeinsamen Strecke zusammengelegt. Nur Linien, die wirklich nebeneinander herfahren, bilden ein Bündel.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Kreuzungen sehen auf der Karte sauber aus.',
+      },
+      {
+        title: 'Stadt löschen gilt auf allen Geräten',
+        what: 'Löschst du eine Stadt auf einem Gerät, verschwindet sie beim nächsten Abgleich auch auf allen anderen Geräten, auf denen du angemeldet bist. Hast du sie dort inzwischen weiterbearbeitet, bleibt sie dort erhalten.',
+        how: 'Du musst nichts tun. Beim Zurückkehren in die App wird gleich abgeglichen. Ein Löschen ohne Netz wird nachgeholt, sobald du wieder online bist.',
+        benefit: 'Gelöschte Städte kommen nicht mehr von einem anderen Gerät zurück.',
+      },
+      {
+        title: 'Karte vergrößern oder verkleinern ohne verzerrte Straßen',
+        what: 'Die Straßen bleiben beim Vergrößern und Verkleinern genau da, wo sie waren, und das Straßennetz wächst in den neuen Randbereichen mit. Auch die Namen der Gewässer wandern jetzt mit.',
+        how: 'In den Einstellungen der Stadt die Kartengröße ändern.',
+        benefit: 'Linien, die du auf Straßen gelegt hast, passen nach dem Vergrößern weiter zur Stadt.',
+      },
+      {
+        title: 'Liniennamen an den Endstationen',
+        what: 'An jedem Ende einer Linie sitzt auf der Karte ein farbiges Schild mit dem Linienamen, wie im Netzplan. Enden mehrere Linien an einer Station, stehen die Schilder in einer Reihe.',
+        how: 'Zoome etwas näher heran, dann erscheinen die Schilder.',
+        benefit: 'Du siehst auf einen Blick, welche Bahnen wo enden.',
+      },
+      {
+        title: 'Verbindung nach außerhalb am Kartenrand',
+        what: 'Endet eine Regional- oder Fernverkehrslinie am Kartenrand, kannst du die Endstation als „Verbindung nach außerhalb“ festlegen. Wird die Karte größer, fragt das Spiel, ob die Linie bis zum neuen Kartenrand weitergeführt werden soll.',
+        how: 'Zeichne die Linie bis an den Rand, wähle die Linie und tippe auf „Verbindung nach außerhalb“ (oder wähle die Station am Rand). Beim Vergrößern erscheint die Frage unten.',
+        benefit: 'Deine Linien führen wirklich aus der Karte hinaus und wachsen mit der Karte mit.',
+      },
+      {
+        title: 'Gebiete per gezeichnetem Umriss',
+        what: 'Neben dem Pinsel gibt es jetzt „Umriss zeichnen“: Du fährst mit dem Finger oder Stift einmal um die Fläche, beim Loslassen wird der Umriss geschlossen und alles darin gefüllt. Der dicke Rand um die Gebiete, der bisher „Umriss“ hieß, entfällt.',
+        how: 'Wähle ein Gebiets-Werkzeug (Stadt, Vorort, Flughafen, Wald, Gebirge oder den Radierer) und schalte oben auf „Umriss zeichnen“.',
+        benefit: 'Genaue Formen ohne mühsames Ausmalen.',
+      },
+    ],
+  },
+  {
     version: '0.24.4',
     date: '2026-11-17',
     headline: 'Kein Konfetti mehr nachts',

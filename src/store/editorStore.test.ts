@@ -34,8 +34,13 @@ describe('editor store', () => {
     expect(S().doc.terrain.length).toBe(256 * 256)
     expect(st.x).toBe(10 + 64)
     expect(st.y).toBe(20 + 64)
+    // the town streets stay where they were: made for 128 cells, now 64 cells from the origin
+    expect(S().doc.streetGen).toBe(128)
+    expect(S().doc.streetDx).toBe(64)
+    expect(S().doc.streetDy).toBe(64)
     S().undo()
     expect(S().doc.size).toBe(128)
+    expect(S().doc.streetGen).toBeUndefined()
   })
 
   it('refuses to place stations on water', () => {

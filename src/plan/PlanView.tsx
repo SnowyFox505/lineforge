@@ -330,7 +330,8 @@ export default function PlanView() {
     // Bundled lines: lanes sit one stroke width + breathing room apart
     const gap = 8 / U // the lines of a bundle lie directly side by side
     const paths = layoutLines(pd, gap)
-    const lines = Object.values(pd.lines).map((l) => {
+    // a branch is drawn under its parent: on the stretch they share, the colour of the main line shows
+    const lines = [...Object.values(pd.lines)].sort((a, b) => Number(!!b.branch) - Number(!!a.branch)).map((l) => {
       const pts = (paths[l.id] ?? []).map((p) => ({ x: px(p.x), y: py(p.y) }))
       return { line: l, pts, d: pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') }
     })

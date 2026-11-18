@@ -78,7 +78,11 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
           {bigger.length ? (
             <div className="flex gap-2">
               {bigger.map((m) => (
-                <button key={m.size} className="btn-soft flex-1 rounded-2xl py-3 text-sm" onClick={() => resizeMap(m.size)}>
+                <button key={m.size} className="btn-soft flex-1 rounded-2xl py-3 text-sm" onClick={() => {
+                    resizeMap(m.size)
+                    // connections to the outside world at the old edge are asked about at the bottom of the editor
+                    if (useEditor.getState().outsideAsk.length) onClose()
+                  }}>
                   Auf {m.size}×{m.size} erweitern
                 </button>
               ))}

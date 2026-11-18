@@ -13,6 +13,13 @@ describe('shrink', () => {
     expect(keptSquare(128, 64)).toEqual({ x0: 32, y0: 32, x1: 96, y1: 96 })
   })
 
+  it('keeps the town streets where they were', () => {
+    const d = shrinkDoc(createCity('T', 'creative', 128), 64)
+    expect(d.streetGen).toBe(128)
+    expect(d.streetDx).toBe(-32)
+    expect(d.streetDy).toBe(-32)
+  })
+
   it('reports and drops what lies outside, and shifts the rest', () => {
     let d = createCity('T', 'creative', 128)
     d = withStation(d, 'in', 64, 64)

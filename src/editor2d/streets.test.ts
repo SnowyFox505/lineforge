@@ -94,3 +94,50 @@ describe('street looks (a different layout per town)', () => {
     }
   })
 })
+
+describe('streets of a map that grew', () => {
+  const grownFrame = { gen: 128, dx: 32, dy: 32, size: 192 }
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9
+
+  for (const style of ['gewachsen', 'raster', 'strahlen'] as const) {
+    it(`keep their place and shape (${style})`, () => {
+      const look: StreetLook = { style, seed: 2 }
+      const before = streetSegments('city', 128, look)
+      const after = streetSegments('city', 192, look, grownFrame)
+      let compared = 0
+      for (const b of before) {
+        const a = after.find((x) => !x.patch.ext && x.patch.lat === b.patch.lat)
+        expect(a, 'every old neighbourhood is still there').toBeTruthy()
+        expect(near(a!.patch.cx, b.patch.cx + 32) && near(a!.patch.cy, b.patch.cy + 32)).toBe(true)
+        expect(a!.major.length).toBe(b.major.length)
+        a!.major.forEach((s, i) => expect(s.every((v, k) => near(v, b.major[i][k] + 32))).toBe(true))
+        expect(a!.minor.length).toBe(b.minor.length)
+        compared++
+      }
+      expect(compared).toBeGreaterThan(10)
+    })
+  }
+
+  it('give the new parts neighbourhoods of their own, and the old part keeps its houses', () => {
+    const before = streetPatches('city', 128)
+    const after = streetPatches('city', 192, DEFAULT_LOOK, grownFrame)
+    expect(after.filter((p) => p.ext).length).toBeGreaterThan(5)
+    expect(after.length).toBeGreaterThan(before.length)
+    const lotsBefore = lotsOf('city', 128)
+    const lotsAfter = lotsOf('city', 192, DEFAULT_LOOK, grownFrame)
+    expect(lotsAfter.length).toBeGreaterThan(lotsBefore.length)
+    const key = (x: number, y: number) => `${Math.round(x * 100)},${Math.round(y * 100)}`
+    const have = new Map(lotsAfter.map((l) => [key(l.x, l.y), l]))
+    let same = 0
+    for (const l of lotsBefore) {
+      const m = have.get(key(l.x + 32, l.y + 32))
+      if (m && near(m.rand, l.rand) && near(m.w, l.w)) same++
+    }
+    expect(same / lotsBefore.length).toBeGreaterThan(0.99)
+  })
+
+  it('a map that is not changed gives exactly what it always gave', () => {
+    expect(lotsOf('city', 128, DEFAULT_LOOK, { gen: 128, dx: 0, dy: 0, size: 128 })).toEqual(lotsOf('city', 128))
+    expect(streetPatches('city', 128).some((p) => p.ext)).toBe(false)
+  })
+})

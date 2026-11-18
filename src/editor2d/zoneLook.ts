@@ -18,7 +18,8 @@ const KEY = 'lineforge-zonelook'
 function stored(): ZoneLook {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<ZoneLook> | null
-    return { weight: v?.weight === 'strong' ? 'strong' : 'light', outline: v?.outline === true }
+    // the thick line around every area is not offered any more (the player wanted to DRAW outlines, see areaMode): an old choice is dropped
+    return { weight: v?.weight === 'strong' ? 'strong' : 'light', outline: false }
   } catch {
     return { weight: 'light', outline: false }
   }

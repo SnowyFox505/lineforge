@@ -1,6 +1,7 @@
 import { buildField, WATER_THRESHOLD } from '../model/terrainField'
 import { airportLayout } from '../model/airport'
 import { streetPaths } from './streets'
+import type { StreetFrame } from './streets'
 import type { StreetLook } from './streets'
 import { ZONE_STYLE } from './zoneGfx'
 import { fillStrength, getZoneLook, OUTLINE } from './zoneLook'
@@ -176,8 +177,8 @@ function scratchFor(w: number, h: number): HTMLCanvasElement {
 }
 
 /** Streets of a town in white on its grey area; finer streets appear as you zoom in. */
-function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number, look?: StreetLook) {
-  const p = streetPaths(kind, size, look)
+function drawStreets(ctx: CanvasRenderingContext2D, kind: 'city' | 'suburb', size: number, s: number, look?: StreetLook, frame?: StreetFrame) {
+  const p = streetPaths(kind, size, look, frame)
   ctx.lineCap = 'butt'
   for (const patch of p.patches) {
     ctx.save()
@@ -436,7 +437,7 @@ export function drawTerrain(
           if (sl.kind !== layer.kind) continue
           c.save()
           if (sl.paths !== layer.paths) c.clip(sl.paths.water)
-          drawStreets(c, sl.kind, size, s, sl.look)
+          drawStreets(c, sl.kind, size, s, sl.look, zones.frame)
           c.restore()
         }
       }

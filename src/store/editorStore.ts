@@ -3,6 +3,9 @@ import { create } from 'zustand'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { createCity, newId } from '../model/factory'
 import { farDestination, outsideBlockers } from '../model/outside'
+import { cellsInPolygon } from '../model/outlineFill'
+import { atMapEdge, edgeSide, extendOutside } from '../model/outsideEdge'
+import type { Side } from '../model/outsideEdge'
 import { addCounty as addCountyTo, divideIntoCounties } from '../model/counties'
 import { applyMap } from '../model/mapGen'
 import type { MapPreset } from '../model/mapGen'
@@ -14,7 +17,8 @@ import { shrinkDoc } from '../model/shrink'
 import { freePoiSpot, poiOnStation, separatePois } from '../model/poi'
 import { dropLinks, renameLinked, toggleLink } from '../model/links'
 import { addStationOnLines, applyStroke, closeRing, moveStationTo, openRing, rebuildLeg, removeLeg, smoothLeg, smoothLine, splitLegAt } from '../model/lineEdit'
-import { endExpress, flipBranch, makeBranch, makeExpress } from '../model/lineKinds'
+import { stopsAt } from '../model/stops'
+import { endExpress, flipBranch, makeBranchBetween, makeExpress } from '../model/lineKinds'
 import { stationName, stationTypeAt } from '../model/stationType'
 import { poolFor, takeName } from '../model/names'
 import { nameWaterAt, removeWaterName as removeWaterOf, renameWater as renameWaterOf, rerollWaterName as rerollWater, setWaterKind as setWaterKindOf } from '../model/waters'
@@ -81,6 +85,8 @@ interface EditorState {
   selectedWaypoint: { lineId: string; k: number; j: number } | null
   /** Zone that the area tools currently paint with, per kind (0 = none yet) */
   activeZone: Record<ZoneKind, number>
+  /** how areas are made: with a brush, or by drawing the outline that is then filled */
+  areaMode: 'brush' | 'outline'
   /** the county painted with (0 = none yet) and whether the brush takes counties away */
   activeCounty: number
   countyErase: boolean
@@ -96,8 +102,12 @@ interface EditorState {
   selectedLeg: { lineId: string; leg: number } | null
   /** the stretch that was drawn last (the smoothing button works on it) */
   lastLeg: { lineId: string; leg: number } | null
-  /** the line a branch (Auslaeufer) is being started on: the next tap on a station of it is where the branch leaves */
+  /** the line a branch (Auslaeufer) is being started on: two taps on its stations say where the branch begins and where it leaves */
   branchPick: string | null
+  /** the first of the two stations (where the branch begins) once it was tapped */
+  branchFrom: string | null
+  /** connections to the outside world that lay at the edge of a map that was just enlarged: the player decides whether they go on to the new edge */
+  outsideAsk: { id: string; side: Side }[]
   /** train the 3D camera follows (null: free camera) and how */
   followId: string | null
   followMode: FollowMode
@@ -134,7 +144,7 @@ interface EditorState {
   /** Make a line an express line (skips the unimportant stations) or a normal one again. Returns a problem, null when it worked. */
   toggleExpress: (lineId: string) => string | null
   setBranchPick: (lineId: string | null) => void
-  /** The branch leaves its parent at this station: a new line is made and chosen. Returns a problem, null when it worked. */
+  /** A tap on a station while a branch is being set up: the first tap is where it begins, the second where it leaves its parent (then the branch is made and chosen). Returns a problem, null when it worked. */
   makeBranchAt: (stationId: string) => string | null
   /** A bare branch takes the other part of its parent */
   flipBranchOf: (lineId: string) => boolean
@@ -159,6 +169,9 @@ interface EditorState {
   /** Start a zone stroke: records history and makes sure the tool's zone exists. Returns the zone id (0 = erasing). */
   beginZonePaint: () => number
   paintZone: (cx: number, cy: number, zoneId: number) => void
+  setAreaMode: (mode: 'brush' | 'outline') => void
+  /** Fill the area inside a drawn outline (cell coordinates) with the zone of the chosen tool, or clear it with the eraser. One undo step. Returns the number of cells changed. */
+  fillOutline: (pts: Pt[]) => number
   addZone: (kind: ZoneKind) => number
   renameZone: (id: number, name: string) => void
   /** A new name for a district or suburb: the next wish of the player, else a random one */
@@ -207,8 +220,12 @@ interface EditorState {
   updateStation: (id: string, patch: Partial<Omit<Station, 'id'>>) => void
   /** Make a station the main station of the city (there is only one); the same station again, or null, takes the mark away. */
   setMainStation: (id: string | null) => void
-  /** Make the station a connection to the outside world (a far-away destination) or take it away again */
+  /** Make the station a connection to the outside world (a far-away destination) or take it away again. Only a station at the edge of the map can be one. */
   setStationOutside: (id: string, on: boolean) => void
+  /** Carry a connection to the outside world on to the new edge of the enlarged map (true when it worked) */
+  extendOutsideAt: (id: string) => boolean
+  /** Leave a connection to the outside world where it is */
+  skipOutsideAt: (id: string) => void
   removeStation: (id: string) => void
   /** link two stations as one interchange (or unlink them again) */
   toggleLink: (a: string, b: string) => void
@@ -265,6 +282,7 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedStationId: null,
     selectedWaypoint: null,
     activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 },
+    areaMode: 'brush',
     pickZone: false,
     shrinkTo: null,
     activeCounty: 0,
@@ -276,18 +294,20 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedLeg: null,
     lastLeg: null,
     branchPick: null,
+    branchFrom: null,
+    outsideAsk: [],
     followId: null,
     followMode: 'chase',
 
     requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
     setScreen: (screen) => set({ screen }),
     openCity: (doc) =>
-      set({ doc: separatePois(migrateGeo(migrateLandmarks(healHooks(withRoutes(doc))))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, activeCounty: 0, countyErase: false, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
+      set({ doc: separatePois(migrateGeo(migrateLandmarks(healHooks(withRoutes(doc))))), past: [], future: [], activeLineId: null, selectedStationId: null, selectedWaypoint: null, selectedPoiId: null, selectedWaterId: null, outsideAsk: [], activeZone: { city: 0, suburb: 0, airport: 0, forest: 0, mountain: 0 }, activeCounty: 0, countyErase: false, editStationId: null, selectedLeg: null, lastLeg: null, followId: null, screen: 'editor', tab: 'map', tool: 'pan' }),
     setTab: (tab) => set({ tab }),
-    setTool: (tool) => set({ tool, selectedLeg: null, branchPick: null }),
+    setTool: (tool) => set({ tool, selectedLeg: null, branchPick: null, branchFrom: null }),
     setBrush: (brush) => set({ brush }),
     setStationType: (stationType) => set({ stationType }),
-    setActiveLine: (activeLineId) => set({ activeLineId, branchPick: null }),
+    setActiveLine: (activeLineId) => set({ activeLineId, branchPick: null, branchFrom: null }),
     setLineMode: (lineMode) => set({ lineMode }),
     selectStation: (selectedStationId) => set({ selectedStationId }),
     selectWaypoint: (selectedWaypoint) => set({ selectedWaypoint }),
@@ -352,18 +372,26 @@ export const useEditor = create<EditorState>((set, get) => {
       commit(next)
       return null
     },
-    setBranchPick: (branchPick) => set({ branchPick }),
+    setBranchPick: (branchPick) => set({ branchPick, branchFrom: null }),
     makeBranchAt: (stationId) => {
-      const { doc, branchPick } = get()
+      const { doc, branchPick, branchFrom } = get()
       const parent = branchPick ? doc.lines[branchPick] : undefined
       if (!parent) return 'Wähle erst eine Linie.'
-      const out = makeBranch(doc, parent.id, stationId)
-      if (!out) {
-        if (parent.branch) return 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.'
-        if (parent.loop) return 'Von einem Ring zweigt kein Ausläufer ab.'
-        return 'Dort kann kein Ausläufer abzweigen: Tippe eine Station zwischen den Enden an, an der die Linie hält (höchstens zehn Ausläufer je Linie).'
+      if (parent.branch) return 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.'
+      if (parent.loop) return 'Von einem Ring zweigt kein Ausläufer ab.'
+      if (!parent.stations.includes(stationId) || !stopsAt(parent, stationId)) return `Tippe eine Station an, an der ${parent.name} hält.`
+      if (!branchFrom) {
+        // the first tap: where the branch begins
+        set({ branchFrom: stationId, selectedStationId: stationId })
+        return null
       }
-      commit(out.doc, { branchPick: null, activeLineId: out.lineId, lineMode: 'draw', selectedStationId: stationId, selectedWaypoint: null })
+      if (branchFrom === stationId) {
+        set({ branchFrom: null, selectedStationId: null })
+        return null
+      }
+      const out = makeBranchBetween(doc, parent.id, branchFrom, stationId)
+      if (!out) return 'Hier lässt sich kein Ausläufer anlegen (höchstens zehn Ausläufer je Linie).'
+      commit(out.doc, { branchPick: null, branchFrom: null, activeLineId: out.lineId, lineMode: 'draw', selectedStationId: stationId, selectedWaypoint: null })
       return null
     },
     flipBranchOf: (lineId) => {
@@ -385,6 +413,11 @@ export const useEditor = create<EditorState>((set, get) => {
       const old = get().doc.size
       if (newSize <= old) return
       const off = Math.floor((newSize - old) / 2)
+      // the connections to the outside world at the old edge: the player is asked afterwards whether they go on to the new edge
+      const ask = Object.values(get().doc.stations)
+        .filter((s) => s.outside)
+        .map((s) => ({ id: s.id, side: edgeSide(old, s.x, s.y) }))
+        .filter((e): e is { id: string; side: Side } => e.side !== null)
       mutate((d) => {
         const terrain = new Uint8Array(newSize * newSize)
         for (let y = 0; y < old; y++) {
@@ -392,6 +425,10 @@ export const useEditor = create<EditorState>((set, get) => {
         }
         d.terrain = terrain
         d.size = newSize
+        // the town streets stay where they were: they are made for the old size and now start `off` cells further in
+        d.streetGen = d.streetGen ?? old
+        d.streetDx = (d.streetDx ?? 0) + off
+        d.streetDy = (d.streetDy ?? 0) + off
         for (const s of Object.values(d.stations)) {
           s.x += off
           s.y += off
@@ -410,6 +447,11 @@ export const useEditor = create<EditorState>((set, get) => {
           poi.x += off
           poi.y += off
         }
+        // named waters are anchored to a cell
+        for (const w of d.waters ?? []) {
+          w.x += off
+          w.y += off
+        }
         for (const line of Object.values(d.lines)) {
           for (const seg of line.segs ?? []) for (const p of seg ?? []) {
             p.x += off
@@ -421,9 +463,11 @@ export const useEditor = create<EditorState>((set, get) => {
           }
         }
       })
+      set({ outsideAsk: ask })
     },
     newCity: (name, mode, size, nameQueues, map) =>
       set({
+        outsideAsk: [],
         doc: applyMap({ ...createCity(name, mode, size), ...(nameQueues ? { nameQueues } : {}) }, map?.preset ?? 'leer', map?.seed ?? 1),
         past: [],
         future: [],
@@ -520,6 +564,28 @@ export const useEditor = create<EditorState>((set, get) => {
         }
       }
       if (changed) set({ doc: { ...doc, zoneGrid: grid } })
+    },
+    setAreaMode: (areaMode) => set({ areaMode }),
+    fillOutline: (pts) => {
+      const st = get()
+      const cells = cellsInPolygon(pts, st.doc.size)
+      if (!cells.length) return 0
+      // the zone of the tool (made when there is none yet); the picture before is kept for undo
+      const zoneId = st.beginZonePaint()
+      const { doc } = get()
+      const grid = new Uint16Array(doc.zoneGrid ?? new Uint16Array(doc.size * doc.size))
+      const kind = doc.zones?.find((z) => z.id === zoneId)?.kind
+      const landOnly = kind === 'forest' || kind === 'mountain'
+      let changed = 0
+      for (const i of cells) {
+        if (landOnly && doc.terrain[i] === WATER) continue
+        if (grid[i] !== zoneId) {
+          grid[i] = zoneId
+          changed++
+        }
+      }
+      if (changed) set({ doc: { ...doc, zoneGrid: grid } })
+      return changed
     },
     setActiveCounty: (activeCounty) => set({ activeCounty }),
     setCountyErase: (countyErase) => set({ countyErase }),
@@ -735,11 +801,22 @@ export const useEditor = create<EditorState>((set, get) => {
       const st = doc.stations[id]
       if (!st || st.type === 'tramstop') return
       if (on && outsideBlockers(doc, id).length) return
+      // a line leaves the map at its edge
+      if (on && !atMapEdge(doc, st)) return
       commit(produce(doc, (d) => {
         if (on) d.stations[id].outside = farDestination(d)
         else delete d.stations[id].outside
       }))
     },
+    extendOutsideAt: (id) => {
+      const { doc, outsideAsk } = get()
+      const entry = outsideAsk.find((e) => e.id === id)
+      const out = entry ? extendOutside(doc, id, entry.side) : null
+      if (!out) return false
+      commit(out.doc, { outsideAsk: outsideAsk.filter((e) => e.id !== id) })
+      return true
+    },
+    skipOutsideAt: (id) => set((s) => ({ outsideAsk: s.outsideAsk.filter((e) => e.id !== id) })),
     setMainStation: (id) => {
       const { doc } = get()
       const st = id ? doc.stations[id] : undefined

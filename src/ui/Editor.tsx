@@ -13,6 +13,7 @@ import { spring } from './primitives'
 import { formatClock, gameTime } from '../sim/clock'
 import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
+import OutsideAsk from './OutsideAsk'
 import ShrinkBar from './ShrinkBar'
 import TimeDial from './TimeDial'
 import ToolDock from './ToolDock'
@@ -235,6 +236,7 @@ export default function Editor() {
   const tab = useEditor((s) => s.tab)
   const editId = useEditor((s) => s.editStationId)
   const shrinking = useEditor((s) => s.shrinkTo !== null)
+  const asking = useEditor((s) => s.outsideAsk.length > 0)
   const [settings, setSettings] = useState(false)
   const [timeOpen, setTimeOpen] = useState(false)
   // load the station editor (and three.js) on first use, keep it mounted for its exit animation
@@ -269,6 +271,8 @@ export default function Editor() {
 
       {shrinking ? (
         <ShrinkBar />
+      ) : asking ? (
+        <OutsideAsk />
       ) : timeOpen ? (
         <TimeDial onClose={() => setTimeOpen(false)} />
       ) : (

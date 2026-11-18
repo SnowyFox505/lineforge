@@ -100,7 +100,12 @@ export interface Line {
   /** An express line: it calls only at the important stations (`passes` holds the rest) and its trains are faster */
   express?: boolean
   /** An Auslaeufer (branch): the line it branches off from, the station where it leaves it, and which end of the parent it follows */
-  branch?: { parent: string; at: string; towards: 'start' | 'end' }
+  /**
+   * Auslaeufer: the line this one branches from and the station where it leaves it. `from` is the station where it begins on the
+   * parent (it runs the stretch from there to `at` on the parent's curve); old branches have none and follow one whole end part
+   * (`towards`).
+   */
+  branch?: { parent: string; at: string; towards: 'start' | 'end'; from?: string }
 }
 
 /** Kinds of areas that can be painted on the map: where the city, its suburbs and the airport are, and forests and mountains. */
@@ -188,4 +193,12 @@ export interface CityDoc {
   clock?: number
   /** Version of the line geometry: 1 = `via` holds the control points of free curves (see model/geo.ts) */
   geoV?: number
+  /**
+   * Where the town streets sit (see `StreetFrame` in editor2d/streets.ts): they are made for the map size the city was founded with
+   * (`streetGen`, the current size when missing) and lie `streetDx`, `streetDy` cells from the map origin. Enlarging or cutting the map moves
+   * the offset and keeps the streets where they were.
+   */
+  streetGen?: number
+  streetDx?: number
+  streetDy?: number
 }

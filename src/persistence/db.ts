@@ -95,6 +95,12 @@ export async function deleteCity(id: string): Promise<void> {
   if (r && r.owner === owner) await db.cities.delete(id)
 }
 
+/** Removes the copy of a city that belongs to `forOwner` (a deletion that came from another device). */
+export async function deleteLocalCity(id: string, forOwner: string): Promise<void> {
+  const r = await db.cities.get(id)
+  if (r && r.owner === forOwner) await db.cities.delete(id)
+}
+
 export async function latestCity(): Promise<CityDoc | undefined> {
   return (await mine())[0]?.doc
 }
@@ -146,5 +152,8 @@ export function importCityJson(text: string, keepId = false): CityDoc {
     links: Array.isArray(raw.links) ? raw.links : undefined,
     clock: typeof raw.clock === 'number' ? raw.clock : undefined,
     geoV: typeof raw.geoV === 'number' ? raw.geoV : undefined,
+    streetGen: typeof raw.streetGen === 'number' ? raw.streetGen : undefined,
+    streetDx: typeof raw.streetDx === 'number' ? raw.streetDx : undefined,
+    streetDy: typeof raw.streetDy === 'number' ? raw.streetDy : undefined,
   }
 }

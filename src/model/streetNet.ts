@@ -1,4 +1,5 @@
-import { avenuesOf, DEFAULT_LOOK, lookKey, lookOf, streetSegments } from '../editor2d/streets'
+import { avenuesOf, DEFAULT_LOOK, frameOf, lookKey, lookOf, streetSegments } from '../editor2d/streets'
+import type { StreetFrame } from '../editor2d/streets'
 import type { StreetLook, UrbanKind } from '../editor2d/streets'
 import { nearestOnCurve, pointsFromRoute } from './geo'
 import { Heap } from './heap'
@@ -71,7 +72,7 @@ function clipToPolygon(px: number, py: number, dx: number, dy: number, poly: [nu
   return [t0, t1]
 }
 
-function collectSegments(size: number, looks: Map<string, StreetLook>): Seg[] {
+function collectSegments(size: number, looks: Map<string, StreetLook>, frame: StreetFrame): Seg[] {
   const segs: Seg[] = []
   const box: [number, number][] = [[0, 0], [size, 0], [size, size], [0, size]]
   const add = (x0: number, y0: number, x1: number, y1: number, w: number, kind: Seg['kind'], look: string | null) => {
@@ -88,7 +89,7 @@ function collectSegments(size: number, looks: Map<string, StreetLook>): Seg[] {
   const key = (p: [number, number]) => `${Math.round(p[0] * 500)},${Math.round(p[1] * 500)}`
   for (const kind of ['city', 'suburb'] as UrbanKind[]) {
     for (const [lk, look] of looks) {
-    for (const { patch: p, major, minor } of streetSegments(kind, size, look)) {
+    for (const { patch: p, major, minor } of streetSegments(kind, size, look, frame)) {
       // main and side streets, clipped to the neighbourhood
       const clipped = (list: [number, number, number, number][], w: number) => {
         for (const [x0, y0, x1, y1] of list) {
@@ -112,8 +113,8 @@ function collectSegments(size: number, looks: Map<string, StreetLook>): Seg[] {
     }
   }
   // long avenues and the ring road
-  const av = avenuesOf(size)
-  const L = size * 1.6
+  const av = avenuesOf(size, frame)
+  const L = Math.max(frame.gen, size + Math.abs(frame.dx) + Math.abs(frame.dy)) * 1.6
   for (const a of av.angles) add(av.cx - Math.cos(a) * L, av.cy - Math.sin(a) * L, av.cx + Math.cos(a) * L, av.cy + Math.sin(a) * L, 0.85, 'any', null)
   if (av.ring > 0) {
     const N = 72
@@ -152,7 +153,7 @@ export function buildStreetGraph(doc: CityDoc): StreetGraph | null {
 
   // 1. cut every street into the pieces that lie inside its own kind of area
   const pieces: Seg[] = []
-  for (const s of collectSegments(size, looks)) {
+  for (const s of collectSegments(size, looks, frameOf(doc))) {
     const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0)
     const n = Math.max(1, Math.ceil(len / 0.5))
     let from = -1

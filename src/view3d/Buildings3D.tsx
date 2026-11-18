@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { lookKey, lookOf, lotsOf } from '../editor2d/streets'
+import { frameOf, lookKey, lookOf, lotsOf } from '../editor2d/streets'
 import type { StreetLook } from '../editor2d/streets'
 import { urbanAlpha } from '../editor2d/zoneSoft'
 import type { UrbanKind } from '../editor2d/streets'
@@ -110,7 +110,7 @@ export function buildBuildings(doc: CityDoc, net: Network3D): Building[] {
   for (const kind of ['city', 'suburb'] as UrbanKind[]) {
     for (const look of looksOf(kind)) {
       const lk = lookKey(look)
-      for (const lot of lotsOf(kind, size, look)) {
+      for (const lot of lotsOf(kind, size, look, frameOf(doc))) {
       if (cellKind(lot.x, lot.y) !== kind) continue
       // the lot belongs to the street look of the area it stands in
       const here = lookAt(lot.x, lot.y)

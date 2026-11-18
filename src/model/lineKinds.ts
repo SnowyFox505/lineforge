@@ -54,9 +54,9 @@ export function endExpress(doc: CityDoc, lineId: string): CityDoc | null {
 
 // ---- Auslaeufer (branches) -----------------------------------------------------------------------
 
-const DIGITS = '1234567890'
+const DIGITS = '0123456789'
 
-/** The name of the next branch of a line: its name plus a digit, e.g. S3 -> S31, S32 ... */
+/** The name of the next branch of a line: its name plus a digit, e.g. S3 -> S30, S31, S32 ... S39 */
 export function branchName(doc: CityDoc, parent: Line): string | null {
   const taken = new Set(Object.values(doc.lines).map((l) => l.name))
   for (const d of DIGITS) if (!taken.has(`${parent.name}${d}`)) return `${parent.name}${d}`
@@ -129,6 +129,47 @@ export function makeBranch(doc: CityDoc, parentId: string, stationId: string, to
 }
 
 /**
+ * A branch (Auslaeufer) that runs along a stretch of its parent: it starts at station `fromId`, follows the parent up to
+ * station `atId` and from there on to wherever the player draws it (or ends there). Both stations have to be stations the
+ * parent calls at; they can lie anywhere on it, in either order (the stretch is turned around when `fromId` comes later).
+ * The branch takes over the control points of the stretch, so on the shared stretch both lines run on exactly the same
+ * curve (the map and the network plan then draw them as one line, see `layoutLines`). Null when that is not possible.
+ */
+export function makeBranchBetween(doc: CityDoc, parentId: string, fromId: string, atId: string): { doc: CityDoc; lineId: string } | null {
+  const base = doc.lines[parentId]
+  if (!base || base.loop || base.branch || fromId === atId) return null
+  const parent = shape(base)
+  const ia = parent.stations.indexOf(fromId)
+  const ib = parent.stations.indexOf(atId)
+  if (ia < 0 || ib < 0 || !stopsAt(parent, fromId) || !stopsAt(parent, atId)) return null
+  const name = branchName(doc, parent)
+  if (!name) return null
+  const via = parent.via ?? []
+  const lo = Math.min(ia, ib)
+  const hi = Math.max(ia, ib)
+  let stations = parent.stations.slice(lo, hi + 1)
+  // the legs of the stretch (leg k lies between station k and k + 1)
+  let legs = via.slice(lo, hi).map((p) => p.map((q) => ({ ...q })))
+  if (ia > ib) {
+    stations = stations.slice().reverse()
+    legs = legs.reverse().map((p) => p.reverse())
+  }
+  const line: Line = {
+    id: newId(),
+    name,
+    operator: parent.operator,
+    color: parent.color,
+    stations,
+    via: [...legs, []],
+    segs: Array.from({ length: stations.length - 1 }, () => undefined as unknown as Pt[]),
+    curve: parent.curve,
+    passes: parent.passes?.filter((id) => stations.includes(id)),
+    branch: { parent: parent.id, at: atId, from: fromId, towards: ia > ib ? 'start' : 'end' },
+  }
+  return { doc: withRoutes(withLine(doc, line)), lineId: line.id }
+}
+
+/**
  * Take the other part of the parent as the branch's way (the far end of the other side). Only possible while the branch is
  * bare, i.e. nothing was drawn beyond the branching station yet. Null otherwise.
  */
@@ -136,7 +177,8 @@ export function flipBranch(doc: CityDoc, lineId: string): CityDoc | null {
   const line = doc.lines[lineId]
   const b = line?.branch
   const parentBase = b ? doc.lines[b.parent] : undefined
-  if (!line || !b || !parentBase) return null
+  // a branch that was made between two stations has no other side
+  if (!line || !b || !parentBase || b.from) return null
   const parent = shape(parentBase)
   const idx = branchIndex(parent, b.at)
   if (idx < 0 || line.stations.length !== partSize(parent, idx, b.towards)) return null
@@ -155,6 +197,12 @@ export function branchIsBare(doc: CityDoc, line: Line): boolean {
   const b = line.branch
   const parentBase = b ? doc.lines[b.parent] : undefined
   if (!b || !parentBase) return false
+  if (b.from) {
+    // made between two stations: bare while it still is only that stretch
+    const stations = shape(parentBase).stations
+    const span = Math.abs(stations.indexOf(b.from) - stations.indexOf(b.at)) + 1
+    return line.stations.length === span && line.stations[0] === b.from && line.stations[line.stations.length - 1] === b.at
+  }
   const idx = branchIndex(shape(parentBase), b.at)
   return idx >= 0 && line.stations.length === partSize(parentBase, idx, b.towards)
 }

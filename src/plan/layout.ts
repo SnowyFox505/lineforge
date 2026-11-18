@@ -42,6 +42,16 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
   }
   // heavy rail and trams are bundled separately: a tram runs on the street beside the railway, not on its tracks
   const lanes = new Map<string, { h: string[]; t: string[] }>()
+  // A line and its branches (Auslaeufer) are one family: where they run the same stretch they are ONE line on ONE lane, not
+  // two lines side by side. A lane holds one line of each family; `laneOf` finds the one that stands for a line.
+  const family = (id: string): string => {
+    const b = doc.lines[id]?.branch
+    return b && doc.lines[b.parent] ? b.parent : id
+  }
+  const laneOf = (list: string[], id: string): number => {
+    const fam = family(id)
+    return list.findIndex((x) => x === id || family(x) === fam)
+  }
 
   for (const line of lines) {
     const lp = opts.source === 'geo' ? geoPts[line.id] : latticePoints(linePolyline(doc, line))
@@ -55,7 +65,7 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
         lanes.set(k, e)
       }
       const list = tram ? e.t : e.h
-      if (!list.includes(line.id)) list.push(line.id)
+      if (laneOf(list, line.id) < 0) list.push(line.id)
     }
   }
   // Lane order: the lines of a shared stretch are ordered by where they leave it, so the one that turns left sits on the
@@ -143,7 +153,7 @@ export function layoutLines(doc: CityDoc, gap: number, opts: { smooth?: number; 
     const sep = e.h.length && e.t.length ? gap * 2.4 : 0
     const total = wH + sep + wT
     const centre = tram ? total / 2 - wT / 2 : -total / 2 + wH / 2
-    return centre + (opts.share ? 0 : (mine.indexOf(id) - (mine.length - 1) / 2) * gap)
+    return centre + (opts.share ? 0 : (laneOf(mine, id) - (mine.length - 1) / 2) * gap)
   }
 
   const result: Record<string, Pt[]> = {}

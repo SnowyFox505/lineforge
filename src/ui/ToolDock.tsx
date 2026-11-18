@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { OPERATORS, STATION_TYPES } from '../model/constants'
 import { STREET_STYLES } from '../editor2d/streets'
 import { branchIsBare } from '../model/lineKinds'
-import { outsideBlockers } from '../model/outside'
+import { canServeOutside, outsideBlockers } from '../model/outside'
+import { atMapEdge } from '../model/outsideEdge'
 import StationHeightPicker from './StationHeightPicker'
 import { stopsAt } from '../model/stops'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
@@ -176,11 +177,11 @@ function StationCard() {
         </p>
       )}
       {st.type !== 'tramstop' && <StationHeightPicker doc={doc} id={st.id} className="mt-2" />}
-      {st.type !== 'tramstop' && (
+      {st.type !== 'tramstop' && (st.outside || atMapEdge(doc, st)) && (
         <div className="mt-2 flex items-center gap-2">
           <Chip active={!!st.outside} onClick={() => (st.outside || !blockers.length) && setOutside(st.id, !st.outside)}>
             <Icon name="arrow" size={16} />
-            {st.outside ? 'Anschluss nach außen ✓' : 'Anschluss nach außen'}
+            {st.outside ? 'Verbindung nach außerhalb ✓' : 'Verbindung nach außerhalb'}
           </Chip>
           {st.outside && <CommitInput value={st.outside} onCommit={(outside) => update(st.id, { outside: outside.trim() || st.outside })} className="min-w-0 flex-1 !py-2" />}
         </div>
@@ -189,7 +190,7 @@ function StationCard() {
         <p className={`mt-1 text-xs ${blockers.length ? 'text-amber-300' : 'text-white/55'}`}>
           {blockers.length
             ? `Nur Regional- und Fernverkehr fahren nach außen. Hier halten noch ${blockers.map((l) => l.name).join(', ')}.`
-            : 'Züge von hier fahren in die weite Welt: nur Regional- und Fernverkehr können diese Station bedienen.'}
+            : 'Hier verlässt die Linie die Karte: Die Züge fahren in die weite Welt. Nur Regional- und Fernverkehr können diese Station bedienen.'}
         </p>
       )}
       {nearby.length > 0 && (
@@ -247,8 +248,10 @@ function LinePanel() {
   const toggleRing = useEditor((s) => s.toggleRing)
   const toggleExpress = useEditor((s) => s.toggleExpress)
   const branchPick = useEditor((s) => s.branchPick)
+  const branchFrom = useEditor((s) => s.branchFrom)
   const setBranchPick = useEditor((s) => s.setBranchPick)
   const flipBranchOf = useEditor((s) => s.flipBranchOf)
+  const setOutside = useEditor((s) => s.setStationOutside)
   const [note, setNote] = useState<{ id: string; text: string } | null>(null)
   const active = activeId ? doc.lines[activeId] : undefined
   const lines = Object.values(doc.lines)
@@ -345,8 +348,8 @@ function LinePanel() {
                 <Chip
                   active={branchPick === active.id}
                   onClick={() => {
-                    if (active.branch || active.loop || active.stations.length < 3) {
-                      setNote({ id: active.id, text: active.branch ? 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.' : active.loop ? 'Von einem Ring zweigt kein Ausläufer ab.' : 'Ein Ausläufer braucht eine Linie mit mindestens drei Stationen.' })
+                    if (active.branch || active.loop || active.stations.length < 2) {
+                      setNote({ id: active.id, text: active.branch ? 'Von einem Ausläufer zweigt kein weiterer ab: Wähle die Hauptlinie.' : active.loop ? 'Von einem Ring zweigt kein Ausläufer ab.' : 'Ein Ausläufer braucht eine Linie mit mindestens zwei Stationen.' })
                       return
                     }
                     setNote(null)
@@ -356,17 +359,53 @@ function LinePanel() {
                   <Icon name="route" size={16} />
                   Ausläufer
                 </Chip>
+                {/* an end of the line that touches the edge of the map can be a connection to the outside world */}
+                {!active.loop &&
+                  [...new Set([active.stations[0], active.stations[active.stations.length - 1]])]
+                    .filter((sid) => doc.stations[sid] && doc.stations[sid].type !== 'tramstop' && atMapEdge(doc, doc.stations[sid]))
+                    .map((sid) => {
+                      const edge = doc.stations[sid]
+                      return (
+                        <Chip
+                          key={sid}
+                          active={!!edge.outside}
+                          onClick={() => {
+                            if (!edge.outside && !canServeOutside(active.operator)) {
+                              setNote({ id: active.id, text: 'Nur Regional- und Fernverkehr fahren nach außerhalb der Karte.' })
+                              return
+                            }
+                            if (!edge.outside && outsideBlockers(doc, sid).length) {
+                              setNote({ id: active.id, text: `An dieser Station halten auch ${outsideBlockers(doc, sid).map((l) => l.name).join(', ')}. Die dürfen die Karte nicht verlassen.` })
+                              return
+                            }
+                            setNote(null)
+                            setOutside(sid, !edge.outside)
+                          }}
+                        >
+                          <Icon name="arrow" size={16} />
+                          {edge.outside ? `Nach außerhalb ✓ ${edge.name}` : `Verbindung nach außerhalb: ${edge.name}`}
+                        </Chip>
+                      )
+                    })}
               </div>
-              {branchPick === active.id && <p className="mt-1 text-xs leading-snug text-accent">Tippe auf der Karte die Station, an der der Ausläufer abzweigt (eine Station zwischen den Enden).</p>}
+              {branchPick === active.id && (
+                <p className="mt-1 text-xs leading-snug text-accent">
+                  {branchFrom
+                    ? `Beginn: ${doc.stations[branchFrom]?.name ?? '?'}. Tippe jetzt die Station, an der der Ausläufer von ${active.name} abzweigt. Bis dorthin fährt er auf derselben Strecke.`
+                    : `Tippe auf der Karte die Station, an der der Ausläufer beginnt (eine Station von ${active.name}).`}
+                </p>
+              )}
               {note?.id === active.id && <p className="mt-1 text-xs leading-snug text-amber-300">{note.text}</p>}
               {active.loop && <p className="mt-1 text-xs leading-snug text-white/50">Ringlinie: Die Züge fahren im Kreis. Eine Strecke herausnehmen (Werkzeug „Abschnitt“) öffnet den Ring wieder.</p>}
               {active.express && <p className="mt-1 text-xs leading-snug text-white/50">Express: hält nur an den Endstationen und an Umsteigebahnhöfen und fährt schneller. Unten legst du fest, wo sie sonst noch hält.</p>}
               {active.branch && doc.lines[active.branch.parent] && (
                 <div className="mt-2 flex items-center gap-2">
                   <p className="min-w-0 flex-1 text-xs leading-snug text-white/50">
-                    Ausläufer von {doc.lines[active.branch.parent].name}: kommt von {doc.stations[active.stations[0]]?.name ?? '?'} und zweigt an {doc.stations[active.branch.at]?.name ?? '?'} ab. Ziehe von dort weiter.
+                    {active.branch.from
+                      ? `Ausläufer von ${doc.lines[active.branch.parent].name}: fährt von ${doc.stations[active.branch.from]?.name ?? '?'} bis ${doc.stations[active.branch.at]?.name ?? '?'} auf derselben Strecke und zweigt dort ab. Ziehe von dort weiter oder lass ihn dort enden.`
+                      : `Ausläufer von ${doc.lines[active.branch.parent].name}: kommt von ${doc.stations[active.stations[0]]?.name ?? '?'} und zweigt an ${doc.stations[active.branch.at]?.name ?? '?'} ab. Ziehe von dort weiter.`}
                   </p>
-                  {branchIsBare(doc, active) && (
+                  {!active.branch.from && branchIsBare(doc, active) && (
                     <button className="btn-soft shrink-0 rounded-xl px-3 py-2 text-xs" onClick={() => flipBranchOf(active.id)}>
                       Andere Seite
                     </button>
@@ -499,11 +538,54 @@ const ZONE_LABEL: Record<ZoneKind, { single: string; add: string; hint: string }
 
 const ZONE_PLURAL: Record<ZoneKind, string> = { city: 'Bezirke', suburb: 'Vororte', airport: 'Flughäfen', forest: 'Wälder', mountain: 'Gebirge' }
 
-/** Paint areas: brush, the zones of this kind (named) and how to add, rename and delete them. */
-function ZonePanel({ kind }: { kind: ZoneKind }) {
-  const doc = useEditor((s) => s.doc)
+/** How areas are made: with a brush, or by drawing the outline of the area (it is filled when the finger lifts). */
+function AreaModeSwitch() {
+  const mode = useEditor((s) => s.areaMode)
+  const setMode = useEditor((s) => s.setAreaMode)
+  return (
+    <div className="flex rounded-xl bg-white/6 p-0.5 text-xs font-semibold" role="group" aria-label="So malst du">
+      {(
+        [
+          ['brush', 'Pinsel'],
+          ['outline', 'Umriss zeichnen'],
+        ] as const
+      ).map(([m, label]) => (
+        <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m} className={`rounded-[10px] px-2.5 py-1.5 transition-colors ${mode === m ? 'bg-white/90 text-[color:var(--bg)]' : 'text-white/60'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** The brush size, or the hint for drawing an outline, depending on how areas are made right now. */
+function AreaBrush({ label }: { label: string }) {
+  const mode = useEditor((s) => s.areaMode)
   const brush = useEditor((s) => s.brush)
   const setBrush = useEditor((s) => s.setBrush)
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="eyebrow">{label}</span>
+        <AreaModeSwitch />
+      </div>
+      {mode === 'brush' ? (
+        <>
+          <div className="mb-1 flex justify-end">
+            <span className="text-sm font-bold tabular-nums">{brush}</span>
+          </div>
+          <Slider value={brush} min={2} max={24} onChange={setBrush} />
+        </>
+      ) : (
+        <p className="text-xs leading-snug text-white/55">Ziehe mit dem Finger oder Stift den Umriss rund um die Fläche. Beim Loslassen wird der Umriss geschlossen und alles darin gefüllt.</p>
+      )}
+    </div>
+  )
+}
+
+/** Paint areas: brush or outline, the zones of this kind (named) and how to add, rename and delete them. */
+function ZonePanel({ kind }: { kind: ZoneKind }) {
+  const doc = useEditor((s) => s.doc)
   const active = useEditor((s) => s.activeZone[kind])
   const setActive = useEditor((s) => s.setActiveZone)
   const addZone = useEditor((s) => s.addZone)
@@ -516,8 +598,6 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   const setPick = useEditor((s) => s.setPickZone)
   const weight = useZoneLook((s) => s.weight)
   const setWeight = useZoneLook((s) => s.setWeight)
-  const outline = useZoneLook((s) => s.outline)
-  const setOutline = useZoneLook((s) => s.setOutline)
   // the picker is only on while this panel is open
   useEffect(() => () => setPick(false), [setPick])
   const zones = (doc.zones ?? []).filter((z) => z.kind === kind)
@@ -526,13 +606,7 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
   const style = ZONE_STYLE[kind]
   return (
     <div className="space-y-3">
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="eyebrow">{L.hint}</span>
-          <span className="text-sm font-bold tabular-nums">{brush}</span>
-        </div>
-        <Slider value={brush} min={2} max={24} onChange={setBrush} />
-      </div>
+      <AreaBrush label={L.hint} />
       <div className="flex flex-wrap items-center gap-2">
         <Chip active={pick} onClick={() => setPick(!pick)}>
           <Icon name="pipette" size={16} />
@@ -540,9 +614,6 @@ function ZonePanel({ kind }: { kind: ZoneKind }) {
         </Chip>
         <Chip active={weight === 'light'} onClick={() => setWeight(weight === 'light' ? 'strong' : 'light')}>
           Leichte Flächen
-        </Chip>
-        <Chip active={outline} onClick={() => setOutline(!outline)}>
-          Umriss
         </Chip>
       </div>
       <div>
@@ -872,15 +943,7 @@ export default function ToolDock() {
               )}
               {tool === 'legRebuild' && <LegPanel />}
               {(tool === 'city' || tool === 'suburb' || tool === 'airport' || tool === 'forest' || tool === 'mountain') && <ZonePanel kind={tool} />}
-              {tool === 'zoneErase' && (
-                <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="eyebrow">Gebiete wegradieren · Pinsel</span>
-                    <span className="text-sm font-bold tabular-nums">{brush}</span>
-                  </div>
-                  <Slider value={brush} min={2} max={24} onChange={setBrush} />
-                </div>
-              )}
+              {tool === 'zoneErase' && <AreaBrush label="Gebiete wegradieren" />}
               {tool === 'county' && <CountyPanel />}
               {tool === 'poi' && <PoiPanel />}
             </div>

@@ -104,4 +104,21 @@ describe('sync plan', () => {
     expect(plan.push.sort()).toEqual(['b', 'd'])
     expect(plan.pull.sort()).toEqual(['c', 'e'])
   })
+
+  it('removes a city that was deleted on another device, unless it was changed here afterwards', () => {
+    const plan = planSync(
+      [
+        { id: 'a', updatedAt: 10 }, // deleted at 20, not touched since: goes
+        { id: 'b', updatedAt: 30 }, // deleted at 20 but edited here at 30: stays and is uploaded again
+      ],
+      [
+        { id: 'a', name: '', updatedAt: 20, deleted: true },
+        { id: 'b', name: '', updatedAt: 20, deleted: true },
+        { id: 'c', name: '', updatedAt: 25, deleted: true }, // deleted, never here: nothing to do
+      ],
+    )
+    expect(plan.remove).toEqual(['a'])
+    expect(plan.push).toEqual(['b'])
+    expect(plan.pull).toEqual([])
+  })
 })

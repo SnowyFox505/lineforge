@@ -1,8 +1,8 @@
 import { airportBoxes } from '../model/airport'
 import type { CityDoc, ZoneKind } from '../model/types'
 import { buildTerrainPaths } from './terrainRender'
-import { lookKey, lookOf } from './streets'
-import type { StreetLook, UrbanKind } from './streets'
+import { frameOf, lookKey, lookOf } from './streets'
+import type { StreetFrame, StreetLook, UrbanKind } from './streets'
 import { urbanAlpha } from './zoneSoft'
 import type { TerrainPaths, ViewTransform } from './terrainRender'
 
@@ -10,6 +10,8 @@ export interface ZoneGfx {
   layers: { kind: ZoneKind; paths: TerrainPaths }[]
   /** the areas of every street look: the town streets are drawn inside these (the same paths as the layer when a kind has one look only) */
   streets: { kind: UrbanKind; look: StreetLook; paths: TerrainPaths }[]
+  /** where the town streets sit on this map (see `StreetFrame`) */
+  frame: StreetFrame
   /** edges between two different zones (e.g. between districts), in cell coordinates */
   borders: Path2D
   labels: { name: string; kind: ZoneKind; x: number; y: number; cells: number }[]
@@ -113,7 +115,7 @@ export function buildZoneGfx(doc: CityDoc): ZoneGfx | null {
   }
   const painted: Partial<Record<ZoneKind, Uint8Array>> = {}
   for (const k of DRAW_ORDER) if (masks[k]) painted[k] = masks[k]!
-  return layers.length ? { layers, streets, borders, labels, airports, soft, masks: painted } : null
+  return layers.length ? { layers, streets, frame: frameOf(doc), borders, labels, airports, soft, masks: painted } : null
 }
 
 /** Names of districts, suburbs and airports (screen space, drawn when zoomed in far enough). */

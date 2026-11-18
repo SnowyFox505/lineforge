@@ -151,6 +151,31 @@ describe('geo: strokes', () => {
   })
 })
 
+describe('geo: crossings are not shared stretches', () => {
+  const line = (x0: number, y0: number, x1: number, y1: number) => {
+    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 0.5)
+    return Array.from({ length: n + 1 }, (_, i) => ({ x: x0 + ((x1 - x0) * i) / n, y: y0 + ((y1 - y0) * i) / n }))
+  }
+  const shared = (a: { x: number; y: number }[], b: { x: number; y: number }[]) => b.filter((p) => a.some((q) => q.x === p.x && q.y === p.y)).length
+
+  it('two lines crossing at 45, 20 or 90 degrees keep their own points', () => {
+    const a = line(10, 40, 70, 40)
+    for (const deg of [20, 45, 90]) {
+      const r = (deg * Math.PI) / 180
+      const b = line(40 - 25 * Math.cos(r), 40 - 25 * Math.sin(r), 40 + 25 * Math.cos(r), 40 + 25 * Math.sin(r))
+      const merged = mergeCorridors({ A: a, B: b }, 1.0)
+      expect(shared(merged.A, merged.B), `${deg} degrees`).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('lines that really run side by side and then part still share the stretch', () => {
+    const a = line(10, 40, 70, 40)
+    const b = [...line(10, 40.4, 40, 40.4), ...line(40.5, 40.7, 60, 55)]
+    const merged = mergeCorridors({ A: a, B: b }, 1.0)
+    expect(shared(merged.A, merged.B)).toBeGreaterThan(20)
+  })
+})
+
 describe('geo: editing', () => {
   it('a station set on the curve splits the stretch and keeps the shape', () => {
     let d = emptyLine(city(), 'L')

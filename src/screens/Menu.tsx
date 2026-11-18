@@ -447,7 +447,7 @@ function Cities({ items, back, onOpen, refresh }: { items: Saved[]; back: () => 
                     className="grid h-10 w-10 place-items-center rounded-full bg-red-500/90 text-[#fff]"
                     aria-label="Wirklich löschen"
                     onClick={async () => {
-                      await useAuth.getState().removeCity(c.id)
+                      await useAuth.getState().removeCity(c.id, c.name)
                       setConfirm(null)
                       refresh()
                     }}

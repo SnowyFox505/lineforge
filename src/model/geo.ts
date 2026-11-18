@@ -417,8 +417,10 @@ export function migrateGeo(doc: CityDoc): CityDoc {
  * Lines that run side by side on the same stretch are recognised by closeness: where a curve stays within `eps` cells of
  * an earlier curve (running the same way, for at least `minRun` samples) it takes over the samples of that curve.
  * The stretch then has identical points on every line, which is what the bundling (lane order, side-by-side offsets) needs.
+ * Lines that merely CROSS are not a shared stretch: they have to head the same way (`minDot` = cosine of the largest angle
+ * between them) and must stay on one side of the other one; a run in which the line passes from one side to the other is a crossing.
  */
-export function mergeCorridors(curves: Record<string, Pt[]>, eps = 0.35, minRun = 6): Record<string, Pt[]> {
+export function mergeCorridors(curves: Record<string, Pt[]>, eps = 0.35, minRun = 6, minDot = 0.9): Record<string, Pt[]> {
   const ids = Object.keys(curves).sort()
   const out: Record<string, Pt[]> = {}
   const cell = eps * 2
@@ -445,7 +447,7 @@ export function mergeCorridors(curves: Record<string, Pt[]>, eps = 0.35, minRun 
             const d = dist(p, q)
             if (d >= bd) continue
             const d1 = dirAt(out[h.r], h.j)
-            if (Math.abs(d0.x * d1.x + d0.y * d1.y) < 0.7) continue
+            if (Math.abs(d0.x * d1.x + d0.y * d1.y) < minDot) continue
             bd = d
             best = h
           }
@@ -475,7 +477,23 @@ export function mergeCorridors(curves: Record<string, Pt[]>, eps = 0.35, minRun 
         if (sg) sign = sg
         j++
       }
+      // does the line pass from one side of the other one to the other? Then it is a crossing, not a shared stretch
+      let crossing = false
       if (j - i + 1 >= minRun && sign !== 0) {
+        const refc = out[first.r]
+        let left = 0
+        let right = 0
+        for (let k = i; k <= j; k++) {
+          const h = m[k] as { r: string; j: number }
+          const q = refc[h.j]
+          const dq = dirAt(refc, h.j)
+          const side = dq.x * (c[k].y - q.y) - dq.y * (c[k].x - q.x)
+          if (side > left) left = side
+          if (-side > right) right = -side
+        }
+        crossing = left > 0.2 && right > 0.2
+      }
+      if (j - i + 1 >= minRun && sign !== 0 && !crossing) {
         const ref = out[first.r]
         const a = first.j
         const b = (m[j] as { r: string; j: number }).j

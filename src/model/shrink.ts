@@ -88,6 +88,10 @@ export function shrinkDoc(doc: CityDoc, newSize: number): CityDoc {
   const next: CityDoc = {
     ...d,
     size: newSize,
+    // the town streets stay where they were: the map now starts `k.x0` cells further in
+    streetGen: d.streetGen ?? old,
+    streetDx: (d.streetDx ?? 0) - k.x0,
+    streetDy: (d.streetDy ?? 0) - k.y0,
     terrain: crop(d.terrain, old, k, newSize, (n) => new Uint8Array(n)),
     stations: Object.fromEntries(Object.entries(d.stations).map(([id, s]) => [id, { ...s, x: s.x - k.x0, y: s.y - k.y0 }])),
     lines,

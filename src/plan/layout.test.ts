@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCity } from '../model/factory'
+import { makeBranchBetween } from '../model/lineKinds'
+import { appendStation } from '../model/routing'
 import { layoutLines } from './layout'
 import type { CityDoc, Line, Station } from '../model/types'
 
@@ -71,4 +73,50 @@ describe('layoutLines', () => {
     const ys = out.s1.map((p) => p.y)
     for (let i = 1; i < ys.length; i++) expect(Math.abs(ys[i] - ys[i - 1])).toBeLessThan(0.45)
   })
+})
+
+describe('layoutLines: a branch shares its stretch with its parent', () => {
+  const build = (branch: boolean): CityDoc => {
+    let d: CityDoc = createCity('T', 'creative', 96)
+    const xs = [10, 24, 38, 52, 66, 80]
+    const stations: CityDoc['stations'] = {}
+    xs.forEach((x, i) => (stations[`s${i}`] = station(`s${i}`, x, 40)))
+    d = { ...d, stations, lines: { P: { id: 'P', name: 'S7', operator: 'sbahn', color: '#a0a', stations: [] } as unknown as Line } }
+    for (let i = 0; i < xs.length; i++) d = appendStation(d, 'P', `s${i}`)
+    if (!branch) {
+      // an unrelated line over the same stations
+      d = { ...d, lines: { ...d.lines, Q: { id: 'Q', name: 'S9', operator: 'sbahn', color: '#0a0', stations: [] } as unknown as Line } }
+      for (const id of ['s1', 's2', 's3']) d = appendStation(d, 'Q', id)
+      return d
+    }
+    return makeBranchBetween(d, 'P', 's1', 's3')!.doc
+  }
+
+  for (const source of ['geo', 'grid'] as const) {
+    it(`runs the same curve as the parent (${source})`, () => {
+      const d = build(true)
+      const b = Object.values(d.lines).find((l) => l.branch)!
+      const out = layoutLines(d, 0.8, { source })
+      const parent = out.P
+      // every point of the branch lies on the parent's line (distance to the polyline)
+      const toLine = (p: { x: number; y: number }) =>
+        Math.min(
+          ...parent.slice(1).map((q, i) => {
+            const a = parent[i]
+            const dx = q.x - a.x
+            const dy = q.y - a.y
+            const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)))
+            return Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y)
+          }),
+        )
+      for (const p of out[b.id]) expect(toLine(p)).toBeLessThan(1e-6)
+    })
+
+    it(`still puts an unrelated line beside the parent (${source})`, () => {
+      const d = build(false)
+      const out = layoutLines(d, 0.8, { source })
+      const gap = Math.max(...out.Q.map((p) => Math.min(...out.P.map((q) => Math.hypot(q.x - p.x, q.y - p.y)))))
+      expect(gap).toBeGreaterThan(0.3)
+    })
+  }
 })

@@ -1,6 +1,6 @@
 import { uploadDelay } from './schedule'
 import { firebase } from '../auth/firebase'
-import { clearOwner, listCityDocs, onCitySaved, putCityFromCloud } from '../persistence/db'
+import { clearOwner, deleteLocalCity, listCityDocs, onCitySaved, putCityFromCloud } from '../persistence/db'
 import type { CityDoc } from '../model/types'
 import { decodeCity, encodeCity } from './codec'
 
@@ -8,13 +8,16 @@ import { decodeCity, encodeCity } from './codec'
  * Cloud copy of a person's cities in Firestore:
  *   users/{uid}/cities/{id}    small description (name, size, time of the last change), listed quickly
  *   users/{uid}/cityData/{id}  the city itself (compressed bytes)
- * The newest change wins. A deletion travels up to the cloud; a city that is deleted on another device is simply
- * kept here (and uploaded again at the next change), so nothing is ever lost by a sync.
+ * The newest change wins. A deleted city stays in the list as a small marker (`deleted`, time of the deletion) without its
+ * data, so every other device removes its copy at the next sync. A copy that was changed after the deletion (on a device that
+ * was offline) is not removed but uploaded again, so no work is lost by accident.
  */
 export interface CloudCity {
   id: string
   name: string
   updatedAt: number
+  /** the city was deleted at `updatedAt`; only this marker is left */
+  deleted?: boolean
 }
 
 export async function pushCity(uid: string, doc: CityDoc, updatedAt: number): Promise<void> {
@@ -33,18 +36,69 @@ export async function pushCity(uid: string, doc: CityDoc, updatedAt: number): Pr
   })
 }
 
-export async function deleteCloudCity(uid: string, id: string): Promise<void> {
+const PENDING_KEY = 'lineforge-pending-deletes'
+
+function readPending(): Record<string, string[]> {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_KEY) ?? '{}') as Record<string, string[]>
+  } catch {
+    return {}
+  }
+}
+
+function writePending(all: Record<string, string[]>) {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(all))
+  } catch {
+    // no storage: the deletion is only tried once
+  }
+}
+
+async function writeTombstone(uid: string, id: string, name: string, at: number): Promise<void> {
   const { db } = await firebase()
-  const { doc: ref, deleteDoc } = await import('firebase/firestore')
-  await deleteDoc(ref(db, 'users', uid, 'cities', id))
+  const { doc: ref, setDoc, deleteDoc } = await import('firebase/firestore')
+  // the marker replaces the description (a listed city is never without its data), then the data goes
+  await setDoc(ref(db, 'users', uid, 'cities', id), { name, deleted: true, updatedAt: at })
   await deleteDoc(ref(db, 'users', uid, 'cityData', id))
+}
+
+/**
+ * Deletes a city in the cloud, so it disappears on every device of the person. When that fails (offline), the deletion is
+ * remembered and tried again at the next sync: the city must not come back from the cloud in the meantime.
+ */
+export async function deleteCloudCity(uid: string, id: string, name = ''): Promise<void> {
+  try {
+    await writeTombstone(uid, id, name, Date.now())
+  } catch (e) {
+    const all = readPending()
+    if (!(all[uid] ?? []).includes(id)) all[uid] = [...(all[uid] ?? []), id]
+    writePending(all)
+    throw e
+  }
+}
+
+async function retryPendingDeletes(uid: string): Promise<void> {
+  const all = readPending()
+  const ids = all[uid] ?? []
+  if (!ids.length) return
+  const left: string[] = []
+  for (const id of ids) {
+    try {
+      await writeTombstone(uid, id, '', Date.now())
+    } catch {
+      left.push(id)
+    }
+  }
+  if (left.length) all[uid] = left
+  else delete all[uid]
+  writePending(all)
 }
 
 export async function listCloudCities(uid: string): Promise<CloudCity[]> {
   const { db } = await firebase()
   const { collection, getDocs } = await import('firebase/firestore')
   const snap = await getDocs(collection(db, 'users', uid, 'cities'))
-  return snap.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? ''), updatedAt: Number(d.data().updatedAt ?? 0) }))
+  return snap.docs.map((d) => ({ id: d.id, name: String(d.data().name ?? ''), updatedAt: Number(d.data().updatedAt ?? 0), deleted: d.data().deleted === true }))
 }
 
 async function pullCity(uid: string, id: string): Promise<CityDoc> {
@@ -78,20 +132,31 @@ export async function pushSettings(uid: string, settings: CloudSettings): Promis
 export interface SyncResult {
   pulled: number
   pushed: number
+  removed: number
 }
 
-/** Which cities have to travel in which direction (newest change wins). */
-export function planSync(local: { id: string; updatedAt: number }[], cloud: CloudCity[]): { pull: string[]; push: string[] } {
+/**
+ * Which cities have to travel in which direction (newest change wins). `remove` lists the local cities that were deleted
+ * in the cloud (on another device) and not changed here since.
+ */
+export function planSync(local: { id: string; updatedAt: number }[], cloud: CloudCity[]): { pull: string[]; push: string[]; remove: string[] } {
   const localById = new Map(local.map((c) => [c.id, c]))
   const cloudById = new Map(cloud.map((c) => [c.id, c]))
   return {
-    pull: cloud.filter((c) => !localById.has(c.id) || localById.get(c.id)!.updatedAt < c.updatedAt).map((c) => c.id),
+    pull: cloud.filter((c) => !c.deleted && (!localById.has(c.id) || localById.get(c.id)!.updatedAt < c.updatedAt)).map((c) => c.id),
     push: local.filter((l) => !cloudById.has(l.id) || cloudById.get(l.id)!.updatedAt < l.updatedAt).map((l) => l.id),
+    remove: local
+      .filter((l) => {
+        const c = cloudById.get(l.id)
+        return !!c && c.deleted === true && l.updatedAt <= c.updatedAt
+      })
+      .map((l) => l.id),
   }
 }
 
 /** Brings this device and the cloud to the same state (newest change wins). */
 export async function syncAll(uid: string): Promise<SyncResult> {
+  await retryPendingDeletes(uid)
   const [cloud, local] = await Promise.all([listCloudCities(uid), listCityDocs(uid)])
   const plan = planSync(local, cloud)
   const cloudById = new Map(cloud.map((c) => [c.id, c]))
@@ -101,7 +166,8 @@ export async function syncAll(uid: string): Promise<SyncResult> {
     const l = localById.get(id)!
     await pushCity(uid, l.doc, l.updatedAt)
   }
-  return { pulled: plan.pull.length, pushed: plan.push.length }
+  for (const id of plan.remove) await deleteLocalCity(id, uid)
+  return { pulled: plan.pull.length, pushed: plan.push.length, removed: plan.remove.length }
 }
 
 // --- uploads of single changes, a few seconds after the last change of a city ---
@@ -142,6 +208,13 @@ export function startUploads(uid: string | null, stateCallback?: (s: 'syncing' |
         }
       : null,
   )
+}
+
+/** Drops an upload that is still waiting (the city was deleted: it must not come back in the cloud). */
+export function cancelUpload(id: string) {
+  const p = pending.get(id)
+  if (p) clearTimeout(p.timer)
+  pending.delete(id)
 }
 
 /** Uploads everything that is still waiting (before leaving the app or signing out). */

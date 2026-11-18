@@ -1,6 +1,6 @@
 import type { User } from 'firebase/auth'
 import { create } from 'zustand'
-import { deleteCloudCity, flushUploads, pullSettings, pushSettings, startUploads, syncAll } from '../cloud/sync'
+import { cancelUpload, deleteCloudCity, flushUploads, pullSettings, pushSettings, startUploads, syncAll } from '../cloud/sync'
 import { useTheme } from '../ui/theme'
 import { adoptGuestCities, clearOwner, countGuestCities, deleteCity, GUEST, setOwner } from '../persistence/db'
 import { accountsAvailable, firebase } from './firebase'
@@ -36,7 +36,7 @@ interface AuthState {
   /** remembers the accent colour in the account (it follows the person to every device) */
   saveAccent: (hex: string, hex2?: string | null) => void
   signOut: (force?: boolean) => Promise<'ok' | 'unsynced'>
-  removeCity: (id: string) => Promise<void>
+  removeCity: (id: string, name?: string) => Promise<void>
 }
 
 /** Firebase error codes in plain German */
@@ -135,6 +135,11 @@ export const useAuth = create<AuthState>((set, get) => {
         })
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'hidden') void flushUploads()
+          // back in the app: pick up what was changed or deleted on the other devices meanwhile
+          else {
+            const uid = get().user?.uid
+            if (uid) void doSync(uid)
+          }
         })
       })().catch(() => set({ status: 'guest' }))
     },
@@ -229,12 +234,13 @@ export const useAuth = create<AuthState>((set, get) => {
       return 'ok'
     },
 
-    removeCity: async (id) => {
+    removeCity: async (id, name) => {
+      cancelUpload(id)
       await deleteCity(id)
       const uid = get().user?.uid
       if (uid) {
         try {
-          await deleteCloudCity(uid, id)
+          await deleteCloudCity(uid, id, name)
         } catch {
           set({ sync: 'error' })
         }
