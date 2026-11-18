@@ -183,8 +183,8 @@ export const sbahnMuc2: ModelDef = {
     out.push(box(c.len * 0.17, 0.052, c.w * 0.54, -c.len * 0.1, -0.044, 0, '#313840'))
     out.push(box(c.len * 0.11, 0.046, c.w * 0.46, c.len * 0.12, -0.04, 0, '#2c3239'))
     out.push(box(c.len * 0.06, 0.04, c.w * 0.4, c.len * 0.21, -0.038, 0, '#394049'))
-    out.push(cylX(0.02, c.len * 0.15, c.len * 0.0, -0.058, 0.07, '#3a4149'))
-    out.push(cylX(0.016, c.len * 0.1, c.len * 0.0, -0.056, -0.07, '#3a4149'))
+    out.push(cylX(0.02, c.len * 0.15, 0, -0.058, 0.07, '#3a4149'))
+    out.push(cylX(0.016, c.len * 0.1, 0, -0.056, -0.07, '#3a4149'))
     // bogies: frame, motor, brake discs, two axles with wheels on the rails (rails stand 0.085 either side of the centre line)
     for (const sx of [-1, 1]) {
       const bx = sx * c.len * 0.3

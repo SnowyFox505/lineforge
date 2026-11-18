@@ -127,7 +127,7 @@ export const ubahnBerlin2: ModelDef = {
     out.push(box(c.len * 0.16, 0.054, c.w * 0.56, -c.len * 0.07, -0.046, 0, '#313840'))
     out.push(box(c.len * 0.12, 0.048, c.w * 0.48, c.len * 0.12, -0.042, 0, '#2c3239'))
     out.push(box(c.len * 0.07, 0.044, c.w * 0.4, c.len * 0.21, -0.04, 0, '#3a424b'))
-    out.push(cylX(0.02, c.len * 0.15, c.len * 0.0, -0.06, 0.075, '#3a4149'))
+    out.push(cylX(0.02, c.len * 0.15, 0, -0.06, 0.075, '#3a4149'))
     out.push(cylX(0.016, c.len * 0.11, c.len * 0.02, -0.058, -0.075, '#3a4149'))
     // bogies Bo'Bo' (wheelbase 1.8 m, pivots 9.5 m apart): frame, two motors, brake discs, axle boxes, current collector shoes
     for (const sx of [-1, 1]) {
