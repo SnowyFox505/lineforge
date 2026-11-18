@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.25.2',
+    date: '2026-11-18',
+    headline: 'Konto und Darstellung getrennt',
+    changes: [
+      {
+        title: 'Farben nur noch unter „Darstellung“',
+        what: 'Akzentfarben und Verläufe lassen sich nur noch im Darstellungs-Fenster einstellen. Im Konto stehen nur noch dein Name, die Anmeldung, der Abgleich deiner Städte und das Abmelden.',
+        how: 'Tippe auf dem Startbildschirm auf den Darstellungsknopf (Palette), um Farben, Hell/Dunkel und Stift-Modus zu ändern.',
+        benefit: 'Jede Einstellung hat genau einen Platz.',
+      },
+    ],
+  },
+  {
     version: '0.25.1',
     date: '2026-11-18',
     headline: 'Ausläufer in der Farbe der Hauptlinie',

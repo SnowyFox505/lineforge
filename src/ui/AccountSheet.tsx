@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/authStore'
 import Icon from './Icon'
 import { Segmented, Sheet } from './primitives'
-import { AccentPicker } from './AppearanceSheet'
 
 type Tab = 'in' | 'up'
 
@@ -177,10 +176,6 @@ export default function AccountSheet({ open, onClose, welcome = false }: { open:
                     </motion.button>
                   </div>
                 </Field>
-              </motion.div>
-
-              <motion.div variants={rise}>
-                <AccentPicker />
               </motion.div>
 
               <motion.div variants={rise} className="card flex items-center gap-3 rounded-2xl p-3.5">
