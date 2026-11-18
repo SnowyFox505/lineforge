@@ -6,6 +6,7 @@ import type { VehicleSpec } from '../model/vehicles'
 import { RAIL_Y } from './heights'
 import { carGlassCompile, poolTexture, trainSpill } from './night'
 import { logoTexture, makeSignMaterial, setSign } from './destSign'
+import { useTrainLook } from '../ui/trainLook'
 import { modelOf, modelKey } from './vehicleModels'
 import { box, DARK, GLASS } from './vehicleModels/parts'
 import type { CarCtx, FrontMetrics } from './vehicleModels/types'
@@ -583,7 +584,10 @@ const lampWarm = new THREE.MeshStandardMaterial({ color: '#fff0c4', emissive: '#
 export function CarMesh({ spec, index, color, sign }: { spec: VehicleSpec; index: number; color: string; sign?: THREE.MeshBasicMaterial }) {
   const n = spec.lens.length
   const role: Role = n === 1 ? 'single' : index === 0 ? 'head' : index === n - 1 ? 'tail' : 'mid'
-  const geo = useMemo(() => carGeometry(spec, index, role, color), [spec, index, role, color])
+  // a train keeps the colours of its real model unless the player wants the line colour on it
+  const tint = useTrainLook((s) => s.tint)
+  const paintColour = tint ? color : spec.livery
+  const geo = useMemo(() => carGeometry(spec, index, role, paintColour), [spec, index, role, paintColour])
   const len = spec.lens[index]
   const st = styleOf(spec)
   const model = modelOf(spec)

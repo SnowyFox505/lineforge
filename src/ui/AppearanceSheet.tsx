@@ -4,6 +4,7 @@ import { useAuth } from '../auth/authStore'
 import Icon from './Icon'
 import { Segmented, Sheet } from './primitives'
 import { usePen } from './pen'
+import { useTrainLook } from './trainLook'
 import { accentFromHue, GRADIENTS, hueOf, isKnownGradient, PRESETS, useTheme } from './theme'
 import type { Mode } from './theme'
 import type { PenMode } from './pen'
@@ -198,6 +199,8 @@ export default function AppearanceSheet({ open, onClose }: { open: boolean; onCl
   const setMode = useTheme((s) => s.setMode)
   const pen = usePen((s) => s.mode)
   const setPen = usePen((s) => s.setMode)
+  const tint = useTrainLook((s) => s.tint)
+  const setTint = useTrainLook((s) => s.setTint)
   return (
     <Sheet open={open} onClose={onClose} title="Darstellung">
       <div className="space-y-6">
@@ -207,6 +210,18 @@ export default function AppearanceSheet({ open, onClose }: { open: boolean; onCl
           <p className="mt-2 text-sm text-white/55">Die Karte, das Netz und die 3D-Ansicht behalten ihre Farben, Menüs und Fenster werden hell oder dunkel.</p>
         </div>
         <AccentPicker />
+        <div>
+          <span className="eyebrow mb-2 block">Zugfarben</span>
+          <Segmented
+            value={tint ? 'line' : 'original'}
+            onChange={(v) => setTint(v === 'line')}
+            options={[
+              { value: 'original', label: 'Wie das Vorbild' },
+              { value: 'line', label: 'Linienfarbe' },
+            ]}
+          />
+          <p className="mt-2 text-sm text-white/55">{tint ? 'Die Züge tragen die Farbe ihrer Linie.' : 'Die Züge behalten die Farben der echten Züge. Die Linie erkennst du an der Zielanzeige.'}</p>
+        </div>
         <div>
           <span className="eyebrow mb-2 block">Apple Pencil</span>
           <Segmented value={pen} onChange={setPen} options={PEN_MODES} />

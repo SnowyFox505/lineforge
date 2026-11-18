@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.29.0',
+    date: '2026-11-18',
+    headline: 'Züge behalten ihre echten Farben',
+    changes: [
+      {
+        title: 'Zugfarbe unabhängig von der Linienfarbe',
+        what: 'Die Züge tragen jetzt die Farben der echten Züge, nach denen sie gebaut sind, und nicht mehr die Farbe ihrer Linie. Eine rote Linie fährt also zum Beispiel auch mit einer blau-weißen Münchner S-Bahn in Blau-Weiß.',
+        how: 'Die Linie erkennst du an der Zielanzeige an der Front (dort steht sie in ihrer Farbe). Wer die Züge lieber in der Linienfarbe sehen will: Darstellung (Palette-Knopf im Menü oder in den Stadteinstellungen) → „Zugfarben“ → „Linienfarbe“.',
+        benefit: 'Die Züge sehen aus wie im echten Leben, und du kannst trotzdem jederzeit auf die Linienfarbe umschalten.',
+      },
+    ],
+  },
+  {
     version: '0.28.2',
     date: '2026-11-18',
     headline: 'Münchner ET 1420 nach den Fotos',
