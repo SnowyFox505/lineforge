@@ -9,6 +9,7 @@ import { TRAM_DIP } from './network3d'
 import type { Network3D } from './network3d'
 import { bindNet } from '../sim/world'
 import { carPoses } from './trainSim'
+import { makeSignMaterial, setSign } from './destSign'
 import { CarMesh } from './vehicles3d'
 
 const qYaw = new THREE.Quaternion()
@@ -43,6 +44,8 @@ export default function Trains3D({ net }: { net: Network3D }) {
   const cityId = useEditor((s) => s.doc.id)
   // the world simulation runs outside this view (sim/WorldSim); here the trains are only put on the rails
   const sim = useMemo(() => bindNet(net, cityId), [net, cityId])
+  // one destination display per train (the head car of the models that have one shows it)
+  const signs = useMemo(() => sim.trains.map(() => makeSignMaterial()), [sim])
   const groups = useRef<(THREE.Group | null)[][]>([])
   const hits = useRef<(THREE.Mesh | null)[][]>([])
   const select = useEditor((s) => s.setFollow)
@@ -53,6 +56,11 @@ export default function Trains3D({ net }: { net: Network3D }) {
     sim.trains.forEach((tr, ti) => {
       const cars = groups.current[ti]
       if (!cars) return
+      // the display: the line, and where the train is going to (the terminal of the direction it runs in; a ring just says Ring)
+      const stops = tr.net.stops
+      const goes = tr.legs[tr.leg % tr.legs.length].dir > 0 ? stops[stops.length - 1] : stops[0]
+      const dest = tr.net.line.loop ? 'Ring' : net.stations[goes.stationId]?.st.name ?? ''
+      if (signs[ti]) setSign(signs[ti], tr.net.line.name, tr.net.line.color, dest)
       const poses = carPoses(tr)
       poses.forEach((p, ci) => {
         const g = cars[ci]
@@ -106,7 +114,7 @@ export default function Trains3D({ net }: { net: Network3D }) {
               }}
             >
               <group position={[0, carLift(tr.spec.kind), 0]} scale={railOf(tr.spec.kind)}>
-                <CarMesh spec={tr.spec} index={ci} color={tr.color} />
+                <CarMesh spec={tr.spec} index={ci} color={tr.color} sign={signs[ti]} />
               </group>
               <mesh
                 ref={(m) => {

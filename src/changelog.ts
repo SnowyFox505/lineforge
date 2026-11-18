@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.26.0',
+    date: '2026-11-18',
+    headline: 'Neue S-Bahn nach Berliner Vorbild',
+    changes: [
+      {
+        title: 'S-Bahn BR 484 mit Zielanzeige',
+        what: 'Die S-Bahn sieht jetzt aus wie die neue Berliner Baureihe 484: cremefarbener Wagenkasten, roter Sockel in der Linienfarbe, große schwarze Frontscheibe, LED-Scheinwerfer, DB-Logo, Lüftungsgitter und Kupplung, dazu Türen und Fenster mit Rahmen, Klimageräte auf dem Dach und Drehgestelle mit Rädern.',
+        how: 'Oben an der Frontscheibe steht eine Zielanzeige: links die Linie in ihrer Farbe, rechts das Ziel, also die Endstation in Fahrtrichtung (bei einer Ringlinie „Ring“). Am Endbahnhof wechselt sie, wenn der Zug umdreht. In der Fahrzeug-Galerie (#fahrzeuge) kannst du dir den Zug von allen Seiten ansehen.',
+        benefit: 'Man erkennt schon von Weitem, welche Linie kommt und wohin sie fährt.',
+      },
+    ],
+  },
+  {
     version: '0.25.2',
     date: '2026-11-18',
     headline: 'Konto und Darstellung getrennt',

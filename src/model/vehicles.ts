@@ -4,6 +4,10 @@ export type VehicleKind = OperatorId
 
 export interface VehicleSpec {
   kind: VehicleKind
+  /** which detailed model of this kind (e.g. '484' for the Berlin S-Bahn class 484); empty = the generic one */
+  model?: string
+  /** name of the model in the vehicle gallery */
+  label?: string
   /** length of every car, head first */
   lens: number[]
   gap: number
@@ -29,7 +33,7 @@ const rep = (n: number, v: number) => Array.from({ length: n }, () => v)
  * double-deck regional EMU, ICE 4). Proportions follow the real trains, lengths are shortened a little.
  */
 export const VEHICLES: Record<OperatorId, VehicleSpec> = {
-  sbahn: { kind: 'sbahn', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.3, speed: 7, body: '#f2c230', roof: '#8f96a0', pantograph: false },
+  sbahn: { kind: 'sbahn', model: '484', label: 'BR 484', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.3, speed: 7, body: '#ecc979', roof: '#c4c9cf', pantograph: false },
   ubahn: { kind: 'ubahn', lens: rep(3, 1.6), gap: 0.06, width: 0.33, height: 0.41, nose: 0.14, speed: 7.5, body: '#f6c61a', roof: '#7c838d', pantograph: false },
   tram: { kind: 'tram', lens: [1.15, 1.0, 1.15], gap: 0.1, width: 0.3, height: 0.38, nose: 0.26, speed: 4.5, body: '#eef0f3', roof: '#d8dde3', paintAll: true, pantograph: true },
   regional: { kind: 'regional', lens: rep(2, 2.1), gap: 0.07, width: 0.36, height: 0.56, nose: 0.4, speed: 8, doubleDeck: true, body: '#d6232b', roof: '#6c737d', pantograph: true },
@@ -50,4 +54,14 @@ export function carOffsets(spec: VehicleSpec): number[] {
     x -= len + spec.gap
   }
   return out
+}
+
+/** Models of a vehicle kind the player can choose from; the first one of a kind is the default (= `VEHICLES`). */
+export const VEHICLE_MODELS: Record<string, VehicleSpec[]> = {
+  sbahn: [VEHICLES.sbahn],
+}
+
+/** The vehicle a line runs with: its chosen model if it exists, else the default of its kind. */
+export function vehicleFor(kind: VehicleKind, model?: string): VehicleSpec {
+  return VEHICLE_MODELS[kind]?.find((v) => v.model === model) ?? VEHICLES[kind]
 }

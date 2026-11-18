@@ -2,7 +2,7 @@ import { EXPRESS_SPEED } from '../model/lineKinds'
 import { railOf } from '../model/scale'
 import { carOffsets } from '../model/vehicles'
 import type { VehicleSpec } from '../model/vehicles'
-import { VEHICLES } from '../model/vehicles'
+import { vehicleFor } from '../model/vehicles'
 import type { OperatorId } from '../model/types'
 import { smooth01 } from './curves'
 import { posOn } from './network3d'
@@ -77,7 +77,7 @@ export class Sim {
     let order = 0
     for (const ln of net.lines) {
       if (ln.stops.length < 2) continue
-      const spec = VEHICLES[ln.line.operator]
+      const spec = vehicleFor(ln.line.operator, ln.line.vehicle)
       const legs = buildLegs(ln.stops.length, !!ln.line.loop)
       const count = Math.min(maxPerLine, Math.max(1, Math.floor(ln.total / 70) + 1))
       for (let i = 0; i < count; i++) {

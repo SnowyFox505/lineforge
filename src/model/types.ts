@@ -76,6 +76,8 @@ export interface Line {
   /** Short name, e.g. "S5" or "U2" */
   name: string
   operator: OperatorId
+  /** Which vehicle model of the operator's kind the line runs with (see `VEHICLE_MODELS`); none = the default one */
+  vehicle?: string
   color: string
   /** Ordered station ids */
   stations: string[]

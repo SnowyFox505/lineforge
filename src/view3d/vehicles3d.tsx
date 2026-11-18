@@ -5,14 +5,15 @@ import { carOffsets } from '../model/vehicles'
 import type { VehicleSpec } from '../model/vehicles'
 import { RAIL_Y } from './heights'
 import { carGlassCompile, poolTexture, trainSpill } from './night'
+import { logoTexture, makeSignMaterial, setSign } from './destSign'
+import { modelOf, modelKey } from './vehicleModels'
+import { box, DARK, GLASS } from './vehicleModels/parts'
+import type { CarCtx, FrontMetrics } from './vehicleModels/types'
 
 /** Underside of the car bodies above the rail head */
 export const BODY_Y = RAIL_Y + 0.07
 
 type Role = 'head' | 'mid' | 'tail' | 'single'
-
-const GLASS = '#25384c'
-const DARK = '#2a2f36'
 
 /** How a vehicle type looks. Fractions are of the body height; colours may be 'line' (the line colour) or 'body'. */
 interface Style {
@@ -41,10 +42,35 @@ interface Style {
   front: string
   roof: string
   skirt: number
+  /** the nose is painted as plain body (the detail model puts windscreen and lights on the end face itself) */
+  detailFront?: boolean
 }
 
 const STYLES: Record<string, Style> = {
-  // Berlin S-Bahn 484: yellow body, red band and front, big dark windscreen
+  // Berlin S-Bahn 484 (see vehicleModels/sbahn484.ts): cream body, red lower body in the line colour, black skirt, dark doors
+  sbahn484: {
+    levels: [0, 0.07, 0.37, 0.42, 0.77],
+    roofRound: 0.26,
+    drop: 0.1,
+    narrow: 0.1,
+    pow: 1.6,
+    doors: [0.18, 0.5, 0.82],
+    doorW: 0.17,
+    winW: 0.2,
+    winGap: 0.05,
+    ws0: 0.39,
+    windows: [[0.42, 0.77]],
+    bands: [
+      [0, 0.07, DARK],
+      [0.07, 0.37, 'line'],
+    ],
+    door: '#14181c',
+    front: 'line',
+    roof: '#c4c9cf',
+    skirt: 0.07,
+    detailFront: true,
+  },
+  // generic S-Bahn: yellow body, red band and front, big dark windscreen
   sbahn: {
     levels: [0, 0.3, 0.46, 0.76],
     roofRound: 0.26,
@@ -155,6 +181,15 @@ const STYLES: Record<string, Style> = {
   },
 }
 
+/** The shell style of a vehicle: its own model's if it has one, else the one of its kind. */
+const styleOf = (spec: VehicleSpec): Style => STYLES[modelKey(spec)] ?? STYLES[spec.kind]
+
+/** Top and half width of the flat end face of a nose (the shell narrows and drops towards it). */
+export function frontMetrics(spec: VehicleSpec): FrontMetrics {
+  const st = styleOf(spec)
+  return { capTop: spec.height * (1 - st.drop), capHW: (spec.width / 2) * (1 - st.narrow) }
+}
+
 function colourOf(name: string, line: string, body: string) {
   return name === 'line' ? line : name === 'body' ? body : name
 }
@@ -186,7 +221,7 @@ const inAny = (list: [number, number][], x: number) => list.some(([a, b]) => x >
 
 /** The body shell of a car: rounded cross-sections along its length, tapered at the nose, coloured face by face. */
 function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: string): THREE.BufferGeometry {
-  const st = STYLES[spec.kind]
+  const st = styleOf(spec)
   const { height: h, width: w } = spec
   const hl = len / 2
   const body = spec.paintAll ? line : spec.body
@@ -253,6 +288,11 @@ function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: str
     const ax = Math.abs(nx)
     const sideFace = Math.abs(nz) > 0.55
     const nose = isNoseX(cx)
+    // a detail model puts windscreen, lights and vents on the end face itself: the nose is plain body and bands
+    if (st.detailFront && nose && ax > 0.25) {
+      for (const [y0, y1, cn] of st.bands) if (yF >= y0 && yF <= y1) return colourOf(cn, line, body)
+      return body
+    }
     // windscreen on and around the nose
     if (nose && ax > 0.25 && yF > st.ws0) return GLASS
     if (nose && ny < 0.8 && yF > st.ws0 && nF > 0.5) return GLASS
@@ -327,54 +367,44 @@ function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: str
   return g
 }
 
-function paint(g: THREE.BufferGeometry, hex: string) {
-  const c = new THREE.Color(hex)
-  const nPts = g.attributes.position.count
-  const arr = new Float32Array(nPts * 3)
-  for (let i = 0; i < nPts; i++) {
-    arr[i * 3] = c.r
-    arr[i * 3 + 1] = c.g
-    arr[i * 3 + 2] = c.b
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
-  return g
-}
-
-function box(w: number, h: number, d: number, x: number, y: number, z: number, hex: string, rotZ = 0) {
-  const g = new THREE.BoxGeometry(w, h, d)
-  if (rotZ) g.rotateZ(rotZ)
-  g.translate(x, y, z)
-  const ng = g.toNonIndexed()
-  g.dispose()
-  ng.deleteAttribute('uv') // the body shell has none, and merging needs identical attributes
-  return paint(ng, hex)
-}
-
 const cache = new Map<string, THREE.BufferGeometry>()
 
 export function carGeometry(spec: VehicleSpec, index: number, role: Role, line: string): THREE.BufferGeometry {
-  const key = `${spec.kind}|${index}|${role}|${line}`
+  const key = `${modelKey(spec)}|${index}|${role}|${line}`
   const hit = cache.get(key)
   if (hit) return hit
   const len = spec.lens[index]
   const { height: h, width: w } = spec
   const nF = role === 'head' || role === 'single' ? spec.nose : 0
   const nR = role === 'tail' || role === 'single' ? spec.nose : 0
-  const st = STYLES[spec.kind]
+  const st = styleOf(spec)
+  const model = modelOf(spec)
   const parts: THREE.BufferGeometry[] = [shell(spec, len, nF, nR, line)]
+  const body = spec.paintAll ? line : spec.body
+  const side = layoutSide(st, len, nF, nR)
+  const fm = frontMetrics(spec)
+  const ctx: CarCtx = { spec, index, role, len, w, h, nF, nR, line, body, doors: side.doors, wins: side.wins, capTop: fm.capTop, capHW: fm.capHW, roofR: st.roofRound * w }
 
-  // underframe and bogies
-  parts.push(box(len * 0.86, 0.06, w * 0.8, 0, -0.03, 0, '#22272e'))
-  for (const sx of [-1, 1]) {
-    parts.push(box(0.3, 0.07, w * 0.7, sx * len * 0.3, -0.045, 0, '#14181d'))
-    for (const sz of [-1, 1]) parts.push(box(0.22, 0.07, 0.03, sx * len * 0.3, -0.045, sz * w * 0.38, '#3a414b'))
+  if (model) {
+    // detailed model: its own underframe, bogies, doors, windows, roof equipment and end faces
+    parts.push(...model.chassis(ctx), ...model.details(ctx))
+  } else {
+    // underframe and bogies
+    parts.push(box(len * 0.86, 0.06, w * 0.8, 0, -0.03, 0, '#22272e'))
+    for (const sx of [-1, 1]) {
+      parts.push(box(0.3, 0.07, w * 0.7, sx * len * 0.3, -0.045, 0, '#14181d'))
+      for (const sz of [-1, 1]) parts.push(box(0.22, 0.07, 0.03, sx * len * 0.3, -0.045, sz * w * 0.38, '#3a414b'))
+    }
+    // roof equipment
+    if (spec.kind === 'regional' || spec.kind === 'sbahn' || spec.kind === 'ubahn') {
+      for (const f of [-0.28, 0.12]) parts.push(box(len * 0.14, 0.022, w * 0.5, len * f, h + 0.002, 0, '#8d949e'))
+    }
+    // buffer beams at the head: dark bumper
+    if (nF > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, len / 2 - 0.005, 0.03, 0, '#1b2026'))
+    if (nR > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, -len / 2 + 0.005, 0.03, 0, '#1b2026'))
   }
   // flexible gangway between cars
   if (role === 'mid' || role === 'tail') parts.push(box(0.09, h * 0.86, w * 0.82, -len / 2 - 0.02, h * 0.45, 0, '#1d2127'))
-  // roof equipment
-  if (spec.kind === 'regional' || spec.kind === 'sbahn' || spec.kind === 'ubahn') {
-    for (const f of [-0.28, 0.12]) parts.push(box(len * 0.14, 0.022, w * 0.5, len * f, h + 0.002, 0, '#8d949e'))
-  }
   // pantograph on a middle (or head) car
   if (spec.pantograph && (role === 'mid' || (role === 'head' && spec.lens.length < 3))) {
     const px = -len * 0.12
@@ -383,9 +413,6 @@ export function carGeometry(spec: VehicleSpec, index: number, role: Role, line: 
     parts.push(box(0.018, 0.17, 0.018, px, h + 0.09, -0.05, '#8a93a0', -0.4))
     parts.push(box(0.03, 0.014, 0.24, px + 0.03, h + 0.17, 0, '#2a313b'))
   }
-  // buffer beams at the head: dark bumper
-  if (nF > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, len / 2 - 0.005, 0.03, 0, '#1b2026'))
-  if (nR > 0) parts.push(box(0.04, 0.05, w * (1 - st.narrow) * 0.9, -len / 2 + 0.005, 0.03, 0, '#1b2026'))
 
   const merged = mergeGeometries(parts, false)!
   parts.forEach((p) => p.dispose())
@@ -403,36 +430,68 @@ bodyMat.customProgramCacheKey = () => 'lf-car-glass'
 trainSpill.map = poolTexture()
 const spillGeo = new THREE.PlaneGeometry(1, 1)
 
-/** One railcar in its own frame: +x is the direction of travel, origin at the car centre, rail level at y = 0 of BODY_Y. */
-export function CarMesh({ spec, index, color }: { spec: VehicleSpec; index: number; color: string }) {
+let logoMat: THREE.MeshBasicMaterial | null = null
+/** The logo plate's material, made when the first car needs it (it draws its picture on a canvas) */
+const logoMaterial = () => (logoMat ??= new THREE.MeshBasicMaterial({ map: logoTexture(), toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }))
+const planes = new Map<string, THREE.PlaneGeometry>()
+const planeOf = (w: number, h: number) => {
+  const k = `${w}x${h}`
+  let g = planes.get(k)
+  if (!g) planes.set(k, (g = new THREE.PlaneGeometry(w, h)))
+  return g
+}
+const lampBoxes = new Map<string, THREE.BoxGeometry>()
+const lampBox = (w: number, h: number) => {
+  const k = `${w}x${h}`
+  let g = lampBoxes.get(k)
+  if (!g) lampBoxes.set(k, (g = new THREE.BoxGeometry(0.008, h, w)))
+  return g
+}
+
+/**
+ * One railcar in its own frame: +x is the direction of travel, origin at the car centre, rail level at y = 0 of BODY_Y.
+ * `sign` is the material of the destination display (the head car of a model that has one); the owner changes its text.
+ */
+export function CarMesh({ spec, index, color, sign }: { spec: VehicleSpec; index: number; color: string; sign?: THREE.MeshBasicMaterial }) {
   const n = spec.lens.length
   const role: Role = n === 1 ? 'single' : index === 0 ? 'head' : index === n - 1 ? 'tail' : 'mid'
   const geo = useMemo(() => carGeometry(spec, index, role, color), [spec, index, role, color])
   const len = spec.lens[index]
-  const st = STYLES[spec.kind]
-  const lampY = spec.height * 0.14
-  const lampZ = spec.width * 0.5 * (1 - st.narrow) * 0.62
+  const st = styleOf(spec)
+  const model = modelOf(spec)
+  const fm = frontMetrics(spec)
+  const lamp = model?.lamp(fm)
+  const lampY = lamp?.y ?? spec.height * 0.14
+  const lampZ = lamp?.z ?? spec.width * 0.5 * (1 - st.narrow) * 0.62
+  const lampG = lamp ? lampBox(lamp.w, lamp.h) : lampGeo
   const front = role === 'head' || role === 'single'
   const rear = role === 'tail' || role === 'single'
+  const signSpec = model?.sign?.(fm)
+  const logoSpec = model?.logo?.(fm)
   return (
     <group position={[0, BODY_Y, 0]}>
       <mesh geometry={geo} material={bodyMat} />
       {/* warm light from the windows on the ground below (only visible at night) */}
       <mesh geometry={spillGeo} material={trainSpill} position={[0, RAIL_Y + 0.02 - BODY_Y, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[len * 1.35, spec.width * 2.2, 1]} renderOrder={3} />
-      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampGeo} material={lampWhite} position={[len / 2 + 0.004, lampY, s * lampZ]} />)}
-      {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampGeo} material={lampRed} position={[-len / 2 - 0.004, lampY, s * lampZ]} />)}
+      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampG} material={lampWhite} position={[len / 2 + (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
+      {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampG} material={lampRed} position={[-len / 2 - (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
+      {front && signSpec && sign && <mesh geometry={planeOf(signSpec.w, signSpec.h)} material={sign} position={[len / 2 + signSpec.x, signSpec.y, 0]} rotation={[0, Math.PI / 2, 0]} />}
+      {front && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[len / 2 + logoSpec.x, logoSpec.y, logoSpec.z]} rotation={[0, Math.PI / 2, 0]} />}
+      {rear && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[-len / 2 - logoSpec.x, logoSpec.y, logoSpec.z]} rotation={[0, -Math.PI / 2, 0]} />}
     </group>
   )
 }
 
-/** A complete train standing along +x, centred on the origin (used by the station editor). */
-export function TrainStatic({ spec, color }: { spec: VehicleSpec; color: string }) {
+/** A complete train standing along +x, centred on the origin (used by the station editor and the gallery). */
+export function TrainStatic({ spec, color, line = 'S5', dest = 'Hauptbahnhof' }: { spec: VehicleSpec; color: string; line?: string; dest?: string }) {
   const offs = carOffsets(spec)
+  const sign = useMemo(() => makeSignMaterial(), [])
+  setSign(sign, line, color, dest)
   return (
     <group>
       {offs.map((x, i) => (
         <group key={i} position={[x, 0, 0]}>
-          <CarMesh spec={spec} index={i} color={color} />
+          <CarMesh spec={spec} index={i} color={color} sign={sign} />
         </group>
       ))}
     </group>
