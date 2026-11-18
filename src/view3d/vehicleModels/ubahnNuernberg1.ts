@@ -16,7 +16,7 @@ const GRAPHITE = '#23272d'
 const WHITE = '#eceef0'
 const GREY = '#3b4048'
 const GREY_L = '#7b828c'
-const INK = '#0a0f14'
+const INK = '#111b25'
 
 const FACE_BOTTOM = 0.1
 const FACE_TOP_GAP = 0.02
@@ -169,8 +169,8 @@ export const ubahnNuernberg1: ModelDef = {
     out.push(box(c.len * 0.11, 0.04, c.w * 0.42, c.len * 0.15, -0.04, 0, '#2c3239'))
     out.push(box(c.len * 0.09, 0.034, c.w * 0.5, -c.len * 0.18, -0.037, 0, '#313840'))
     out.push(box(c.len * 0.05, 0.046, c.w * 0.3, c.len * 0.04, -0.043, 0, '#222830'))
-    out.push(cylX(0.019, c.len * 0.16, c.len * 0.0, -0.056, 0.075, '#3a4149'))
-    out.push(cylX(0.015, c.len * 0.11, c.len * 0.0, -0.054, -0.075, '#3a4149'))
+    out.push(cylX(0.019, c.len * 0.16, 0, -0.056, 0.075, '#3a4149'))
+    out.push(cylX(0.015, c.len * 0.11, 0, -0.054, -0.075, '#3a4149'))
     // bogies (wheel base 2.1 m): frame, cross beams, motors with gear boxes, brake discs, springs, current collector shoes
     for (const sx of [-1, 1]) {
       const bx = sx * c.len * 0.3
@@ -260,11 +260,11 @@ export const ubahnNuernberg1: ModelDef = {
       for (const k of [-1, 0, 1]) out.push(box(c.len * 0.14, 0.004, 0.014, c.len * f, h + 0.012, k * 0.048, '#6c737c'))
     }
     out.push(box(c.len * 0.3, 0.005, 0.022, c.len * -0.05, h + 0.002, 0, '#6a717a'))
-    if (c.role === 'mid' || c.role === 'single') out.push(box(0.05, 0.012, 0.06, c.len * 0.0, h + 0.006, 0.05, '#9aa1aa'))
+    if (c.role === 'mid' || c.role === 'single') out.push(box(0.05, 0.012, 0.06, 0, h + 0.006, 0.05, '#9aa1aa'))
     if (c.nF > 0) out.push(box(0.05, 0.02, 0.006, hl - c.nF - 0.2, h + 0.008, 0, '#d9dde2', -0.35))
-    // ribbed bellows at the end that joins the next car (the shell has the generic box in the gap)
-    if (c.role === 'mid' || c.role === 'tail') {
-      for (const k of [0, 1, 2, 3]) out.push(box(0.005, h * 0.88, c.w * 0.855, -hl - 0.062 + k * 0.022 + 0.01, h * 0.45, 0, k % 2 ? '#14181c' : '#262b32'))
+    // ribbed bellows in the gap to the car ahead (the walk-through G1 has a wide, folded one; the shell adds a plain box on the other side)
+    if (c.nF === 0) {
+      for (const k of [0, 1, 2, 3]) out.push(box(0.007, h * 0.88, c.w * 0.84, hl + 0.006 + k * 0.014, h * 0.45, 0, k % 2 ? '#14181c' : '#2a2f36'))
     }
 
     if (c.nF > 0) out.push(...endFace(c))
