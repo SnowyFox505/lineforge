@@ -7,6 +7,7 @@ import { canServeOutside, outsideBlockers } from '../model/outside'
 import { atMapEdge } from '../model/outsideEdge'
 import StationHeightPicker from './StationHeightPicker'
 import { stopsAt } from '../model/stops'
+import { VEHICLE_MODELS, vehicleFor } from '../model/vehicles'
 import { allowedKinds, namedWaters, WATER_LABEL } from '../model/waters'
 import { BUILD_TYPES, stationTypeAt } from '../model/stationType'
 import { effectiveTypes } from '../plan/glyphs'
@@ -323,6 +324,18 @@ function LinePanel() {
               </button>
             </div>
             <ColorPicker value={active.color} onChange={(color) => updateLine(active.id, { color })} />
+            {(VEHICLE_MODELS[active.operator]?.length ?? 0) > 1 && (
+              <div>
+                <div className="eyebrow mb-1">Zug</div>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  {VEHICLE_MODELS[active.operator].map((v, i) => (
+                    <Chip key={v.model} active={vehicleFor(active.operator, active.vehicle).model === v.model} onClick={() => updateLine(active.id, { vehicle: i === 0 ? undefined : v.model })}>
+                      {v.label ?? v.model}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="border-t border-white/8 pt-3">
               <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
                 <Chip

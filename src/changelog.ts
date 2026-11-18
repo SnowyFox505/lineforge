@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.28.0',
+    date: '2026-11-18',
+    headline: 'Zugmodell pro Linie wählen',
+    changes: [
+      {
+        title: 'Welcher Zug auf einer Linie fährt',
+        what: 'Jede S-Bahn-Linie kann jetzt mit einem eigenen Zugmodell fahren: Berlin BR 484, Berlin BR 481, München BR 423 oder München ET 1420.',
+        how: 'Wähle das Linien-Werkzeug und tippe eine S-Bahn-Linie an. Unter den Farben steht „Zug“ mit den Modellen zur Auswahl. Die Wahl gilt sofort in der 3D-Ansicht und bleibt mit der Stadt gespeichert.',
+        benefit: 'Du kannst jede Linie so aussehen lassen, wie du sie dir vorstellst, zum Beispiel eine Linie mit den alten Berliner und eine mit den neuen Münchner Zügen.',
+      },
+    ],
+  },
+  {
     version: '0.27.0',
     date: '2026-11-18',
     headline: 'Drei weitere S-Bahn-Modelle',
