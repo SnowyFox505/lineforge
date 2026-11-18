@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.30.0',
+    date: '2026-11-18',
+    headline: 'Neue U-Bahn-Züge',
+    changes: [
+      {
+        title: 'Berliner und Münchner U-Bahnen nach echten Vorbildern',
+        what: 'Die U-Bahn gibt es jetzt in mehreren Modellen nach deinen Fotos: Berlin J, H und F-Serie sowie München C2 und A2 (und ein Nürnberger Zug, falls fertig). Alle haben Zielanzeige an der Front, Türen, Fenster, Drehgestelle und Stromschienen-Schleifer.',
+        how: 'Linien-Werkzeug, U-Bahn-Linie antippen, unter „Zug“ das Modell wählen. In der Fahrzeug-Galerie (#fahrzeuge, dann U-Bahn) siehst du alle von allen Seiten.',
+        benefit: 'Jede U-Bahn-Linie kann wie ein echter Zug aussehen. Die Züge behalten ihre Farben, die Linie steht auf der Zielanzeige.',
+      },
+    ],
+  },
+  {
     version: '0.29.0',
     date: '2026-11-18',
     headline: 'Züge behalten ihre echten Farben',

@@ -3,6 +3,12 @@ import { sbahn481 } from './sbahn481'
 import { sbahn484 } from './sbahn484'
 import { sbahnMuc1 } from './sbahnMuc1'
 import { sbahnMuc2 } from './sbahnMuc2'
+import { ubahnBerlin1 } from './ubahnBerlin1'
+import { ubahnBerlin2 } from './ubahnBerlin2'
+import { ubahnBerlin3 } from './ubahnBerlin3'
+import { ubahnMuc1 } from './ubahnMuc1'
+import { ubahnMuc2 } from './ubahnMuc2'
+import { ubahnNuernberg1 } from './ubahnNuernberg1'
 import type { ModelDef } from './types'
 
 /**
@@ -15,6 +21,12 @@ export const MODELS: Record<string, ModelDef> = {
   sbahn481,
   sbahn1420: sbahnMuc2,
   sbahn1420b: sbahnMuc2,
+  ubahnj: ubahnBerlin1,
+  ubahnh: ubahnBerlin2,
+  ubahnf79: ubahnBerlin3,
+  ubahnc2: ubahnMuc1,
+  ubahna2: ubahnMuc2,
+  ubahng1: ubahnNuernberg1,
   sbahnm423: sbahnMuc1,
 }
 

@@ -68,9 +68,31 @@ const MUC_BR423: VehicleSpec = { kind: 'sbahn', model: 'm423', label: 'MUC BR 42
 /** Berlin S-Bahn class 481 (the red-and-yellow classic) */
 const SBAHN_481: VehicleSpec = { kind: 'sbahn', model: '481', label: 'BR 481', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.24, speed: 7, body: '#ebcd7c', roof: '#d6cba9', pantograph: false, livery: '#c4202a' }
 
+/** Berlin U-Bahn, Stadler series J / JK (signal yellow, black doors, huge black windscreen with the display on top) */
+const BLN_J: VehicleSpec = { kind: 'ubahn', model: 'j', label: 'BLN J / JK', lens: rep(3, 1.9), gap: 0.06, width: 0.32, height: 0.4, nose: 0.13, speed: 7.5, body: '#fccd16', roof: '#f4c10f', pantograph: false, livery: '#fccd16' }
+/** Berlin U-Bahn class H (large profile, 2.65 m wide, three doors per side and car; yellow all over) */
+const BLN_H: VehicleSpec = { kind: 'ubahn', model: 'h', label: 'BLN H', lens: rep(3, 1.9), gap: 0.06, width: 0.318, height: 0.42, nose: 0.14, speed: 7.5, body: '#fccd16', roof: '#ebbf12', pantograph: false, livery: '#fccd16' }
+/** Berlin U-Bahn large profile, classic yellow series D / F (2.65 m wide, 3.43 m high, black skirt, three separate windscreens) */
+const BLN_F79: VehicleSpec = { kind: 'ubahn', model: 'f79', label: 'BLN F-Serie', lens: rep(3, 1.75), gap: 0.06, width: 0.32, height: 0.4, nose: 0.1, speed: 7.5, body: '#f8c21a', roof: '#efb512', pantograph: false, livery: '#f8c21a' }
+/** Munich U-Bahn C2 (Siemens Inspiro): silver-grey walk-through train, blue door frames, third rail */
+const MUC_C2: VehicleSpec = { kind: 'ubahn', model: 'c2', label: 'MUC C2', lens: rep(3, 2.1), gap: 0.05, width: 0.35, height: 0.43, nose: 0.4, speed: 8, body: '#c3c9d1', roof: '#6c727b', pantograph: false, livery: '#3d86e6' }
+/** Munich U-Bahn class A (A2.x): blue with a cream window band, 2.9 m wide, three double doors per car, third rail */
+const MUC_A2: VehicleSpec = { kind: 'ubahn', model: 'a2', label: 'MUC A2', lens: rep(3, 2.05), gap: 0.06, width: 0.35, height: 0.43, nose: 0.1, speed: 7.5, body: '#46a0ec', roof: '#d2d7dc', pantograph: false, livery: '#46a0ec' }
+/** Nuremberg U-Bahn G1 (Siemens Inspiro, 2.90 m wide, four cars; here three): graphite with red nose, roof edge and base stripe, white lower panels */
+const NUE_G1: VehicleSpec = { kind: 'ubahn', model: 'g1', label: 'NUE G1', lens: rep(3, 1.8), gap: 0.06, width: 0.35, height: 0.4, nose: 0.22, speed: 7.5, body: '#23272d', roof: '#868c95', pantograph: false, livery: '#cc1522' }
+
 /** Models of a vehicle kind the player can choose from; the first one of a kind is the default (= `VEHICLES`). */
 export const VEHICLE_MODELS: Record<string, VehicleSpec[]> = {
   sbahn: [VEHICLES.sbahn, SBAHN_481, MUC_ET1420B, MUC_ET1420, MUC_BR423],
+  ubahn: [
+    VEHICLES.ubahn,
+    BLN_J,
+    BLN_H,
+    BLN_F79,
+    MUC_C2,
+    MUC_A2,
+    NUE_G1,
+  ],
 }
 
 /** The vehicle a line runs with: its chosen model if it exists, else the default of its kind. */
