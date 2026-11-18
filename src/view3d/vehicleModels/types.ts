@@ -55,6 +55,10 @@ export interface LampSpec {
   z: number
   w: number
   h: number
+  /** a round lamp (diameter = the smaller of w and h) instead of a rectangular one */
+  round?: boolean
+  /** warm yellowish white instead of cold white (older lamps) */
+  warm?: boolean
 }
 
 /** The extra detail of one vehicle model, on top of the shared body shell (see vehicles3d.tsx). */

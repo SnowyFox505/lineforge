@@ -18,20 +18,33 @@ const DEFAULT_COLOR: Record<OperatorId, string> = {
 
 /** Showroom for the vehicle models: pick a type and a line colour, orbit around it. */
 export default function VehicleGallery({ onClose }: { onClose: () => void }) {
-  const [kind, setKind] = useState<OperatorId>('sbahn')
-  const [color, setColor] = useState<string | null>(null)
+  // the address can pick what to show: #fahrzeuge?k=sbahn&m=481&view=front|front34|side|rear|top&c=ff8a00 (handy for screenshots)
+  const q = new URLSearchParams(location.hash.split('?')[1] ?? '')
+  const [kind, setKind] = useState<OperatorId>((q.get('k') as OperatorId) || 'sbahn')
+  const [color, setColor] = useState<string | null>(q.get('c') ? `#${q.get('c')}` : null)
   const [head, setHead] = useState(false)
-  const [model, setModel] = useState<string | undefined>(undefined)
+  const [model, setModel] = useState<string | undefined>(q.get('m') ?? undefined)
+  const view = q.get('view')
   const models = VEHICLE_MODELS[kind] ?? []
   const spec = vehicleFor(kind, model)
   const line = color ?? DEFAULT_COLOR[kind]
   const len = trainLength(spec)
   const dist = head ? 4.4 : Math.max(3.4, len * 1.3)
   const tx = head ? len / 2 - 0.9 : 0
+  const hy = 0.5 + spec.height * 0.5
+  // fixed cameras for the `view` parameter: position and target
+  const fixed: Record<string, [[number, number, number], [number, number, number]]> = {
+    front: [[len / 2 + 2.3, hy, 0.15], [len / 2, hy, 0]],
+    front34: [[len / 2 + 1.7, hy + 0.3, 1.6], [len / 2 - 0.4, hy - 0.05, 0]],
+    side: [[len / 2 - 1.2, hy, 2.7], [len / 2 - 1.2, hy, 0]],
+    rear: [[-len / 2 - 1.7, hy + 0.3, -1.6], [-len / 2 + 0.4, hy - 0.05, 0]],
+    top: [[len / 2 - 1, hy + 3, 0.3], [len / 2 - 1, hy, 0]],
+  }
+  const cam = view ? fixed[view] : undefined
 
   return (
     <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 40%, #1d2d3d 0%, #0a1017 60%, #06080c 100%)' }}>
-      <Canvas key={`${kind}${spec.model}${head}`} camera={{ position: head ? [len / 2 + 1.7, 0.5 + spec.height * 1.1, 1.6] : [dist * 0.75, dist * 0.3, dist * 0.7], fov: 34, near: 0.1, far: 200 }} gl={{ antialias: true }} dpr={[1, 2]}>
+      <Canvas key={`${kind}${spec.model}${head}`} camera={{ position: cam ? cam[0] : head ? [len / 2 + 1.7, 0.5 + spec.height * 1.1, 1.6] : [dist * 0.75, dist * 0.3, dist * 0.7], fov: 34, near: 0.1, far: 200 }} gl={{ antialias: true, preserveDrawingBuffer: true }} dpr={[1, 2]}>
         <hemisphereLight args={['#dfe8ff', '#2a3a35', 1.5]} />
         <directionalLight position={[6, 9, 5]} intensity={2.4} color="#fff0d9" />
         <directionalLight position={[-6, 3, -5]} intensity={0.5} color="#7aa8ff" />
@@ -52,7 +65,7 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
           </mesh>
           <TrainStatic spec={spec} color={line} />
         </group>
-        <OrbitControls makeDefault enableDamping autoRotate={!head} autoRotateSpeed={0.9} target={[tx, 0.5 + spec.height * 0.5, 0]} minDistance={1.2} maxDistance={len * 2} maxPolarAngle={Math.PI / 2.05} />
+        <OrbitControls makeDefault enableDamping autoRotate={!head && !cam} autoRotateSpeed={0.9} target={cam ? cam[1] : [tx, 0.5 + spec.height * 0.5, 0]} minDistance={1.2} maxDistance={len * 2} maxPolarAngle={Math.PI / 2.05} />
       </Canvas>
 
       <button onClick={onClose} aria-label="Zurück" className="glass absolute left-4 top-[calc(14px+var(--safe-top))] grid h-11 w-11 place-items-center rounded-full active:scale-90">

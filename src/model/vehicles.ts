@@ -33,7 +33,7 @@ const rep = (n: number, v: number) => Array.from({ length: n }, () => v)
  * double-deck regional EMU, ICE 4). Proportions follow the real trains, lengths are shortened a little.
  */
 export const VEHICLES: Record<OperatorId, VehicleSpec> = {
-  sbahn: { kind: 'sbahn', model: '484', label: 'BR 484', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.3, speed: 7, body: '#ecc979', roof: '#c4c9cf', pantograph: false },
+  sbahn: { kind: 'sbahn', model: '484', label: 'BR 484', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.17, speed: 7, body: '#ecc979', roof: '#c4c9cf', pantograph: false },
   ubahn: { kind: 'ubahn', lens: rep(3, 1.6), gap: 0.06, width: 0.33, height: 0.41, nose: 0.14, speed: 7.5, body: '#f6c61a', roof: '#7c838d', pantograph: false },
   tram: { kind: 'tram', lens: [1.15, 1.0, 1.15], gap: 0.1, width: 0.3, height: 0.38, nose: 0.26, speed: 4.5, body: '#eef0f3', roof: '#d8dde3', paintAll: true, pantograph: true },
   regional: { kind: 'regional', lens: rep(2, 2.1), gap: 0.07, width: 0.36, height: 0.56, nose: 0.4, speed: 8, doubleDeck: true, body: '#d6232b', roof: '#6c737d', pantograph: true },

@@ -51,7 +51,7 @@ export const sbahnMuc1Logo = (m: FrontMetrics) => {
 }
 export const sbahnMuc1Lamp = (m: FrontMetrics) => {
   const s = screen(m)
-  return { y: s.H * 0.305, z: Math.min(0.118, m.capHW - 0.04), w: 0.044, h: 0.03 }
+  return { y: s.H * 0.305, z: Math.min(0.118, m.capHW - 0.04), w: 0.04, h: 0.04, round: true, warm: true }
 }
 
 /** Everything on the front (or, turned round, the rear) end face of a car with a nose. Built facing +x at x = len / 2. */

@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.28.1',
+    date: '2026-11-18',
+    headline: 'Feinschliff an den S-Bahnen',
+    changes: [
+      {
+        title: 'Näher am Vorbild',
+        what: 'Die Front der BR 484 ist kürzer und steiler, die Frontscheibe größer und die Fensterreihe höher, wie auf den Fotos. Die Scheinwerfer der BR 481 und der Münchner BR 423 sind jetzt rund und warmweiß statt eckig.',
+        how: 'Zu sehen in der 3D-Ansicht und in der Fahrzeug-Galerie. Die Galerie lässt sich auch mit einer Adresse wie #fahrzeuge?m=481&view=front direkt auf ein Modell und eine Ansicht stellen.',
+        benefit: 'Die Züge sehen echter aus, auch aus der Nähe.',
+      },
+    ],
+  },
+  {
     version: '0.28.0',
     date: '2026-11-18',
     headline: 'Zugmodell pro Linie wählen',

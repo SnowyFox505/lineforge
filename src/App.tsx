@@ -36,9 +36,9 @@ export default function App() {
     }
   }
   // #fahrzeuge opens the vehicle gallery (also linked from the city list)
-  const [gallery, setGallery] = useState(() => location.hash === '#fahrzeuge')
+  const [gallery, setGallery] = useState(() => location.hash.startsWith('#fahrzeuge'))
   useEffect(() => {
-    const onHash = () => setGallery(location.hash === '#fahrzeuge')
+    const onHash = () => setGallery(location.hash.startsWith('#fahrzeuge'))
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])

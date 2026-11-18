@@ -32,7 +32,7 @@ export const sbahn481Logo = (m: FrontMetrics) => {
 }
 export const sbahn481Lamp = (m: FrontMetrics) => {
   const s = screen(m)
-  return { y: s.y0 + 0.028, z: s.w / 2 - 0.03, w: 0.015, h: 0.015 }
+  return { y: s.y0 + 0.028, z: s.w / 2 - 0.03, w: 0.026, h: 0.026, round: true, warm: true }
 }
 
 /** A cylinder standing upright (springs, posts): radius r, height len, centred on (x, y, z). */

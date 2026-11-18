@@ -49,17 +49,17 @@ interface Style {
 const STYLES: Record<string, Style> = {
   // Berlin S-Bahn 484 (see vehicleModels/sbahn484.ts): cream body, red lower body in the line colour, black skirt, dark doors
   sbahn484: {
-    levels: [0, 0.07, 0.37, 0.42, 0.77],
-    roofRound: 0.26,
-    drop: 0.1,
-    narrow: 0.1,
-    pow: 1.6,
+    levels: [0, 0.07, 0.37, 0.4, 0.82],
+    roofRound: 0.18,
+    drop: 0.13,
+    narrow: 0.07,
+    pow: 2.1,
     doors: [0.18, 0.5, 0.82],
     doorW: 0.17,
     winW: 0.2,
     winGap: 0.05,
     ws0: 0.39,
-    windows: [[0.42, 0.77]],
+    windows: [[0.4, 0.82]],
     bands: [
       [0, 0.07, DARK],
       [0.07, 0.37, 'line'],
@@ -100,7 +100,7 @@ const STYLES: Record<string, Style> = {
     roofRound: 0.22,
     drop: 0.07,
     narrow: 0.07,
-    pow: 1.6,
+    pow: 2.1,
     doors: [0.18, 0.5, 0.82],
     doorW: 0.17,
     winW: 0.2,
@@ -121,9 +121,9 @@ const STYLES: Record<string, Style> = {
   sbahnm423: {
     levels: [0, 0.11, 0.2, 0.4, 0.72],
     roofRound: 0.2,
-    drop: 0.1,
+    drop: 0.13,
     narrow: 0.12,
-    pow: 1.6,
+    pow: 2.1,
     doors: [0.165, 0.5, 0.835],
     doorW: 0.19,
     winW: 0.12,
@@ -511,13 +511,18 @@ const planeOf = (w: number, h: number) => {
   if (!g) planes.set(k, (g = new THREE.PlaneGeometry(w, h)))
   return g
 }
-const lampBoxes = new Map<string, THREE.BoxGeometry>()
-const lampBox = (w: number, h: number) => {
-  const k = `${w}x${h}`
-  let g = lampBoxes.get(k)
-  if (!g) lampBoxes.set(k, (g = new THREE.BoxGeometry(0.008, h, w)))
+const lampShapes = new Map<string, THREE.BufferGeometry>()
+/** A lamp body: a thin box, or a round disc facing forward */
+const lampShape = (w: number, h: number, round?: boolean) => {
+  const k = `${w}x${h}${round ? 'r' : ''}`
+  let g = lampShapes.get(k)
+  if (!g) {
+    g = round ? new THREE.CylinderGeometry(Math.min(w, h) / 2, Math.min(w, h) / 2, 0.008, 16).rotateZ(Math.PI / 2) : new THREE.BoxGeometry(0.008, h, w)
+    lampShapes.set(k, g)
+  }
   return g
 }
+const lampWarm = new THREE.MeshStandardMaterial({ color: '#fff0c4', emissive: '#ffd98a', emissiveIntensity: 1.5 })
 
 /**
  * One railcar in its own frame: +x is the direction of travel, origin at the car centre, rail level at y = 0 of BODY_Y.
@@ -534,7 +539,8 @@ export function CarMesh({ spec, index, color, sign }: { spec: VehicleSpec; index
   const lamp = model?.lamp(fm)
   const lampY = lamp?.y ?? spec.height * 0.14
   const lampZ = lamp?.z ?? spec.width * 0.5 * (1 - st.narrow) * 0.62
-  const lampG = lamp ? lampBox(lamp.w, lamp.h) : lampGeo
+  const lampG = lamp ? lampShape(lamp.w, lamp.h, lamp.round) : lampGeo
+  const lampFront = lamp?.warm ? lampWarm : lampWhite
   const front = role === 'head' || role === 'single'
   const rear = role === 'tail' || role === 'single'
   const signSpec = model?.sign?.(fm)
@@ -544,7 +550,7 @@ export function CarMesh({ spec, index, color, sign }: { spec: VehicleSpec; index
       <mesh geometry={geo} material={bodyMat} />
       {/* warm light from the windows on the ground below (only visible at night) */}
       <mesh geometry={spillGeo} material={trainSpill} position={[0, RAIL_Y + 0.02 - BODY_Y, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[len * 1.35, spec.width * 2.2, 1]} renderOrder={3} />
-      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampG} material={lampWhite} position={[len / 2 + (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
+      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampG} material={lampFront} position={[len / 2 + (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
       {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampG} material={lampRed} position={[-len / 2 - (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
       {front && signSpec && sign && <mesh geometry={planeOf(signSpec.w, signSpec.h)} material={sign} position={[len / 2 + signSpec.x, signSpec.y, 0]} rotation={[0, Math.PI / 2, 0]} />}
       {front && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[len / 2 + logoSpec.x, logoSpec.y, logoSpec.z]} rotation={[0, Math.PI / 2, 0]} />}

@@ -8,14 +8,14 @@ import type { CarCtx, FrontMetrics, ModelDef } from './types'
  * panel with the DB logo between them, two vents and the coupler cover below. Doors: dark double leaves in a black frame.
  */
 
-const WS_BOTTOM = 0.39 // windscreen bottom as a share of the face height
-const WS_TOP_GAP = 0.03
+const WS_BOTTOM = 0.37 // windscreen bottom as a share of the face height
+const WS_TOP_GAP = 0.018
 
 /** Black panel of the windscreen: centre height, height, width. */
 function screen(m: FrontMetrics) {
   const y0 = m.capTop * WS_BOTTOM
   const y1 = m.capTop - WS_TOP_GAP
-  return { y0, y1, cy: (y0 + y1) / 2, h: y1 - y0, w: Math.min(2 * m.capHW - 0.04, 0.27) }
+  return { y0, y1, cy: (y0 + y1) / 2, h: y1 - y0, w: Math.min(2 * m.capHW - 0.026, 0.3) }
 }
 
 export const sbahn484Sign = (m: FrontMetrics) => {
@@ -110,8 +110,8 @@ export const sbahn484: ModelDef = {
   details(c) {
     const out: THREE.BufferGeometry[] = []
     const zw = c.w / 2
-    const wy0 = c.h * 0.42
-    const wy1 = c.h * 0.77
+    const wy0 = c.h * 0.4
+    const wy1 = c.h * 0.82
     for (const s of [-1, 1]) {
       // windows: black rim, glass pane proud of the wall
       for (const [x0, x1] of c.wins) {
@@ -123,9 +123,9 @@ export const sbahn484: ModelDef = {
       for (const [x0, x1] of c.doors) {
         const cx = (x0 + x1) / 2
         const dw = x1 - x0
-        out.push(box(dw + 0.012, c.h * 0.74, 0.007, cx, c.h * 0.43, s * (zw + 0.002), '#14181c'))
-        for (const sl of [-1, 1]) out.push(box(dw / 2 - 0.012, c.h * 0.62, 0.009, cx + sl * (dw / 4 + 0.0015), c.h * 0.47, s * (zw + 0.0025), GLASS))
-        out.push(box(0.005, c.h * 0.72, 0.01, cx, c.h * 0.43, s * (zw + 0.003), '#090b0d'))
+        out.push(box(dw + 0.012, c.h * 0.79, 0.007, cx, c.h * 0.455, s * (zw + 0.002), '#14181c'))
+        for (const sl of [-1, 1]) out.push(box(dw / 2 - 0.012, c.h * 0.67, 0.009, cx + sl * (dw / 4 + 0.0015), c.h * 0.505, s * (zw + 0.0025), GLASS))
+        out.push(box(0.005, c.h * 0.77, 0.01, cx, c.h * 0.455, s * (zw + 0.003), '#090b0d'))
         out.push(box(0.012, 0.018, 0.008, x1 + 0.014, c.h * 0.42, s * (zw + 0.003), '#3f9a4b'))
       }
     }
