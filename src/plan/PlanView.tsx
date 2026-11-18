@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { OPERATORS } from '../model/constants'
+import { ownRuns, shownColor } from '../model/branchLook'
 import type { StationType } from '../model/types'
 import { useEditor } from '../store/editorStore'
 import Icon from '../ui/Icon'
@@ -394,7 +395,7 @@ export default function PlanView() {
           y: pts[a].y + (dy / len) * dist,
           w,
           name: line.name,
-          color: line.color,
+          color: shownColor(pd, line),
           r: Math.min(OPERATORS[line.operator].badgeRadius, 10),
         })
       })
@@ -563,13 +564,25 @@ export default function PlanView() {
                   const dl = 0.15 + i * 0.18
                   const style = { animationDelay: `${dl}s`, animationDuration: '1.3s' }
                   if (layer === 'glow') {
-                    return T.glow ? <path key={line.id} className="draw-line" d={d} stroke={line.color} strokeWidth={w + 8} opacity={0.3} filter="url(#soft)" pathLength={1} strokeDasharray="1 2" style={style} /> : null
+                    return T.glow ? <path key={line.id} className="draw-line" d={d} stroke={shownColor(pd, line)} strokeWidth={w + 8} opacity={0.3} filter="url(#soft)" pathLength={1} strokeDasharray="1 2" style={style} /> : null
                   }
                   // one outline around the whole bundle: every line gets its casing before any colour is drawn
-                  return <path key={line.id} className="draw-line" d={d} stroke={layer === 'casing' ? T.casing : line.color} strokeWidth={layer === 'casing' ? w + 5 : w} pathLength={1} strokeDasharray="1 2" style={style} />
+                  return <path key={line.id} className="draw-line" d={d} stroke={layer === 'casing' ? T.casing : shownColor(pd, line)} strokeWidth={layer === 'casing' ? w + 5 : w} pathLength={1} strokeDasharray="1 2" style={style} />
                 })}
               </g>
             ))}
+
+            {/* A branch wears the colour of its main line; once it has left it, a pale stripe marks it */}
+            <g strokeLinecap="butt" strokeLinejoin="round" fill="none" stroke="#fff" strokeOpacity={0.85}>
+              {plan.lines.map(({ line, pts }) => {
+                const parent = line.branch ? plan.lines.find((o) => o.line.id === line.branch?.parent) : undefined
+                if (!parent) return null
+                const w = OPERATORS[line.operator].width + 1.4
+                return ownRuns(pts, parent.pts, 2.5).map((run, k) => (
+                  <path key={`${line.id}-${k}`} d={run.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')} strokeWidth={Math.max(1.5, w * 0.34)} />
+                ))
+              })}
+            </g>
 
             {/* Linked stations (a tram stop next to a station): a short walkway between them */}
             {(doc.links ?? []).map(([la, lb]) => {
@@ -644,7 +657,7 @@ export default function PlanView() {
                   const w = Math.max(40, l.name.length * 10 + 16)
                   return (
                     <g key={l.id} transform={`translate(0, ${18 + i * 34})`}>
-                      <rect width={w} height={24} rx={Math.min(OPERATORS[l.operator].badgeRadius, 11)} fill={l.color} />
+                      <rect width={w} height={24} rx={Math.min(OPERATORS[l.operator].badgeRadius, 11)} fill={shownColor(pd, l)} />
                       <text x={w / 2} y={17} textAnchor="middle" fontSize={13} fontWeight={700} fill="#fff">
                         {l.name}
                       </text>

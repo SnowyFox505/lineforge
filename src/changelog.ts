@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.25.1',
+    date: '2026-11-18',
+    headline: 'Ausläufer in der Farbe der Hauptlinie',
+    changes: [
+      {
+        title: 'Ausläufer mit hellem Streifen',
+        what: 'Ein Ausläufer trägt jetzt immer die Farbe seiner Hauptlinie. Solange er auf der gemeinsamen Strecke fährt, ist er einfach die Hauptlinie. Sobald er sich von ihr trennt, läuft ein heller Streifen in der Mitte der Linie mit, an dem du ihn als Ausläufer erkennst.',
+        how: 'Du musst nichts tun. Der Streifen erscheint auf der Karte und im Netzplan von selbst, wo der Ausläufer abzweigt.',
+        benefit: 'Der Ausläufer sieht aus wie ein Teil der Hauptlinie und nicht wie eine ganz andere Linie.',
+      },
+    ],
+  },
+  {
     version: '0.25.0',
     date: '2026-11-18',
     headline: 'Ausläufer, Umriss zeichnen, Verbindungen nach außerhalb',

@@ -13,6 +13,7 @@ import { useTheme, getAccent } from '../ui/theme'
 import { penActive, pointerRole, usePen } from '../ui/pen'
 import { useZoneLook } from './zoneLook'
 import { drawStation } from './drawStation'
+import { ownRuns, shownColor } from '../model/branchLook'
 import { buildZoneGfx, drawZoneLabels, ZONE_STYLE } from './zoneGfx'
 import { stationLabel } from '../model/outside'
 import { buildCountyGfx, drawCountyLabels, drawCounties } from './countyGfx'
@@ -289,6 +290,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       if (shown <= 0.001) continue
 
       const w0 = lineWidthPx(line.operator, s)
+      const color = shownColor(doc, line)
       const path = new Path2D()
       pts.forEach((pt, i) => {
         const px = ox + (pt.x + 0.5) * s
@@ -302,7 +304,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
       ctx.globalAlpha = tool === 'line' && activeLineId && activeLineId !== line.id ? 0.5 : 1
       // soft coloured glow: two wide translucent strokes (a blurred shadow costs far too much on phones)
       const ga = ctx.globalAlpha
-      ctx.strokeStyle = line.color
+      ctx.strokeStyle = color
       ctx.globalAlpha = ga * 0.12
       ctx.lineWidth = w0 * 2.6
       ctx.stroke(path)
@@ -335,12 +337,31 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         ctx.restore()
       }
       // colour on top for a crisp edge
-      ctx.strokeStyle = line.color
+      ctx.strokeStyle = color
       ctx.lineWidth = w0
       ctx.stroke(path)
       ctx.strokeStyle = 'rgba(255,255,255,0.22)'
       ctx.lineWidth = Math.max(1, w0 * 0.22)
       ctx.stroke(path)
+      // a branch wears the colour of its main line; once it has left it, a pale stripe shows that it is a branch
+      const parentPts = line.branch ? linePaths[line.branch.parent] : undefined
+      if (parentPts && shown >= total - 1e-6) {
+        ctx.setLineDash([])
+        ctx.lineCap = 'butt'
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+        ctx.lineWidth = Math.max(1.2, w0 * 0.34)
+        for (const run of ownRuns(pts, parentPts, 0.25)) {
+          const rp = new Path2D()
+          run.forEach((pt, i) => {
+            const px = ox + (pt.x + 0.5) * s
+            const py = oy + (pt.y + 0.5) * s
+            if (i === 0) rp.moveTo(px, py)
+            else rp.lineTo(px, py)
+          })
+          ctx.stroke(rp)
+        }
+        ctx.lineCap = 'round'
+      }
       ctx.setLineDash([])
       ctx.globalAlpha = 1
     }
@@ -600,7 +621,7 @@ export default function MapEditor({ insets }: { insets: Insets }) {
         ctx.lineWidth = 2.5
         ctx.strokeStyle = 'rgba(6,10,14,0.85)'
         ctx.stroke()
-        ctx.fillStyle = line.color
+        ctx.fillStyle = shownColor(doc, line)
         ctx.fill()
         ctx.fillStyle = '#ffffff'
         ctx.fillText(line.name, b.cx, b.cy + 0.5)
