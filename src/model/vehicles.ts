@@ -57,7 +57,8 @@ export function carOffsets(spec: VehicleSpec): number[] {
 }
 
 /** Munich S-Bahn, new generation (Siemens ET 1420): graphite body, silver lower body, overhead-line train. */
-const MUC_ET1420: VehicleSpec = { kind: 'sbahn', model: '1420', label: 'MUC ET 1420', lens: rep(3, 2.0), gap: 0.07, width: 0.37, height: 0.45, nose: 0.34, speed: 7.5, body: '#464d58', roof: '#4b515a', pantograph: false }
+const MUC_ET1420: VehicleSpec = { kind: 'sbahn', model: '1420', label: 'MUC ET 1420 grau', lens: rep(3, 2.0), gap: 0.07, width: 0.37, height: 0.45, nose: 0.34, speed: 7.5, body: '#464d58', roof: '#4b515a', pantograph: false }
+const MUC_ET1420B: VehicleSpec = { kind: 'sbahn', model: '1420b', label: 'MUC ET 1420 blau', lens: rep(3, 2.0), gap: 0.07, width: 0.37, height: 0.45, nose: 0.34, speed: 7.5, body: '#eef1f4', roof: '#dde1e6', pantograph: false }
 
 /** Munich S-Bahn class 423 (red with a white stripe, grey skirt, round front with the destination display above the windscreen) */
 const MUC_BR423: VehicleSpec = { kind: 'sbahn', model: 'm423', label: 'MUC BR 423', lens: rep(3, 1.95), gap: 0.07, width: 0.36, height: 0.43, nose: 0.28, speed: 7, body: '#e4e5e6', roof: '#9ca1a8', pantograph: false }
@@ -67,7 +68,7 @@ const SBAHN_481: VehicleSpec = { kind: 'sbahn', model: '481', label: 'BR 481', l
 
 /** Models of a vehicle kind the player can choose from; the first one of a kind is the default (= `VEHICLES`). */
 export const VEHICLE_MODELS: Record<string, VehicleSpec[]> = {
-  sbahn: [VEHICLES.sbahn, SBAHN_481, MUC_ET1420, MUC_BR423],
+  sbahn: [VEHICLES.sbahn, SBAHN_481, MUC_ET1420B, MUC_ET1420, MUC_BR423],
 }
 
 /** The vehicle a line runs with: its chosen model if it exists, else the default of its kind. */

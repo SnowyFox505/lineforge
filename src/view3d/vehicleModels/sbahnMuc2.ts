@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { box, cylX, cylZ, frontPlate, GLASS, paint, toRear } from './parts'
+import { box, cylX, cylZ, frontPlate, GLASS, paint, rakeParts, toRear } from './parts'
 import type { CarCtx, FrontMetrics, ModelDef } from './types'
 
 /**
@@ -73,16 +73,18 @@ function bar(x0: number, y0: number, x1: number, y1: number, z: number, t: numbe
 }
 
 /** The green S-Bahn disc with a white S made of bars, standing proud of a plane. `side`: on a side wall (x along the car), else on the front. */
-function sBadge(x: number, y: number, z: number, r: number, dir: 1 | -1, side: boolean): THREE.BufferGeometry[] {
+function sBadge(x: number, y: number, z: number, r: number, dir: 1 | -1, side: boolean, disc = true): THREE.BufferGeometry[] {
   const out: THREE.BufferGeometry[] = []
   const t = 0.0035
-  const a = r * 0.34 // half width of the S
-  const b = r * 0.62 // half height
-  const bt = r * 0.24 // stroke
-  if (side) out.push(cylZ(r, t, x, y, z + (dir * t) / 2, '#16a24a', 16))
-  else out.push(cylX(r, t, x + t / 2, y, z, '#16a24a', 16))
+  const a = r * (disc ? 0.34 : 0.5) // half width of the S
+  const b = r * (disc ? 0.62 : 0.78) // half height
+  const bt = r * (disc ? 0.24 : 0.3) // stroke
+  if (disc) {
+    if (side) out.push(cylZ(r, t, x, y, z + (dir * t) / 2, '#16a24a', 16))
+    else out.push(cylX(r, t, x + t / 2, y, z, '#16a24a', 16))
+  }
   // the S: a sine curve from top to bottom, drawn as short bars (u across the badge, v up)
-  const N = 10
+  const N = disc ? 10 : 16
   const pt = (i: number): [number, number] => {
     const k = i / N
     return [-a * Math.sin(2 * Math.PI * k), b * (1 - 2 * k)]
@@ -110,7 +112,7 @@ function endFace(c: CarCtx): THREE.BufferGeometry[] {
 
   // silver frame wrapping the windscreen, a dark glass panel inside it, a deeper recess for the destination display
   parts.push(frontShape(taper(s.wb, s.wt, s.h, 0.02, 0.06), x, s.cy, 0, 0.007, SILVER))
-  parts.push(frontShape(taper(s.wb - 0.014, s.wt - 0.018, s.h - 0.034, 0.014, 0.05), x + 0.007, s.cy + 0.004, 0, 0.0025, INK))
+  parts.push(frontShape(taper(s.wb - 0.05, s.wt - 0.058, s.h - 0.062, 0.02, 0.06), x + 0.007, s.cy + 0.002, 0, 0.0025, INK))
   // a faint reflection across the glass
   parts.push(frontShape(taper(0.075, 0.045, s.h - 0.07, 0.008, 0.008), x + 0.0095, s.cy + 0.002, -s.wb * 0.2, 0.0006, '#1b2b39'))
   parts.push(frontShape(taper(0.02, 0.012, s.h - 0.07, 0.004, 0.004), x + 0.0095, s.cy + 0.002, -s.wb * 0.04, 0.0006, '#1b2b39'))
@@ -146,7 +148,7 @@ function endFace(c: CarCtx): THREE.BufferGeometry[] {
   // apron / buffer beam and a step plate
   parts.push(box(0.03, 0.03, c.capHW * 2 * 0.94, x + 0.004, 0.015, 0, '#1b2026'))
   parts.push(box(0.012, 0.006, c.capHW * 1.5, x + 0.016, 0.03, 0, '#3a424b'))
-  return parts
+  return rakeParts(parts, c.rake, c.h)
 }
 
 /** The cab door and the little cab window on the side wall behind a nose (the last window of the car is replaced by it). */
@@ -213,6 +215,8 @@ export const sbahnMuc2: ModelDef = {
     const zw = c.w / 2
     const wy0 = c.h * 0.38
     const wy1 = c.h * 0.79
+    // the blue-white livery (photos 1 and 3): doors and the front section in the line colour, a big white S on the front cars
+    const blue = c.spec.model === '1420b'
     const isCab = (x0: number, x1: number) => (c.nF > 0 && x1 > c.len / 2 - c.nF - 0.07) || (c.nR > 0 && x0 < -c.len / 2 + c.nR + 0.07)
     for (const s of [-1, 1] as const) {
       for (const [x0, x1] of c.wins) {
@@ -229,8 +233,8 @@ export const sbahnMuc2: ModelDef = {
       for (const [x0, x1] of c.doors) {
         const cx = (x0 + x1) / 2
         const dw = x1 - x0
-        out.push(box(dw + 0.014, c.h * 0.76, 0.006, cx, c.h * 0.43, s * (zw + 0.0015), SILVER_DARK))
-        out.push(box(dw, c.h * 0.73, 0.008, cx, c.h * 0.43, s * (zw + 0.002), '#14181c'))
+        out.push(box(dw + 0.014, c.h * 0.76, 0.006, cx, c.h * 0.43, s * (zw + 0.0015), blue ? '#dfe3e8' : SILVER_DARK))
+        out.push(box(dw, c.h * 0.73, 0.008, cx, c.h * 0.43, s * (zw + 0.002), blue ? c.line : '#14181c'))
         for (const sl of [-1, 1]) out.push(box(dw / 2 - 0.014, c.h * 0.52, 0.0095, cx + sl * (dw / 4 + 0.0015), c.h * 0.5, s * (zw + 0.0026), GLASS))
         out.push(box(0.005, c.h * 0.7, 0.0105, cx, c.h * 0.43, s * (zw + 0.003), '#090b0d'))
         out.push(box(dw * 0.5, 0.011, 0.005, cx, c.h * 0.82, s * (zw + 0.002), '#3f86c9'))
@@ -238,7 +242,9 @@ export const sbahnMuc2: ModelDef = {
       }
       // the green S next to the first door of the car, on the light lower body
       const d0 = c.doors[0]
-      if (d0) out.push(...sBadge(d0[1] + 0.07, c.h * 0.17, s * zw, 0.022, s, true))
+      if (d0 && !blue) out.push(...sBadge(d0[1] + 0.07, c.h * 0.17, s * zw, 0.022, s, true))
+      if (blue && c.nF > 0) out.push(...sBadge(c.len / 2 - c.nF - 0.56, c.h * 0.5, s * (zw + 0.0048), 0.12, s, true, false))
+      if (blue && c.nR > 0) out.push(...sBadge(-(c.len / 2 - c.nR - 0.56), c.h * 0.5, s * (zw + 0.0048), 0.12, s, true, false))
     }
 
     // roof: two air conditioning units with grilles, a cable duct; the middle car carries the single-arm pantograph

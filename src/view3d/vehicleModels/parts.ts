@@ -98,3 +98,14 @@ export function sidePlate(w: number, h: number, r: number, x: number, y: number,
 export function toRear(parts: THREE.BufferGeometry[]): THREE.BufferGeometry[] {
   return parts.map((p) => p.rotateY(Math.PI))
 }
+
+/** Lean the parts of a front end face back to match a raked nose: x shifts by `amount * y / h` (built facing +x, before `toRear`). */
+export function rakeParts(parts: THREE.BufferGeometry[], amount: number, h: number): THREE.BufferGeometry[] {
+  if (!amount) return parts
+  for (const g of parts) {
+    const pos = g.attributes.position
+    for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) - (amount * pos.getY(i)) / h)
+    pos.needsUpdate = true
+  }
+  return parts
+}

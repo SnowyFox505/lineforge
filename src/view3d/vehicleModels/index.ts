@@ -14,6 +14,7 @@ export const MODELS: Record<string, ModelDef> = {
   sbahn484,
   sbahn481,
   sbahn1420: sbahnMuc2,
+  sbahn1420b: sbahnMuc2,
   sbahnm423: sbahnMuc1,
 }
 

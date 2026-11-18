@@ -44,6 +44,12 @@ interface Style {
   skirt: number
   /** the nose is painted as plain body (the detail model puts windscreen and lights on the end face itself) */
   detailFront?: boolean
+  /** the end face leans back: its top lies this far behind its bottom (design units); the nose is sheared, the model's end parts must follow (`rakeParts`) */
+  rake?: number
+  /** colour of the whole nose (and, with `cabLen`, of the wall behind it): 'line', 'body' or a hex colour */
+  noseColour?: string
+  /** length of the wall behind the nose that is painted in `noseColour` too */
+  cabLen?: number
 }
 
 const STYLES: Record<string, Style> = {
@@ -71,6 +77,7 @@ const STYLES: Record<string, Style> = {
     detailFront: true,
   },
   // Munich S-Bahn ET 1420 (see vehicleModels/sbahnMuc2.ts): graphite body, light grey lower body, thin stripe in the line colour
+  // Munich ET 1420, grey version (renders): graphite body above, light grey below
   sbahn1420: {
     levels: [0, 0.07, 0.29, 0.325, 0.38, 0.8],
     roofRound: 0.22,
@@ -90,9 +97,37 @@ const STYLES: Record<string, Style> = {
     ],
     door: '#14181c',
     front: '#b4bac2',
-    roof: '#4b515a',
+    roof: '#a9b0b9',
     skirt: 0.07,
     detailFront: true,
+    rake: 0.13,
+  },
+  // Munich ET 1420, blue-white version (photos 1 and 3): white body, dark windows, blue (= line colour) front section and doors
+  sbahn1420b: {
+    levels: [0, 0.07, 0.29, 0.325, 0.38, 0.8],
+    roofRound: 0.22,
+    drop: 0.12,
+    narrow: 0.12,
+    pow: 1.5,
+    doors: [0.2, 0.5, 0.8],
+    doorW: 0.18,
+    winW: 0.3,
+    winGap: 0.05,
+    ws0: 0.37,
+    windows: [[0.38, 0.79]],
+    bands: [
+      [0, 0.07, DARK],
+      [0.07, 0.29, 'body'],
+      [0.29, 0.325, 'line'],
+    ],
+    door: '#14181c',
+    front: 'line',
+    roof: '#dde1e6',
+    skirt: 0.07,
+    detailFront: true,
+    rake: 0.13,
+    noseColour: 'line',
+    cabLen: 0.72,
   },
   // Berlin S-Bahn 481 (see vehicleModels/sbahn481.ts): cream-yellow body, red lower body in the line colour, red door leaves
   sbahn481: {
@@ -359,6 +394,14 @@ function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: str
     const ax = Math.abs(nx)
     const sideFace = Math.abs(nz) > 0.55
     const nose = isNoseX(cx)
+    // painted nose (and the wall behind it): one colour above the skirt, except the roof
+    if (st.noseColour && ny < 0.55) {
+      const behind = (nF > 0 && cx > hl - nF - (st.cabLen ?? 0)) || (nR > 0 && cx < -hl + nR + (st.cabLen ?? 0))
+      if ((nose || behind) && yF >= st.skirt && !(behind && !nose && Math.abs(nz) <= 0.55)) {
+        const glass = !nose && st.windows.some(([y0, y1]) => yF > y0 && yF < y1) && inAny(side.wins, cx)
+        if (!glass) return colourOf(st.noseColour, line, body)
+      }
+    }
     // a detail model puts windscreen, lights and vents on the end face itself: the nose is plain body and bands
     if (st.detailFront && nose && ax > 0.25) {
       for (const [y0, y1, cn] of st.bands) if (yF >= y0 && yF <= y1) return colourOf(cn, line, body)
@@ -384,7 +427,16 @@ function shell(spec: VehicleSpec, len: number, nF: number, nR: number, line: str
     return body
   }
 
+  // a raked nose: the top of the nose leans back (x shifts with height, growing towards the end face)
+  const shear = (v: THREE.Vector3) => {
+    if (!st.rake) return
+    if (nF > 0 && v.x > hl - nF) v.x -= st.rake * (v.y / h) * ((v.x - (hl - nF)) / nF)
+    else if (nR > 0 && v.x < -hl + nR) v.x += st.rake * (v.y / h) * ((-hl + nR - v.x) / nR)
+  }
   const tri = (p: THREE.Vector3, q: THREE.Vector3, r: THREE.Vector3) => {
+    shear(p)
+    shear(q)
+    shear(r)
     n.copy(q).sub(p).cross(vb.copy(r).sub(p)).normalize()
     const cx = (p.x + q.x + r.x) / 3
     const cy = (p.y + q.y + r.y) / 3
@@ -454,7 +506,7 @@ export function carGeometry(spec: VehicleSpec, index: number, role: Role, line: 
   const body = spec.paintAll ? line : spec.body
   const side = layoutSide(st, len, nF, nR)
   const fm = frontMetrics(spec)
-  const ctx: CarCtx = { spec, index, role, len, w, h, nF, nR, line, body, doors: side.doors, wins: side.wins, capTop: fm.capTop, capHW: fm.capHW, roofR: st.roofRound * w }
+  const ctx: CarCtx = { spec, index, role, len, w, h, nF, nR, line, body, doors: side.doors, wins: side.wins, capTop: fm.capTop, capHW: fm.capHW, roofR: st.roofRound * w, rake: st.rake ?? 0 }
 
   if (model) {
     // detailed model: its own underframe, bogies, doors, windows, roof equipment and end faces
@@ -545,16 +597,20 @@ export function CarMesh({ spec, index, color, sign }: { spec: VehicleSpec; index
   const rear = role === 'tail' || role === 'single'
   const signSpec = model?.sign?.(fm)
   const logoSpec = model?.logo?.(fm)
+  // a raked end face: decals and lamps lean back with it
+  const rake = st.rake ?? 0
+  const tilt = Math.atan2(rake, spec.height)
+  const xAt = (y: number) => (rake * y) / spec.height
   return (
     <group position={[0, BODY_Y, 0]}>
       <mesh geometry={geo} material={bodyMat} />
       {/* warm light from the windows on the ground below (only visible at night) */}
       <mesh geometry={spillGeo} material={trainSpill} position={[0, RAIL_Y + 0.02 - BODY_Y, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[len * 1.35, spec.width * 2.2, 1]} renderOrder={3} />
-      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampG} material={lampFront} position={[len / 2 + (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
-      {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampG} material={lampRed} position={[-len / 2 - (lamp ? 0.0112 : 0.004), lampY, s * lampZ]} />)}
-      {front && signSpec && sign && <mesh geometry={planeOf(signSpec.w, signSpec.h)} material={sign} position={[len / 2 + signSpec.x, signSpec.y, 0]} rotation={[0, Math.PI / 2, 0]} />}
-      {front && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[len / 2 + logoSpec.x, logoSpec.y, logoSpec.z]} rotation={[0, Math.PI / 2, 0]} />}
-      {rear && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[-len / 2 - logoSpec.x, logoSpec.y, logoSpec.z]} rotation={[0, -Math.PI / 2, 0]} />}
+      {front && [-1, 1].map((s) => <mesh key={`f${s}`} geometry={lampG} material={lampFront} position={[len / 2 + (lamp ? 0.0112 : 0.004) - xAt(lampY), lampY, s * lampZ]} rotation={[0, 0, tilt]} />)}
+      {rear && [-1, 1].map((s) => <mesh key={`r${s}`} geometry={lampG} material={lampRed} position={[-len / 2 - (lamp ? 0.0112 : 0.004) + xAt(lampY), lampY, s * lampZ]} rotation={[0, 0, -tilt]} />)}
+      {front && signSpec && sign && <mesh geometry={planeOf(signSpec.w, signSpec.h)} material={sign} position={[len / 2 + signSpec.x - xAt(signSpec.y), signSpec.y, 0]} rotation={new THREE.Euler(0, Math.PI / 2, tilt, 'ZYX')} />}
+      {front && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[len / 2 + logoSpec.x - xAt(logoSpec.y), logoSpec.y, logoSpec.z]} rotation={new THREE.Euler(0, Math.PI / 2, tilt, 'ZYX')} />}
+      {rear && logoSpec && <mesh geometry={planeOf(logoSpec.w, logoSpec.h)} material={logoMaterial()} position={[-len / 2 - logoSpec.x + xAt(logoSpec.y), logoSpec.y, logoSpec.z]} rotation={new THREE.Euler(0, -Math.PI / 2, -tilt, 'ZYX')} />}
     </group>
   )
 }

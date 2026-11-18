@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.28.2',
+    date: '2026-11-18',
+    headline: 'Münchner ET 1420 nach den Fotos',
+    changes: [
+      {
+        title: 'ET 1420 in Blau-Weiß und Grau, mit geneigter Front',
+        what: 'Der neue Münchner S-Bahn-Zug gibt es jetzt in zwei Lackierungen: Blau-Weiß wie auf den Fotos (weißer Wagenkasten, dunkle Fenster, großes weißes S auf dem Führerstand) und die bisherige graue. Das Blau ist die Farbe deiner Linie. Die Front ist jetzt wie am Original stark nach hinten geneigt und hat einen dicken silbernen Rahmen um die Scheibe.',
+        how: 'Linien-Werkzeug, S-Bahn-Linie antippen, unter „Zug“ „MUC ET 1420 blau“ oder „MUC ET 1420 grau“ wählen.',
+        benefit: 'Die Münchner Linie sieht aus wie die echte neue S-Bahn und passt zu deiner Linienfarbe.',
+      },
+    ],
+  },
+  {
     version: '0.28.1',
     date: '2026-11-18',
     headline: 'Feinschliff an den S-Bahnen',

@@ -24,6 +24,8 @@ export interface CarCtx {
   capHW: number
   /** the corner radius at the roof edge */
   roofR: number
+  /** how far the top of the end face leans back (0 = upright); end parts are sheared with `rakeParts` */
+  rake: number
 }
 
 /** Where the flat front face of a nose is: top height and half width (the plane x = len / 2). */

@@ -27,7 +27,7 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
   const view = q.get('view')
   const models = VEHICLE_MODELS[kind] ?? []
   const spec = vehicleFor(kind, model)
-  const line = color ?? DEFAULT_COLOR[kind]
+  const line = color ?? (spec.model === '1420b' ? '#1f6fd1' : DEFAULT_COLOR[kind])
   const len = trainLength(spec)
   const dist = head ? 4.4 : Math.max(3.4, len * 1.3)
   const tx = head ? len / 2 - 0.9 : 0
