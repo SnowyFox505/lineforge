@@ -1,101 +1,81 @@
 import { clamp01 } from '../netCanvas'
-import { textDots } from './dotFont'
-import { Flap, padTo } from './flap'
+import { padTo, Roll } from './roll'
 
 /**
- * The departure board of the update screen: split-flap tiles and an LED line, drawn on a 2D canvas.
+ * The information display of the update screen: a flat dark panel with a line badge, big version number, status and a
+ * line of text for what the update is doing. Texts change by rolling (see `Roll`).
  * Everything is laid out in "design units" of a board that is 350 wide and scaled as a whole.
  */
 export const BOARD_W = 350
 export const BOARD_H = 382
 
-const WARM: RGB = [244, 240, 228]
+type RGB = [number, number, number]
 const AMBER: RGB = [255, 176, 46]
 const GREEN: RGB = [98, 242, 161]
-type RGB = [number, number, number]
+const INK: RGB = [246, 248, 252]
+const GREY: RGB = [140, 150, 165]
 
 const css = (c: RGB, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`
 const mixC = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - clamp01(t), 3)
 
 export interface Board {
-  clock: Flap[]
-  version: Flap[]
-  zug: Flap[]
-  gleis: Flap[]
-  ziel: Flap[]
-  status: Flap[]
-  /** a wide tile (digit) or a narrow one (dot) for every place of the version */
-  wide: boolean[]
+  clock: Roll
+  /** one roll per character, so the digits turn one after the other */
+  version: Roll[]
+  zug: Roll
+  ziel: Roll
+  status: Roll
   ticker: string
   tickerSince: number
 }
 
-const isDigit = (c: string) => c >= '0' && c <= '9'
-
 export function makeBoard(oldVersion: string, newVersion: string): Board {
   const n = Math.max(oldVersion.length, newVersion.length)
-  const mk = (len: number, fps = 15) => Array.from({ length: len }, () => new Flap(fps))
   return {
-    clock: mk(5, 14),
-    version: Array.from({ length: n }, () => new Flap(14)),
-    zug: mk(9),
-    gleis: mk(1),
-    ziel: mk(12),
-    status: mk(9),
-    wide: Array.from({ length: n }, (_, i) => isDigit(oldVersion[i] ?? ' ') || isDigit(newVersion[i] ?? ' ')),
+    clock: new Roll(),
+    version: Array.from({ length: n }, () => new Roll()),
+    zug: new Roll(),
+    ziel: new Roll(),
+    status: new Roll(),
     ticker: '',
     tickerSince: 0,
   }
 }
 
-/** The board comes to life: every tile turns to its first text, left to right and top to bottom. */
+const allRolls = (b: Board): Roll[] => [b.clock, ...b.version, b.zug, b.ziel, b.status]
+
+/** The board comes to life: the texts roll in, top to bottom. */
 export function startBoard(b: Board, oldVersion: string, clock: string, instant: boolean) {
-  const put = (tiles: Flap[], text: string, delay: number, step: number, spins = 0) => {
-    padTo(text, tiles.length).forEach((ch, i) => {
-      if (instant) {
-        tiles[i].cur = ch
-        tiles[i].target = ch
-      } else tiles[i].set(ch, delay + i * step, spins)
-    })
-  }
-  put(b.clock, clock, 0.25, 0.07)
-  put(b.version, oldVersion, 0.35, 0.09, 4)
-  put(b.zug, 'LINEFORGE', 0.7, 0.05)
-  put(b.gleis, '1', 1.0, 0)
-  put(b.ziel, 'NEUE VERSION', 0.95, 0.045)
-  put(b.status, 'EINFAHRT', 1.35, 0.045)
+  const put = (r: Roll, text: string, delay: number) => (instant ? r.jump(text) : r.set(text, delay))
+  put(b.clock, clock, 0.2)
+  padTo(oldVersion, b.version.length).forEach((ch, i) => put(b.version[i], ch, 0.3 + i * 0.08))
+  put(b.zug, 'LineForge', 0.85)
+  put(b.ziel, 'Neue Version', 0.95)
+  put(b.status, 'Einfahrt', 1.15)
 }
 
-/** The new version turns in place of the old one. */
+/** The new version rolls in place of the old one. */
 export function flipVersion(b: Board, newVersion: string, instant: boolean) {
-  padTo(newVersion, b.version.length).forEach((ch, i) => {
-    if (instant) {
-      b.version[i].cur = ch
-      b.version[i].target = ch
-    } else b.version[i].set(ch, i * 0.08, 5)
-  })
+  padTo(newVersion, b.version.length).forEach((ch, i) => (instant ? b.version[i].jump(ch) : b.version[i].set(ch, i * 0.09)))
 }
 
 export function flipStatus(b: Board, instant: boolean) {
-  padTo('PÜNKTLICH', b.status.length).forEach((ch, i) => {
-    if (instant) {
-      b.status[i].cur = ch
-      b.status[i].target = ch
-    } else b.status[i].set(ch, i * 0.05, 4)
-  })
+  if (instant) b.status.jump('Pünktlich')
+  else b.status.set('Pünktlich', 0)
 }
 
 export function stepBoard(b: Board, dt: number) {
-  for (const row of [b.clock, b.version, b.zug, b.gleis, b.ziel, b.status]) for (const f of row) f.step(dt)
+  for (const r of allRolls(b)) r.step(dt)
 }
 
-/** true when no tile is turning any more */
+/** true when nothing is rolling any more */
 export function boardSettled(b: Board): boolean {
-  return [b.clock, b.version, b.zug, b.gleis, b.ziel, b.status].every((row) => row.every((f) => f.settled))
+  return allRolls(b).every((r) => r.settled)
 }
 
 export function setClock(b: Board, clock: string) {
-  padTo(clock, b.clock.length).forEach((ch, i) => b.clock[i].set(ch, 0, 0))
+  b.clock.set(clock, 0)
 }
 
 // ---- drawing ----------------------------------------------------------------------------------------------------------
@@ -105,120 +85,49 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.roundRect(x, y, w, h, r)
 }
 
-function tile(ctx: CanvasRenderingContext2D, f: Flap, x: number, y: number, w: number, h: number, color: RGB, glow: number, s: number, font: string) {
-  const mid = y + h / 2
-  const r = 3.4 * s
-  const half = (which: 'top' | 'bot', ch: string, scaleY: number, shade: number) => {
-    if (scaleY < 0.002) return
-    ctx.save()
-    ctx.translate(0, mid)
-    ctx.scale(1, scaleY)
-    ctx.translate(0, -mid)
-    ctx.beginPath()
-    if (which === 'top') ctx.rect(x - 1, y - 1, w + 2, h / 2 + 1)
-    else ctx.rect(x - 1, mid, w + 2, h / 2 + 1)
-    ctx.clip()
-    roundRect(ctx, x, y, w, h, r)
-    const g = ctx.createLinearGradient(0, y, 0, y + h)
-    g.addColorStop(0, '#222833')
-    g.addColorStop(0.5, '#171c24')
-    g.addColorStop(0.5, '#10141a')
-    g.addColorStop(1, '#0c0f14')
-    ctx.fillStyle = g
-    ctx.fill()
-    if (ch !== ' ') {
-      ctx.font = font
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      if (glow > 0.01) {
-        ctx.shadowColor = css(color, 0.9 * glow)
-        ctx.shadowBlur = 10 * s * glow
-      }
-      ctx.fillStyle = css(color)
-      ctx.fillText(ch, x + w / 2, mid + h * 0.03)
-      ctx.shadowBlur = 0
-    }
-    if (shade > 0) {
-      ctx.fillStyle = `rgba(0,0,0,${shade})`
-      ctx.fillRect(x - 1, y - 1, w + 2, h + 2)
-    }
-    ctx.restore()
-  }
-  const flipping = f.next !== null
-  half('top', flipping ? f.next! : f.cur, 1, 0)
-  half('bot', f.cur, 1, flipping && f.p > 0.5 ? 0.35 : 0)
-  if (flipping) {
-    if (f.p < 0.5) half('top', f.cur, Math.cos(f.p * Math.PI), f.p * 0.7)
-    else half('bot', f.next!, -Math.cos(f.p * Math.PI), (1 - f.p) * 0.55)
-  }
-  // the gap between the two flaps and the hinge pins
-  ctx.fillStyle = 'rgba(0,0,0,0.85)'
-  ctx.fillRect(x, mid - 0.7 * s, w, 1.4 * s)
-  ctx.fillStyle = 'rgba(255,255,255,0.05)'
-  ctx.fillRect(x, mid + 0.7 * s, w, 0.6 * s)
-  ctx.fillStyle = '#05070a'
-  ctx.beginPath()
-  ctx.arc(x + 1.2 * s, mid, 1.2 * s, 0, Math.PI * 2)
-  ctx.arc(x + w - 1.2 * s, mid, 1.2 * s, 0, Math.PI * 2)
-  ctx.fill()
-  roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, r)
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
-  ctx.lineWidth = 1
-  ctx.stroke()
+interface TextLook {
+  size: number
+  weight: number
+  color: RGB
+  align: CanvasTextAlign
+  family: string
+  /** how far the text travels while it rolls */
+  rise: number
 }
 
-// the LED line: text raster as lit dots, rendered once per text and size
-const tickerCache = new Map<string, HTMLCanvasElement>()
-
-function tickerImage(text: string, w: number, h: number, dpr: number): HTMLCanvasElement {
-  const key = `${text}|${Math.round(w)}|${Math.round(h)}|${dpr}`
-  const hit = tickerCache.get(key)
-  if (hit) return hit
-  if (tickerCache.size > 12) tickerCache.clear()
-  const { cols, rows, dots } = textDots(text)
-  const out = document.createElement('canvas')
-  out.width = Math.round(w * dpr)
-  out.height = Math.round(h * dpr)
-  const g = out.getContext('2d')!
-  g.scale(dpr, dpr)
-  const pitch = Math.min((h - 8) / 9.4, (w - 18) / (cols + 1), 5)
-  const ox = (w - cols * pitch) / 2
-  const oy = (h - rows * pitch) / 2
-  // unlit dots over the whole panel
-  g.fillStyle = 'rgba(255,176,46,0.08)'
-  g.beginPath()
-  for (let gx = ox - Math.floor((ox - 6) / pitch) * pitch; gx < w - 5; gx += pitch) {
-    for (let gy = oy - Math.floor((oy - 3) / pitch) * pitch; gy < h - 3; gy += pitch) {
-      g.moveTo(gx + pitch * 0.2, gy)
-      g.arc(gx, gy, pitch * 0.2, 0, Math.PI * 2)
+/** a rolling text: the old one goes up and out, the new one comes from below (the caller sets the clip) */
+function drawRoll(ctx: CanvasRenderingContext2D, r: Roll, x: number, y: number, t: TextLook, alpha = 1) {
+  ctx.font = `${t.weight} ${t.size}px ${t.family}`
+  ctx.textAlign = t.align
+  ctx.textBaseline = 'alphabetic'
+  if (r.next === null) {
+    if (r.cur) {
+      ctx.fillStyle = css(t.color, alpha)
+      ctx.fillText(r.cur, x, y)
     }
+    return
   }
-  g.fill()
-  // lit dots, with a glow
-  g.shadowColor = 'rgba(255,170,40,0.9)'
-  g.shadowBlur = pitch * 1.3
-  g.fillStyle = '#ffc04d'
-  g.beginPath()
-  for (const [x, y] of dots) {
-    const cx = ox + (x + 0.5) * pitch
-    const cy = oy + (y + 0.5) * pitch
-    g.moveTo(cx + pitch * 0.34, cy)
-    g.arc(cx, cy, pitch * 0.34, 0, Math.PI * 2)
+  const e = easeOutCubic(r.p)
+  if (r.cur && e < 0.99) {
+    ctx.fillStyle = css(t.color, alpha * (1 - e))
+    ctx.fillText(r.cur, x, y - e * t.rise)
   }
-  g.fill()
-  tickerCache.set(key, out)
-  return out
+  if (e > 0.01) {
+    ctx.fillStyle = css(t.color, alpha * e)
+    ctx.fillText(r.next, x, y + (1 - e) * t.rise)
+  }
 }
 
 export interface BoardLook {
-  /** seconds, for the blinking and the gloss */
+  /** seconds, for the pulse of the status dot */
   t: number
   /** 0 = waiting, 1 = on time (the status turns green) */
   go: number
   dpr: number
-  font: string
   family: string
-  /** seconds since the LED text changed (it is written in from the left) */
+  /** the colour of the line badge */
+  accent: RGB
+  /** seconds since the text line changed (it comes in from below) */
   tickerAge: number
 }
 
@@ -228,146 +137,182 @@ export function drawBoard(ctx: CanvasRenderingContext2D, b: Board, bx: number, b
   ctx.translate(bx, by)
   const W = BOARD_W * s
   const H = BOARD_H * s
+  const ls = ctx as CanvasRenderingContext2D & { letterSpacing?: string }
 
-  // housing
+  // the panel
   ctx.save()
-  ctx.shadowColor = 'rgba(0,0,0,0.65)'
-  ctx.shadowBlur = 40 * s
-  ctx.shadowOffsetY = 14 * s
-  roundRect(ctx, 0, 0, W, H, 18 * s)
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = 44 * s
+  ctx.shadowOffsetY = 16 * s
+  roundRect(ctx, 0, 0, W, H, 22 * s)
   const hg = ctx.createLinearGradient(0, 0, 0, H)
-  hg.addColorStop(0, '#1a2029')
-  hg.addColorStop(1, '#0b0e13')
+  hg.addColorStop(0, '#141a23')
+  hg.addColorStop(1, '#0a0d12')
   ctx.fillStyle = hg
   ctx.fill()
   ctx.restore()
-  roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 18 * s)
-  ctx.strokeStyle = 'rgba(255,255,255,0.09)'
+  roundRect(ctx, 0.5, 0.5, W - 1, H - 1, 22 * s)
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'
   ctx.lineWidth = 1
   ctx.stroke()
-  // inner panel
-  roundRect(ctx, 7 * s, 7 * s, W - 14 * s, H - 14 * s, 13 * s)
-  ctx.fillStyle = '#080a0e'
-  ctx.fill()
-  // screws
-  ctx.fillStyle = '#2a313c'
-  for (const [sx, sy] of [[3.6, 3.6], [BOARD_W - 3.6, 3.6], [3.6, BOARD_H - 3.6], [BOARD_W - 3.6, BOARD_H - 3.6]]) {
-    ctx.beginPath()
-    ctx.arc(sx * s, sy * s, 1.5 * s, 0, Math.PI * 2)
-    ctx.fill()
-  }
+  // a thin line of the line's colour along the top edge
+  ctx.save()
+  roundRect(ctx, 0, 0, W, H, 22 * s)
+  ctx.clip()
+  const bar = ctx.createLinearGradient(0, 0, W, 0)
+  bar.addColorStop(0, css(look.accent, 0.95))
+  bar.addColorStop(1, css(look.accent, 0.15))
+  ctx.fillStyle = bar
+  ctx.fillRect(0, 0, W, 3 * s)
+  ctx.restore()
 
-  const px = 18 * s
-  const label = (text: string, x: number, y: number, align: CanvasTextAlign = 'left', color = 'rgba(255,176,46,0.7)', size = 9) => {
-    ctx.font = `600 ${size * s}px ${look.family}`
-    ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${1.6 * s}px`
+  const px = 24 * s
+  const label = (text: string, x: number, y: number, align: CanvasTextAlign = 'left') => {
+    ctx.font = `600 ${10.5 * s}px ${look.family}`
+    ls.letterSpacing = `${1.8 * s}px`
     ctx.textAlign = align
     ctx.textBaseline = 'alphabetic'
-    ctx.fillStyle = color
+    ctx.fillStyle = css(GREY)
     ctx.fillText(text, x, y)
-    ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = '0px'
+    ls.letterSpacing = '0px'
+  }
+  const clipRect = (x: number, y: number, w: number, h: number) => {
+    ctx.beginPath()
+    ctx.rect(x, y, w, h)
+    ctx.clip()
   }
 
-  // header: the direction of the board and the clock
-  label('ABFAHRT', px, 30 * s, 'left', 'rgba(255,176,46,0.9)', 11)
-  const cw = 13 * s
-  const ch = 19 * s
-  const cg = 2 * s
-  const cwidths = [cw, cw, 7 * s, cw, cw]
-  let clockX = W - px - (cwidths.reduce((acc, v) => acc + v, 0) + cg * 4)
-  b.clock.forEach((f, i) => {
-    tile(ctx, f, clockX, 15 * s, cwidths[i], ch, AMBER, 0, s * 0.5, `700 ${ch * 0.66}px ${look.family}`)
-    clockX += cwidths[i] + cg
-  })
+  // header: the direction and the clock
+  label('ABFAHRT', px, 40 * s)
+  ctx.save()
+  clipRect(W - px - 90 * s, 18 * s, 90 * s, 30 * s)
+  drawRoll(ctx, b.clock, W - px, 41 * s, { size: 20 * s, weight: 600, color: INK, align: 'right', family: look.family, rise: 14 * s })
+  ctx.restore()
 
-  // the version
-  label('VERSION', px, 62 * s)
-  const gap = 4 * s
-  const widths = b.wide.map((w) => (w ? 44 : 17) * s)
-  const total = widths.reduce((a, c) => a + c, 0) + gap * (widths.length - 1)
+  // the version: big, every character rolls on its own
+  label('VERSION', px, 82 * s)
+  const vsize = 74 * s
+  ctx.font = `600 ${vsize}px ${look.family}`
+  const widths = b.version.map((r) => {
+    const ch = r.target === ' ' ? (r.next !== null ? r.cur : '') : r.target
+    return ch ? ctx.measureText(ch).width : 0
+  })
+  const total = widths.reduce((a, c) => a + c, 0)
   let vx = (W - total) / 2
-  const vh = 64 * s
-  b.version.forEach((f, i) => {
-    tile(ctx, f, vx, 72 * s, widths[i], vh, WARM, 0, s, `700 ${vh * 0.68}px ${look.family}`)
-    vx += widths[i] + gap
+  const vtop = 92 * s
+  b.version.forEach((r, i) => {
+    ctx.save()
+    clipRect(vx - 4 * s, vtop, widths[i] + 8 * s, 82 * s)
+    drawRoll(ctx, r, vx + widths[i] / 2, vtop + 68 * s, { size: vsize, weight: 600, color: INK, align: 'center', family: look.family, rise: 52 * s })
+    ctx.restore()
+    vx += widths[i]
   })
 
   // divider
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'
-  ctx.fillRect(px, 150 * s, W - 2 * px, 1)
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'
+  ctx.fillRect(px, 188 * s, W - 2 * px, 1)
 
-  // the departure
-  const tw = 23 * s
-  const th = 34 * s
-  const tg = 2.5 * s
-  const font = `700 ${th * 0.66}px ${look.family}`
-  const row = (tiles: Flap[], y: number, color: RGB, glow = 0, blink = false, x0 = px) => {
-    tiles.forEach((f, i) => {
-      const on = !blink || Math.sin(look.t * Math.PI * 1.6) > -0.35
-      tile(ctx, f, x0 + i * (tw + tg), y, tw, th, mixC(color, [color[0] * 0.35, color[1] * 0.35, color[2] * 0.35], on ? 0 : 1), glow, s, font)
-    })
-  }
-  label('ZUG', px, 168 * s)
-  row(b.zug, 174 * s, WARM)
-  label('GLEIS', W - px - tw, 168 * s)
-  row(b.gleis, 174 * s, WARM, 0, false, W - px - tw)
-  label('ZIEL', px, 224 * s)
-  row(b.ziel, 230 * s, WARM)
-  label('STATUS', px, 280 * s)
+  // the departure: line badge, destination, platform
+  const bw = 46 * s
+  const by0 = 206 * s
+  roundRect(ctx, px, by0, bw, bw, 12 * s)
+  ctx.fillStyle = css(look.accent)
+  ctx.fill()
+  const luma = 0.299 * look.accent[0] + 0.587 * look.accent[1] + 0.114 * look.accent[2]
+  ctx.font = `700 ${22 * s}px ${look.family}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = luma > 150 ? '#0b0e13' : '#ffffff'
+  ctx.fillText('U1', px + bw / 2, by0 + bw / 2 + 1 * s)
+  const tx = px + bw + 14 * s
+  ctx.save()
+  clipRect(tx, by0 - 2 * s, 180 * s, 26 * s)
+  drawRoll(ctx, b.ziel, tx, by0 + 20 * s, { size: 21 * s, weight: 700, color: INK, align: 'left', family: look.family, rise: 16 * s })
+  ctx.restore()
+  ctx.save()
+  clipRect(tx, by0 + 25 * s, 180 * s, 24 * s)
+  drawRoll(ctx, b.zug, tx, by0 + 41 * s, { size: 13.5 * s, weight: 500, color: GREY, align: 'left', family: look.family, rise: 12 * s })
+  ctx.restore()
+  // platform
+  const gw = 64 * s
+  const gx = W - px - gw
+  roundRect(ctx, gx, by0 + 6 * s, gw, 34 * s, 17 * s)
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)'
+  ctx.stroke()
+  ctx.font = `600 ${13.5 * s}px ${look.family}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = css(INK, 0.92)
+  ctx.fillText('Gleis 1', gx + gw / 2, by0 + 23.5 * s)
+
+  // status
+  const sy = 272 * s
+  const sh = 48 * s
   const statusColor = mixC(AMBER, GREEN, look.go)
-  row(b.status, 286 * s, statusColor, look.go, look.go < 0.5, px)
+  roundRect(ctx, px, sy, W - 2 * px, sh, 14 * s)
+  ctx.fillStyle = css(statusColor, 0.07 + 0.05 * look.go)
+  ctx.fill()
+  ctx.strokeStyle = css(statusColor, 0.22)
+  ctx.stroke()
+  // the dot pulses while the train is awaited and stays calm when it is clear
+  const pulse = look.go > 0.5 ? 0.5 : 0.5 + 0.5 * Math.sin(look.t * 5)
+  const dx = px + 22 * s
+  const dy = sy + sh / 2
+  ctx.fillStyle = css(statusColor, 0.18 + 0.25 * pulse)
+  ctx.beginPath()
+  ctx.arc(dx, dy, (7 + 4 * pulse) * s, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = css(statusColor)
+  ctx.beginPath()
+  ctx.arc(dx, dy, 4.5 * s, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.save()
+  clipRect(px + 40 * s, sy, 170 * s, sh)
+  drawRoll(ctx, b.status, px + 40 * s, sy + 31 * s, { size: 21 * s, weight: 700, color: statusColor, align: 'left', family: look.family, rise: 18 * s })
+  ctx.restore()
+  label('STATUS', W - px - 16 * s, sy + 29 * s, 'right')
   if (look.go > 0.01) {
     ctx.save()
     ctx.globalCompositeOperation = 'lighter'
-    const gx = px + 4.5 * (tw + tg)
-    const gr = ctx.createRadialGradient(gx, 303 * s, 0, gx, 303 * s, 150 * s)
-    gr.addColorStop(0, css(GREEN, 0.16 * look.go))
+    const gr = ctx.createRadialGradient(dx, dy, 0, dx, dy, 170 * s)
+    gr.addColorStop(0, css(GREEN, 0.14 * look.go))
     gr.addColorStop(1, css(GREEN, 0))
     ctx.fillStyle = gr
-    ctx.fillRect(0, 230 * s, W, 140 * s)
+    ctx.fillRect(0, sy - 40 * s, W, 150 * s)
     ctx.restore()
   }
 
-  // the LED line
-  const lx = px
-  const ly = 332 * s
+  // what the update is doing right now
+  const ly = 334 * s
   const lw = W - 2 * px
-  const lh = 36 * s
-  roundRect(ctx, lx, ly, lw, lh, 6 * s)
-  ctx.fillStyle = '#050608'
+  const lh = 30 * s
+  roundRect(ctx, px, ly, lw, lh, 15 * s)
+  ctx.fillStyle = 'rgba(255,255,255,0.045)'
   ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.07)'
-  ctx.stroke()
-  if (b.ticker) {
-    const img = tickerImage(b.ticker, lw, lh, look.dpr)
-    ctx.save()
-    roundRect(ctx, lx, ly, lw, lh, 6 * s)
-    ctx.clip()
-    // written in from the left
-    const reveal = clamp01(look.tickerAge / 0.45)
-    ctx.beginPath()
-    ctx.rect(lx, ly, lw * reveal + (reveal < 1 ? 0 : 1), lh)
-    ctx.clip()
-    ctx.drawImage(img, lx, ly, lw, lh)
-    ctx.restore()
-  }
-
-  // gloss over the glass
   ctx.save()
-  roundRect(ctx, 7 * s, 7 * s, W - 14 * s, H - 14 * s, 13 * s)
+  roundRect(ctx, px, ly, lw, lh, 15 * s)
   ctx.clip()
-  const sweep = ((look.t * 0.12) % 2.4) - 0.7
-  const gl = ctx.createLinearGradient(W * (sweep - 0.25), 0, W * (sweep + 0.25), H * 0.6)
-  gl.addColorStop(0, 'rgba(255,255,255,0)')
-  gl.addColorStop(0.5, 'rgba(255,255,255,0.045)')
-  gl.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = gl
-  ctx.fillRect(0, 0, W, H)
-  const top = ctx.createLinearGradient(0, 0, 0, H * 0.35)
-  top.addColorStop(0, 'rgba(255,255,255,0.05)')
-  top.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = top
-  ctx.fillRect(0, 0, W, H * 0.35)
+  // a light runs along the line while the update works, and stays full when it is done
+  const run = look.go > 0.5 ? 1 : 0
+  const sweep = ((look.t * 0.5) % 1.4) - 0.2
+  const sg = ctx.createLinearGradient(px + lw * (sweep - 0.2), 0, px + lw * (sweep + 0.2), 0)
+  sg.addColorStop(0, css(look.accent, 0))
+  sg.addColorStop(0.5, css(look.accent, 0.5))
+  sg.addColorStop(1, css(look.accent, 0))
+  ctx.fillStyle = run ? css(GREEN, 0.5) : sg
+  ctx.fillRect(px, ly + lh - 2.5 * s, lw, 2.5 * s)
+  if (b.ticker) {
+    const e = easeOutCubic(look.tickerAge / 0.4)
+    ctx.font = `600 ${12.5 * s}px ${look.family}`
+    ls.letterSpacing = `${0.6 * s}px`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = css(INK, 0.85 * e)
+    ctx.fillText(b.ticker, px + lw / 2, ly + lh / 2 + (1 - e) * 10 * s)
+    ls.letterSpacing = '0px'
+  }
   ctx.restore()
 
   ctx.restore()

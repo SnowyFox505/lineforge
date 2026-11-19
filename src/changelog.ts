@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.36.0',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: moderne Tafel und die gelbe U-Bahn',
+    changes: [
+      {
+        title: 'Neue, moderne Anzeigetafel',
+        what: 'Die Tafel beim Aktualisieren ist jetzt eine flache, moderne Anzeige: ein Linien-Schild, die große Versionsnummer, Gleis, Status und eine Zeile dazu, was gerade passiert. Die Ziffern und Texte rollen sanft von unten ein, statt wie früher zu klappern.',
+        how: 'Du musst nichts tun, sie erscheint beim Aktualisieren.',
+        benefit: 'Das Aktualisieren sieht klarer und zeitgemäßer aus.',
+      },
+      {
+        title: 'Die gelbe U-Bahn BLN J / JK fährt ein',
+        what: 'Aus dem Tunnel kommt jetzt dieselbe gelbe U-Bahn, die du aus der Fahrzeug-Galerie kennst: drei Wagen mit schwarzen Fenstern und Türen, großer Frontscheibe und hellen Lichtbalken.',
+        how: 'Du musst nichts tun, sie fährt beim Aktualisieren von selbst durchs Bild.',
+        benefit: 'Der Zug passt zum Rest des Spiels.',
+      },
+    ],
+  },
+  {
     version: '0.35.2',
     date: '2026-11-19',
     headline: 'Aktualisieren: kein Blick mehr auf den alten Startbildschirm',

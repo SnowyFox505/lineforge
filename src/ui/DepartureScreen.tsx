@@ -13,7 +13,7 @@ export interface DepartureProps {
 }
 
 /** the LED line, one text per stage (a stage is shown for at least a moment, however fast the work is) */
-const TICKER = ['SUCHE NACH UPDATES', 'SPEICHER LEEREN', 'STÄDTE SICHERN', 'NEUSTART']
+const TICKER = ['Suche nach Updates', 'Speicher leeren', 'Städte sichern', 'Neustart']
 const STAGE_MS = 0.7
 /** timeline after the work is done, in seconds: the status flips, and only when every tile and the LED line have settled the train gets its turn */
 const T_STATUS = 0.55
@@ -118,7 +118,7 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
         shownAt = el
       }
       const text = TICKER[Math.min(shown, TICKER.length - 1)]
-      const wantText = finishAt >= 0 ? 'BITTE ZURÜCKTRETEN' : text
+      const wantText = finishAt >= 0 ? 'Bitte zurücktreten' : text
       if (wantText !== tickerText) {
         tickerText = wantText
         board.ticker = wantText
@@ -224,7 +224,7 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
       ctx.fillText('LINEFORGE', logoX - 52 * s + logoSize * 0.7, logoY + logoSize / 2 + 1)
       ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = '0px'
 
-      drawBoard(ctx, board, bx, by, s, { t: el, go, dpr, font: '', family, tickerAge: el - tickerAt })
+      drawBoard(ctx, board, bx, by, s, { t: el, go, dpr, family, accent, tickerAge: el - tickerAt })
 
       // The screen fades in at the start. When the train has passed it goes dark (not see-through: the home screen
       // underneath must not show) and the app reloads right then.

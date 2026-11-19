@@ -10,9 +10,10 @@ type RGB = [number, number, number]
 
 export const TUNNEL_Z = 34 // the wall with the tunnel mouth
 export const TRACK_X = 4.2
-export const CAR_LEN = 15.5
-export const CAR_GAP = 0.7
-export const CARS = 4
+export const CAR_LEN = 17
+export const CAR_GAP = 0.3
+export const CAR_W = 2.6
+export const CARS = 3
 export const TRAIN_LEN = CARS * CAR_LEN + (CARS - 1) * CAR_GAP
 
 const PLATFORM_Y = 0.95
@@ -360,58 +361,67 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   }
   for (let z = 9; z < Zt - 3; z += 11) box(T - 6.2, T - 5.6, PLATFORM_Y, HALL_TOP, z, z + 0.6, [40, 48, 62])
 
-  // the train (also built a few times shifted along its way for the blur)
+  // the train: three articulated cars of the yellow U-Bahn (BLN J / JK of the vehicle gallery), also built a few times shifted for the blur
   const addTrain = (zf: number, out: Item[]) => {
     const tface = (f: Face) => face({ ...f, thru: true })
     const lit = (z: number) => 0.15 + 0.85 * clamp01((Zt + 10 - z) / 20) // a car inside the tunnel is dark, it gets lighter as it comes out
+    const YELLOW: RGB = [252, 205, 22]
+    const GLASS: RGB = [22, 26, 33]
+    const BLACK: RGB = [14, 16, 20]
+    const xl = T - CAR_W / 2
+    const xr = T + CAR_W / 2
+    const top = 3.35
     for (let i = 0; i < CARS; i++) {
       const z0 = zf + i * (CAR_LEN + CAR_GAP)
       const z1 = z0 + CAR_LEN
       const head = i === 0
-      const nose = head ? 3.4 : 0
-      const k = (z: number) => lit(z)
+      const rake = head ? 0.8 : 0
       out.push({
         depth: depthOf([T, 2, z0 + CAR_LEN / 2]),
         draw: () => {
-          const kk = k(z0 + CAR_LEN / 2)
-          const body: RGB = [226, 231, 238]
-          const xl = T - 1.45
-          const xr = T + 1.45
-          // side (the one facing the platform)
-          tface({ pts: [[xl, 0.55, z0], [xl, head ? 1.7 : 3.1, z0], ...(head ? ([[xl, 3.1, z0 + nose]] as V3[]) : []), [xl, 3.1, z1], [xl, 0.55, z1]], fill: body, k: 0.78 * kk })
-          // dark skirt and the accent stripe
-          tface({ pts: [[xl - 0.005, 0.55, z0], [xl - 0.005, 0.95, z0], [xl - 0.005, 0.95, z1], [xl - 0.005, 0.55, z1]], fill: [40, 46, 56], k: kk })
-          tface({ pts: [[xl - 0.006, 0.97, z0], [xl - 0.006, 1.22, z0], [xl - 0.006, 1.22, z1], [xl - 0.006, 0.97, z1]], fill: s.accent, k: 0.95 * kk, glow: kk })
-          // windows and doors
-          const w0 = z0 + (head ? 4.4 : 0.9)
-          const n = head ? 5 : 7
-          const step = (z1 - 1 - w0) / n
+          const kk = lit(z0 + CAR_LEN / 2)
+          // side (the one facing the platform), the dark running gear below it and the roof edge
+          tface({ pts: [[xl, 0.5, z0], [xl, top, z0 + rake], [xl, top, z1], [xl, 0.5, z1]], fill: YELLOW, k: 0.8 * kk })
+          tface({ pts: [[xl - 0.004, 0.5, z0 + 0.3], [xl - 0.004, 0.8, z0 + 0.3], [xl - 0.004, 0.8, z1 - 0.3], [xl - 0.004, 0.5, z1 - 0.3]], fill: [30, 32, 37], k: kk })
+          tface({ pts: [[xl, top, z0 + rake], [xl + 0.28, top + 0.26, z0 + rake], [xl + 0.28, top + 0.26, z1], [xl, top, z1]], fill: YELLOW, k: 0.92 * kk })
+          tface({ pts: [[xl + 0.28, top + 0.26, z0 + rake], [xr - 0.28, top + 0.26, z0 + rake], [xr - 0.28, top + 0.26, z1], [xl + 0.28, top + 0.26, z1]], fill: [200, 160, 16], k: kk })
+          // doors and windows: dark glass with the warm light of the inside
+          const w0 = z0 + (head ? 3.6 : 0.9)
+          const w1 = z1 - 0.9
+          const n = Math.max(1, Math.floor((w1 - w0) / 2))
+          const step = (w1 - w0) / n
           for (let w = 0; w < n; w++) {
-            const door = w === 2 || (!head && w === 4)
-            const a = w0 + w * step + 0.18
-            const b = w0 + (w + 1) * step - 0.18
-            if (door) {
-              tface({ pts: [[xl - 0.008, 1.3, a], [xl - 0.008, 2.95, a], [xl - 0.008, 2.95, b], [xl - 0.008, 1.3, b]], fill: [60, 120, 170], k: 0.9 * kk })
+            const a = w0 + w * step + 0.1
+            const b = w0 + (w + 1) * step - 0.1
+            if (w % 3 === 1) {
+              const m = (a + b) / 2
+              for (const [p, q] of [[a, m - 0.04], [m + 0.04, b]]) {
+                tface({ pts: [[xl - 0.008, 0.95, p], [xl - 0.008, 3.0, p], [xl - 0.008, 3.0, q], [xl - 0.008, 0.95, q]], fill: GLASS, k: kk })
+                tface({ pts: [[xl - 0.01, 1.2, p + 0.08], [xl - 0.01, 2.9, p + 0.08], [xl - 0.01, 2.9, q - 0.08], [xl - 0.01, 1.2, q - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.2 * kk })
+              }
             } else {
-              tface({ pts: [[xl - 0.008, 1.75, a], [xl - 0.008, 2.75, a], [xl - 0.008, 2.75, b], [xl - 0.008, 1.75, b]], fill: [255, 226, 160], k: 1, glow: kk, alpha: 0.95 * kk + 0.05 })
+              tface({ pts: [[xl - 0.008, 1.65, a], [xl - 0.008, 2.85, a], [xl - 0.008, 2.85, b], [xl - 0.008, 1.65, b]], fill: GLASS, k: kk })
+              tface({ pts: [[xl - 0.01, 1.75, a + 0.08], [xl - 0.01, 2.75, a + 0.08], [xl - 0.01, 2.75, b - 0.08], [xl - 0.01, 1.75, b - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.24 * kk })
             }
           }
-          // roof chamfers and roof
-          const shoulder = 3.1
-          tface({ pts: [[xl, shoulder, z0 + nose], [xl + 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z1], [xl, shoulder, z1]], fill: body, k: 0.92 * kk })
-          tface({ pts: [[xl + 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z1], [xl + 0.35, 3.7, z1]], fill: [214, 220, 229], k: 1 * kk })
+          if (i < CARS - 1) {
+            // the dark bellows between two cars
+            tface({ pts: [[xl, 0.6, z1], [xl, 3.3, z1], [xl, 3.3, z1 + CAR_GAP], [xl, 0.6, z1 + CAR_GAP]], fill: BLACK, k: kk })
+          }
           if (head) {
-            // windscreen, lower nose and the two small triangles at the corners
-            tface({ pts: [[xl, 1.7, z0], [xr, 1.7, z0], [xr - 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z0 + nose]], fill: [14, 22, 32], k: 1 * kk })
-            const sx = (T - 1.0) + 0.25 * Math.sin(s.t * 0.7)
-            tface({ pts: [[sx, 2.0, z0 - 0.02], [sx + 0.55, 2.0, z0 - 0.02], [sx + 1.0, 3.55, z0 + nose - 0.03], [sx + 0.45, 3.55, z0 + nose - 0.03]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.1 * kk })
-            tface({ pts: [[xl, 0.55, z0], [xr, 0.55, z0], [xr, 1.7, z0], [xl, 1.7, z0]], fill: [232, 236, 242], k: 0.62 * kk })
-            tface({ pts: [[xl, 0.98, z0 - 0.004], [xr, 0.98, z0 - 0.004], [xr, 1.2, z0 - 0.004], [xl, 1.2, z0 - 0.004]], fill: s.accent, k: 0.95 * kk, glow: kk })
-            tface({ pts: [[xl, 1.7, z0], [xl + 0.35, 3.7, z0 + nose], [xl, 3.1, z0 + nose]], fill: body, k: 0.7 * kk })
-            tface({ pts: [[xl + 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.55, z0 + nose - 0.05], [xl + 0.4, 3.55, z0 + nose - 0.05]], fill: [255, 170, 60], k: 1, glow: kk, alpha: 0.9 * kk })
-          } else {
-            // the front of a middle car is only seen as a dark gap
-            tface({ pts: [[xl, 0.55, z0], [xl, 3.1, z0], [xl + 0.1, 3.1, z0 - 0.7], [xl + 0.1, 0.55, z0 - 0.7]], fill: [10, 12, 16], k: 1 })
+            const zy = (y: number) => z0 + (rake * (y - 0.5)) / (top - 0.5) - 0.012
+            // the cab door
+            tface({ pts: [[xl - 0.008, 0.95, z0 + 1.3], [xl - 0.008, 3.0, z0 + 1.3], [xl - 0.008, 3.0, z0 + 2.9], [xl - 0.008, 0.95, z0 + 2.9]], fill: GLASS, k: kk })
+            // front: yellow, with a big dark windscreen, the destination display and two white light bars
+            tface({ pts: [[xl, 0.5, z0], [xr, 0.5, z0], [xr, top, z0 + rake], [xl, top, z0 + rake]], fill: YELLOW, k: 0.66 * kk })
+            tface({ pts: [[xl + 0.16, 1.25, zy(1.25)], [xr - 0.16, 1.25, zy(1.25)], [xr - 0.16, 3.12, zy(3.12)], [xl + 0.16, 3.12, zy(3.12)]], fill: BLACK, k: kk })
+            const sx = T - 0.9 + 0.25 * Math.sin(s.t * 0.7)
+            tface({ pts: [[sx, 1.5, zy(1.5) - 0.006], [sx + 0.5, 1.5, zy(1.5) - 0.006], [sx + 0.95, 3.0, zy(3.0) - 0.006], [sx + 0.45, 3.0, zy(3.0) - 0.006]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.09 * kk })
+            tface({ pts: [[xl + 0.4, 2.78, zy(2.78) - 0.006], [xl + 1.5, 2.78, zy(2.78) - 0.006], [xl + 1.5, 2.96, zy(2.96) - 0.006], [xl + 0.4, 2.96, zy(2.96) - 0.006]], fill: [255, 170, 60], k: 1, glow: kk, alpha: 0.9 * kk })
+            for (const [p, q] of [[xl + 0.3, xl + 0.95], [xr - 0.95, xr - 0.3]]) {
+              tface({ pts: [[p, 1.38, zy(1.38) - 0.006], [q, 1.38, zy(1.38) - 0.006], [q, 1.46, zy(1.46) - 0.006], [p, 1.46, zy(1.46) - 0.006]], fill: [255, 255, 255], k: 1, glow: kk, alpha: 1 })
+            }
+            tface({ pts: [[xl, 0.5, z0 - 0.02], [xr, 0.5, z0 - 0.02], [xr, 0.82, z0 - 0.02], [xl, 0.82, z0 - 0.02]], fill: [30, 32, 37], k: kk })
           }
         },
       })
@@ -470,9 +480,9 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   if (s.trainZ !== null) {
     const zf = s.trainZ
     const k = clamp01((Zt + 24 - zf) / 10)
-    for (const dx of [-0.95, 0.95]) {
-      light([T + dx, 1.15, zf - 0.05], 2.1, [255, 250, 235], 0.85 * k)
-      light([T + dx, 1.15, zf - 0.05], 0.7, [255, 255, 255], 1 * k)
+    for (const dx of [-0.62, 0.62]) {
+      light([T + dx, 1.42, zf - 0.05], 2.1, [255, 250, 235], 0.85 * k)
+      light([T + dx, 1.42, zf - 0.05], 0.7, [255, 255, 255], 1 * k)
     }
     // the beam on the rails and the platform ahead of the train
     light([T, 0.3, zf - 5], 10, [255, 244, 220], 0.2 * k)
