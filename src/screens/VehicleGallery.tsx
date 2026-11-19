@@ -1,6 +1,6 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LINE_COLORS, OPERATORS } from '../model/constants'
 import { trainLength, VEHICLE_MODELS, vehicleFor } from '../model/vehicles'
 import type { OperatorId } from '../model/types'
@@ -16,6 +16,10 @@ const DEFAULT_COLOR: Record<OperatorId, string> = {
   fernverkehr: '#d6232b',
 }
 
+/** Seconds one model turns once in the show (and is shown for) */
+const SHOW_SECONDS = 4
+const SHOW_KINDS: OperatorId[] = ['tram', 'fernverkehr', 'regional']
+
 /** Showroom for the vehicle models: pick a type and a line colour, orbit around it. */
 export default function VehicleGallery({ onClose }: { onClose: () => void }) {
   // the address can pick what to show: #fahrzeuge?k=sbahn&m=481&view=front|front34|side|rear|top&c=ff8a00 (handy for screenshots)
@@ -25,6 +29,19 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
   const [head, setHead] = useState(false)
   const [model, setModel] = useState<string | undefined>(q.get('m') ?? undefined)
   const view = q.get('view')
+  // show: every model of trams, long-distance and regional trains turns once, then the next one (#fahrzeuge?show=1 or the button)
+  const [show, setShow] = useState<number | null>(q.get('show') ? 0 : null)
+  const showList = SHOW_KINDS.flatMap((k) => (VEHICLE_MODELS[k] ?? []).map((m) => ({ k, m: m.model })))
+  useEffect(() => {
+    if (show === null) return
+    const e = showList[show]
+    setKind(e.k)
+    setModel(e.m)
+    setColor(null)
+    const t = setTimeout(() => setShow(show + 1 < showList.length ? show + 1 : null), SHOW_SECONDS * 1000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show])
   const models = VEHICLE_MODELS[kind] ?? []
   const spec = vehicleFor(kind, model)
   const line = color ?? (spec.model === '1420b' ? '#1f6fd1' : DEFAULT_COLOR[kind])
@@ -65,7 +82,7 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
           </mesh>
           <TrainStatic spec={spec} color={line} />
         </group>
-        <OrbitControls makeDefault enableDamping autoRotate={!head && !cam} autoRotateSpeed={0.9} target={cam ? cam[1] : [tx, 0.5 + spec.height * 0.5, 0]} minDistance={1.2} maxDistance={len * 2} maxPolarAngle={Math.PI / 2.05} />
+        <OrbitControls makeDefault enableDamping autoRotate={!head && !cam} autoRotateSpeed={show !== null ? 30 / SHOW_SECONDS : 0.9} target={cam ? cam[1] : [tx, 0.5 + spec.height * 0.5, 0]} minDistance={1.2} maxDistance={len * 2} maxPolarAngle={Math.PI / 2.05} />
       </Canvas>
 
       <button onClick={onClose} aria-label="Zurück" className="glass absolute left-4 top-[calc(14px+var(--safe-top))] grid h-11 w-11 place-items-center rounded-full active:scale-90">
@@ -73,7 +90,7 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
       </button>
       <div className="pointer-events-none absolute left-0 right-0 top-[calc(18px+var(--safe-top))] text-center">
         <p className="text-lg font-bold tracking-tight">{OPERATORS[kind].label}</p>
-        <p className="text-xs text-white/50">Fahrzeug-Galerie · ziehen zum Drehen, zwei Finger zum Zoomen</p>
+        <p className="text-xs text-white/50">{show !== null ? `${spec.label ?? spec.model} · ${show + 1} von ${showList.length}` : 'Fahrzeug-Galerie · ziehen zum Drehen, zwei Finger zum Zoomen'}</p>
       </div>
 
       <div className="glass absolute inset-x-3 bottom-[calc(14px+var(--safe-bottom))] rounded-3xl p-3">
@@ -89,7 +106,10 @@ export default function VehicleGallery({ onClose }: { onClose: () => void }) {
                 {m.label ?? m.model}
               </button>
             ))}
-          <button onClick={() => setHead((h) => !h)} className={`ml-auto shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold ${head ? 'bg-accent text-ink' : 'btn-soft'}`}>
+          <button onClick={() => setShow((v) => (v === null ? 0 : null))} className={`ml-auto shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold ${show !== null ? 'bg-accent text-ink' : 'btn-soft'}`}>
+            Vorführung
+          </button>
+          <button onClick={() => setHead((h) => !h)} className={`shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold ${head ? 'bg-accent text-ink' : 'btn-soft'}`}>
             Kopf
           </button>
         </div>
