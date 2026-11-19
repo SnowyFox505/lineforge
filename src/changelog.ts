@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.34.0',
+    date: '2026-11-19',
+    headline: 'Komplett neue Ladebildschirme',
+    changes: [
+      {
+        title: 'Neuer Ladebildschirm für deine Stadt',
+        what: 'Ein Umsteigebahnhof baut sich Linie für Linie vor dir auf, während weiche Farben im Hintergrund treiben und Lichter über die Gleise laufen. Ein Ring um den Bahnhof füllt sich, dein Stadtname leuchtet in deiner Akzentfarbe, und darunter steht, woran gerade gearbeitet wird. Wenn alles bereit ist, platzt ein Ring aus dem Bahnhof und das Spiel öffnet sich wie eine Blende.',
+        how: 'Du musst nichts tun, der Bildschirm erscheint beim Öffnen einer Stadt.',
+        benefit: 'Das Warten sieht nach LineForge aus und passt zu deiner Farbe.',
+      },
+      {
+        title: 'Neuer Aktualisieren-Bildschirm',
+        what: 'Beim Aktualisieren der App läuft dieselbe Animation. Am Ende wird der Bahnhof zu einem Haken: „Aktuell!“, dann startet die App neu.',
+        how: 'Tippe im Menü auf „Aktualisieren“.',
+        benefit: 'Du siehst, dass die App arbeitet und wann sie fertig ist.',
+      },
+    ],
+  },
+  {
     version: '0.33.0',
     date: '2026-11-19',
     headline: 'Züge auf den Ladebildschirmen, Löschen mit Nachfrage',

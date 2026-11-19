@@ -413,3 +413,45 @@ input[type='range'].hue-slider::-webkit-slider-thumb {
 :root[data-theme='light'] .bg-black\/60 {
   background-color: rgba(20, 28, 40, 0.38);
 }
+
+/* splash screens (loading a city, updating the app) */
+@keyframes splash-rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes splash-shine {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+@keyframes splash-msg {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 0.62; transform: none; }
+}
+.splash-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: splash-msg 0.8s ease-out 0.5s forwards;
+}
+.splash-title {
+  background-image: linear-gradient(100deg, var(--splash-ink) 0%, var(--splash-ink) 36%, var(--accent) 50%, var(--splash-ink) 64%, var(--splash-ink) 100%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: splash-rise 1s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both, splash-shine 3.4s linear 1.6s infinite;
+}
+.splash-msg { opacity: 0; animation: splash-msg 0.5s ease-out forwards; }
+.splash-hint { opacity: 0.38; }
+.splash-brand {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  opacity: 0.28;
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-title, .splash-msg, .splash-eyebrow { animation: none; opacity: 1; filter: none; }
+  .splash-msg { opacity: 0.62; }
+}

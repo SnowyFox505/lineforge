@@ -1,6 +1,6 @@
 import { flushUploads } from '../cloud/sync'
-import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
+import Splash from './Splash'
 
 /** Deletes the offline copy of the app (service worker + caches). Saved cities live in IndexedDB and stay untouched. */
 export async function clearAppCaches() {
@@ -16,28 +16,15 @@ export async function clearAppCaches() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-const LINES = [
-  { d: 'M -10 70 H 90 L 150 130 V 200', color: '#ff5470' },
-  { d: 'M 410 90 H 300 L 250 140 V 200', color: '#3db8ff' },
-  { d: 'M 40 410 V 330 L 120 250 H 200', color: '#a6e03c' },
-  { d: 'M 360 410 V 320 L 280 240 H 200', color: '#ffc233' },
-  { d: 'M 200 -10 V 200', color: '#9a6bff' },
-]
+const STEPS = ['Suche nach Updates', 'Zwischenspeicher wird geleert', 'Neue Version wird geladen']
 
-const STEPS = ['Suche nach Updates …', 'Zwischenspeicher wird geleert …', 'Neue Version wird geladen …']
-const TOTAL = 3200
-
-/** Full-screen update animation: the lines of the network run into one station, then the app reloads. */
+/** Full-screen update screen: clears the offline copy, sends what is still on its way to the cloud, then reloads the app. */
 export default function UpdateOverlay() {
-  const [step, setStep] = useState(0)
-  const [done, setDone] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let alive = true
-    const t1 = setTimeout(() => alive && setStep(1), 900)
-    const t2 = setTimeout(() => alive && setStep(2), 2100)
     ;(async () => {
-      const t0 = Date.now()
       try {
         await clearAppCaches()
       } catch {
@@ -45,68 +32,27 @@ export default function UpdateOverlay() {
       }
       // a city that is still on its way to the cloud goes first (but never hold the update up for long)
       await Promise.race([flushUploads().catch(() => undefined), sleep(6000)])
-      await sleep(Math.max(0, TOTAL - (Date.now() - t0)))
-      if (!alive) return
-      setDone(true)
-      await sleep(850)
-      location.reload()
+      if (alive) setReady(true)
     })()
     return () => {
       alive = false
-      clearTimeout(t1)
-      clearTimeout(t2)
     }
   }, [])
 
   return (
-    <motion.div
-      className="fixed inset-0 z-[60] grid place-items-center"
-      style={{ background: 'var(--splash-bg)' }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      role="status"
-      aria-live="polite"
-    >
-      <div className="flex w-full max-w-sm flex-col items-center px-8">
-        <svg viewBox="0 0 400 400" className="h-auto w-full max-w-[340px] overflow-visible" aria-hidden>
-          <defs>
-            <filter id="upd-glow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="5" />
-            </filter>
-          </defs>
-          {LINES.map((l, i) => (
-            <g key={l.d}>
-              <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={13} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} filter="url(#upd-glow)" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
-              <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
-              {/* a little train of three cars drives along the line into the station */}
-              {[0, 1, 2].map((c) => (
-                <g key={c} opacity={0}>
-                  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.06;0.92;1" dur="1.6s" begin={`${1.0 + i * 0.22 + c * 0.11}s`} fill="freeze" />
-                  <animateMotion dur="1.6s" begin={`${1.0 + i * 0.22 + c * 0.11}s`} fill="freeze" path={l.d} rotate="auto" />
-                  <rect x={-11} y={-6.5} width={22} height={13} rx={c === 0 ? 5 : 3} fill="#fff" stroke="var(--splash-dot, #0a0e14)" strokeWidth={2.5} />
-                  <rect x={-8} y={1} width={16} height={3} fill={l.color} />
-                  <rect x={-8} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
-                  <rect x={-2} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
-                  <rect x={4} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
-                </g>
-              ))}
-            </g>
-          ))}
-          {/* the station all lines run into, with a progress ring */}
-          <circle className="pop-dot" cx={200} cy={200} r={26} fill="var(--splash-dot, #0a0e14)" stroke="var(--splash-ink, #fff)" strokeWidth={9} style={{ animationDelay: '1.1s' }} />
-          <circle cx={200} cy={200} r={43} fill="none" stroke="var(--splash-ring, rgba(255,255,255,0.12))" strokeWidth={5} />
-          <circle className="update-ring" cx={200} cy={200} r={43} fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={5} strokeLinecap="round" pathLength={1} strokeDasharray="1 2" transform="rotate(-90 200 200)" />
-          {done && (
-            <motion.path d="M 187 201 l 9 9 l 18 -20" fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4 }} />
-          )}
-        </svg>
-        <div className="mt-2 text-center">
-          <div className="text-xl font-bold tracking-tight">{done ? 'Aktuell!' : 'Aktualisiere LineForge'}</div>
-          <div className="mt-1 h-5 text-sm text-white/60">{done ? 'Die App startet neu …' : STEPS[step]}</div>
-          <div className="mt-5 text-xs text-white/40">Deine Städte bleiben erhalten.</div>
-        </div>
-      </div>
-    </motion.div>
+    <Splash
+      variant="update"
+      eyebrow="Update"
+      title="Aktualisiere LineForge"
+      messages={STEPS}
+      loop={false}
+      hint="Deine Städte bleiben erhalten."
+      doneTitle="Aktuell!"
+      doneMessage="Die App startet neu"
+      ready={ready}
+      minMs={3200}
+      onDone={() => location.reload()}
+      z={60}
+    />
   )
 }
