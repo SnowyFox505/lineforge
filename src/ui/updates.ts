@@ -33,6 +33,19 @@ export async function fetchLatestBuild(): Promise<string | null> {
   return null
 }
 
+/** Asks the server for the version number of the newest build ("0.34.1"). Null when it cannot be told. */
+export async function fetchLatestVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data: unknown = await res.json()
+    if (data && typeof data === 'object' && 'version' in data && typeof data.version === 'string') return data.version
+  } catch {
+    // offline or not json: no news
+  }
+  return null
+}
+
 /** True when the server has a newer build than the one that is running. Checked at start, when the app comes back to the front and every few minutes. */
 export function useUpdateAvailable(): boolean {
   const [available, setAvailable] = useState(false)

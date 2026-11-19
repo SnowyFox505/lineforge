@@ -10,7 +10,6 @@ export default function LoadingScreen({ title, done, minMs = 3000, onDone }: { t
   const n = Math.min(done, LOAD_STEPS.length)
   return (
     <Splash
-      variant="city"
       eyebrow="Stadt wird geladen"
       title={title}
       messages={LOAD_STEPS}

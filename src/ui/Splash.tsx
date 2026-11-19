@@ -1,18 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { clamp01, drawLight, easeInOut, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from './netCanvas'
 import type { P } from './netCanvas'
-import { ACCENT_LINE, closingProgress, DIAL_R, EMBLEM, emblemBox, FINISH_CITY, FINISH_UPDATE, hexRgb, HUB, IRIS_FEATHER, irisRadius, loadProgress } from './splashScene'
+import { ACCENT_LINE, closingProgress, DIAL_R, EMBLEM, emblemBox, FINISH_CITY, hexRgb, HUB, IRIS_FEATHER, irisRadius, loadProgress } from './splashScene'
 
 export interface SplashProps {
-  /** `city` opens onto the game through a round hole, `update` ends in a check mark */
-  variant: 'city' | 'update'
   eyebrow: string
   title: string
   /** what is going on, one line at a time */
   messages: string[]
-  /** go round the messages again and again (otherwise the last one stays) */
-  loop?: boolean
-  hint?: string
   /**
    * Real progress (0..1) reported by the work behind the screen. The ring follows it but never runs ahead of the pace of the animation,
    * so a fast device still shows the screen for `minMs`. Without it the ring creeps along a made-up curve.
@@ -20,8 +15,6 @@ export interface SplashProps {
   progress?: number
   /** the step that is going on now (replaces the cycling messages when `progress` is given) */
   liveMessage?: string
-  doneTitle?: string
-  doneMessage?: string
   /** the thing that was waited for is there */
   ready: boolean
   /** show at least this long (milliseconds) */
@@ -52,14 +45,13 @@ function blobSprite(rgb: [number, number, number]): HTMLCanvasElement {
  * lights run along the lines and a progress ring around the hub fills up. When the work is done a ring bursts out of the hub
  * and the screen opens like an iris (city) or the hub turns into a check mark (update).
  */
-export default function Splash({ variant, eyebrow, title, messages, loop = true, hint, progress, liveMessage, doneTitle, doneMessage, ready, minMs, onDone, z = 70 }: SplashProps) {
+export default function Splash({ eyebrow, title, messages, progress, liveMessage, ready, minMs, onDone, z = 70 }: SplashProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const readyRef = useRef(ready)
   const doneRef = useRef(onDone)
   const progressRef = useRef(progress)
-  const [finishing, setFinishing] = useState(false)
   const [msg, setMsg] = useState(0)
 
   useEffect(() => {
@@ -69,10 +61,10 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
   }, [ready, onDone, progress])
 
   useEffect(() => {
-    if (finishing || progress !== undefined || messages.length < 2 || REDUCED_MOTION()) return
-    const id = window.setInterval(() => setMsg((m) => (loop ? (m + 1) % messages.length : Math.min(m + 1, messages.length - 1))), 1250)
+    if (progress !== undefined || messages.length < 2 || REDUCED_MOTION()) return
+    const id = window.setInterval(() => setMsg((m) => (m + 1) % messages.length), 1250)
     return () => window.clearInterval(id)
-  }, [finishing, loop, messages.length, progress])
+  }, [messages.length, progress])
 
   useEffect(() => {
     const root = rootRef.current
@@ -101,7 +93,7 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       blobSprite(hexRgb('#9a6bff')),
     ]
     const reduced = REDUCED_MOTION()
-    const finishLen = variant === 'update' ? FINISH_UPDATE : FINISH_CITY
+    const finishLen = FINISH_CITY
 
     let w = 0
     let h = 0
@@ -232,7 +224,7 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       // everything of the emblem lives in the 400 x 400 design space around the hub
       const zoom = closing ? 1 + 0.14 * easeInOut(clamp01((u - 0.25) / 0.6)) : 1
       const k = (size / 400) * zoom
-      const alpha = variant === 'city' && closing ? 1 - clamp01((u - 0.5) / 0.3) : 1
+      const alpha = closing ? 1 - clamp01((u - 0.5) / 0.3) : 1
       ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (cx - HUB[0] * k), dpr * (cy - HUB[1] * k))
 
       net.forEach((l, i) => {
@@ -313,43 +305,19 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
         }
         ctx.globalAlpha = alpha
         if (shown > 0.01 && shown < 0.999) drawLight(ctx, [Math.cos(a1) * DIAL_R, Math.sin(a1) * DIAL_R], 22, alpha)
-        // the hub station (a check mark in the update variant once it is done)
-        const checkIn = variant === 'update' && closing ? clamp01((u - 0.3) / 0.35) : 0
-        if (checkIn > 0) {
-          ctx.beginPath()
-          ctx.arc(0, 0, 30 * easeOutBack(checkIn), 0, Math.PI * 2)
-          ctx.fillStyle = accentCss
-          ctx.fill()
-          const q = clamp01((u - 0.45) / 0.3)
-          const seg1 = 11.3
-          const seg2 = 22.7
-          const run = q * (seg1 + seg2)
-          ctx.strokeStyle = '#0d1300'
-          ctx.lineWidth = 6
-          ctx.lineJoin = 'round'
-          ctx.beginPath()
-          ctx.moveTo(-11, 1)
-          if (run <= seg1) ctx.lineTo(-11 + (8 * run) / seg1, 1 + (8 * run) / seg1)
-          else {
-            ctx.lineTo(-3, 9)
-            const f = (run - seg1) / seg2
-            ctx.lineTo(-3 + 15 * f, 9 - 17 * f)
-          }
-          ctx.stroke()
-        } else {
-          const beat = 1 + 0.12 * Math.sin(t * 4)
-          ctx.beginPath()
-          ctx.arc(0, 0, 14, 0, Math.PI * 2)
-          ctx.fillStyle = '#ffffff'
-          ctx.fill()
-          ctx.lineWidth = 5
-          ctx.strokeStyle = stationStroke
-          ctx.stroke()
-          ctx.beginPath()
-          ctx.arc(0, 0, 5.5 * beat, 0, Math.PI * 2)
-          ctx.fillStyle = accentCss
-          ctx.fill()
-        }
+        // the hub station
+        const beat = 1 + 0.12 * Math.sin(t * 4)
+        ctx.beginPath()
+        ctx.arc(0, 0, 14, 0, Math.PI * 2)
+        ctx.fillStyle = '#ffffff'
+        ctx.fill()
+        ctx.lineWidth = 5
+        ctx.strokeStyle = stationStroke
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(0, 0, 5.5 * beat, 0, Math.PI * 2)
+        ctx.fillStyle = accentCss
+        ctx.fill()
         ctx.restore()
       }
 
@@ -382,13 +350,12 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       if (finishAt < 0 && el * 1000 >= minMs && readyRef.current) {
         finishAt = now
         from = disp
-        setFinishing(true)
       }
       const u = finishAt < 0 ? -1 : clamp01((now - finishAt) / 1000 / finishLen)
       draw(t, u)
       // fade in at the start, close
       root.style.opacity = String(clamp01(el / 0.3))
-      if (u >= 0 && variant === 'city') {
+      if (u >= 0) {
         text.style.opacity = String(1 - clamp01(u / 0.3))
         const r = irisRadius(u, w, h)
         const mask = r <= 0 ? 'none' : `radial-gradient(circle at ${cx}px ${cy}px, transparent ${Math.max(0, r - IRIS_FEATHER)}px, #000 ${r}px)`
@@ -411,30 +378,23 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       ro.disconnect()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minMs, variant])
+  }, [minMs])
 
-  const shownTitle = finishing && doneTitle ? doneTitle : title
-  const shownMsg = finishing && doneMessage ? doneMessage : progress !== undefined && liveMessage ? liveMessage : messages[Math.min(msg, messages.length - 1)]
+  const shownMsg = progress !== undefined && liveMessage ? liveMessage : messages[Math.min(msg, messages.length - 1)]
 
   return (
     <div ref={rootRef} className="fixed inset-0 overflow-hidden" style={{ zIndex: z, opacity: 0, background: 'var(--splash-bg)', color: 'var(--splash-ink)' }} role="status" aria-live="polite">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       <div ref={textRef} className="pointer-events-none absolute inset-x-0 flex flex-col items-center px-6 text-center">
         <div className="splash-eyebrow">{eyebrow}</div>
-        <h1 key={shownTitle} className="splash-title mt-2 max-w-full truncate pb-1 text-[2.1rem] font-extrabold leading-tight tracking-tight">
-          {shownTitle}
-        </h1>
+        <h1 className="splash-title mt-2 max-w-full truncate pb-1 text-[2.1rem] font-extrabold leading-tight tracking-tight">{title}</h1>
         <div key={shownMsg} className="splash-msg mt-3 min-h-5 text-sm">
-          {shownMsg}
-          {finishing && doneMessage ? '' : ' …'}
+          {shownMsg} …
         </div>
-        {hint && <div className="splash-hint mt-5 text-xs">{hint}</div>}
       </div>
-      {!hint && (
-        <div className="splash-brand pointer-events-none absolute inset-x-0 bottom-[calc(26px+var(--safe-bottom))] text-center" aria-hidden>
-          LINEFORGE
-        </div>
-      )}
+      <div className="splash-brand pointer-events-none absolute inset-x-0 bottom-[calc(26px+var(--safe-bottom))] text-center" aria-hidden>
+        LINEFORGE
+      </div>
     </div>
   )
 }

@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.35.0',
+    date: '2026-11-19',
+    headline: 'Aktualisieren als Abfahrtstafel im Bahnhof',
+    changes: [
+      {
+        title: 'Neuer Aktualisieren-Bildschirm',
+        what: 'Beim Aktualisieren siehst du eine Abfahrtstafel mit Klappanzeige in einer Bahnhofshalle. Die Version dreht sich von der alten auf die neue, dazu stehen dort „LineForge“, „Neue Version“, „Gleis 1“ und der Status „Einfahrt“. Eine LED-Zeile zeigt, was die App gerade wirklich tut. Wenn alles bereit ist, steht dort „Pünktlich“, und ein Zug kommt aus dem Tunnel und rauscht durchs Bild. Danach startet die App neu.',
+        how: 'Tippe im Menü auf „Aktualisieren“.',
+        benefit: 'Du siehst, auf welche Version du wechselst und wann die App fertig ist.',
+      },
+    ],
+  },
+  {
     version: '0.34.1',
     date: '2026-11-19',
     headline: 'Der Ladebildschirm zeigt echten Fortschritt',

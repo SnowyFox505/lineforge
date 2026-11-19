@@ -28,7 +28,6 @@ export const DIAL_R = 42
 
 /** seconds the closing animation takes */
 export const FINISH_CITY = 1.3
-export const FINISH_UPDATE = 1.7
 /** the iris that opens onto the game is soft at its edge by this many pixels */
 export const IRIS_FEATHER = 90
 
