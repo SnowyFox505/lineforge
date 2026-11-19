@@ -89,6 +89,11 @@ export function stepBoard(b: Board, dt: number) {
   for (const row of [b.clock, b.version, b.zug, b.gleis, b.ziel, b.status]) for (const f of row) f.step(dt)
 }
 
+/** true when no tile is turning any more */
+export function boardSettled(b: Board): boolean {
+  return [b.clock, b.version, b.zug, b.gleis, b.ziel, b.status].every((row) => row.every((f) => f.settled))
+}
+
 export function setClock(b: Board, clock: string) {
   padTo(clock, b.clock.length).forEach((ch, i) => b.clock[i].set(ch, 0, 0))
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { clamp01, easeInOut, easeOut, REDUCED_MOTION } from './netCanvas'
-import { BOARD_H, BOARD_W, drawBoard, flipStatus, flipVersion, makeBoard, setClock, startBoard, stepBoard } from './departure/board'
+import { BOARD_H, BOARD_W, boardSettled, drawBoard, flipStatus, flipVersion, makeBoard, setClock, startBoard, stepBoard } from './departure/board'
 import { drawStation, TRAIN_LEN, TUNNEL_Z } from './departure/scene3d'
 import { hexRgb } from './splashScene'
 
@@ -15,10 +15,10 @@ export interface DepartureProps {
 /** the LED line, one text per stage (a stage is shown for at least a moment, however fast the work is) */
 const TICKER = ['SUCHE NACH UPDATES', 'SPEICHER LEEREN', 'STÄDTE SICHERN', 'NEUSTART']
 const STAGE_MS = 0.7
-/** timeline after the work is done, in seconds */
+/** timeline after the work is done, in seconds: the status flips, and only when every tile and the LED line have settled the train gets its turn */
 const T_STATUS = 0.55
-const T_GLOW = 0.6
-const T_TRAIN = 1.05
+/** the pause between the last tile turning and the first light from the tunnel, so the text can be read */
+const READ_TIME = 2
 
 const clockText = () => {
   const d = new Date()
@@ -64,6 +64,8 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
     let finishAt = -1
     let flipped = false
     let statusFlipped = false
+    // when the board stood still after the finish began (null while something still turns)
+    let settledAt: number | null = null
     let tickerAt = 0
     let tickerText = TICKER[0]
     board.ticker = tickerText
@@ -142,21 +144,23 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
         flipStatus(board, reduced)
       }
       stepBoard(board, dt)
+      if (f >= 0 && settledAt === null && flipped && statusFlipped && boardSettled(board) && el - tickerAt > 0.6) settledAt = f
 
       // numbers for the picture
       const go = f < 0 ? 0 : easeInOut(clamp01((f - T_STATUS) / 0.6))
-      const tau = f - T_TRAIN
-      const portalGlow = f < 0 ? 0.04 + 0.03 * Math.sin(el * 3) : Math.max(0.04, easeOut(clamp01((f - T_GLOW) / 0.7)) * (1 - 0.7 * clamp01(tau / 0.7)))
+      const tau = settledAt === null ? -1 : f - settledAt - READ_TIME
+      const glowIn = settledAt === null ? 0 : easeOut(clamp01((f - settledAt - READ_TIME) / 0.9))
+      const portalGlow = f < 0 ? 0.04 + 0.03 * Math.sin(el * 3) : Math.max(0.04, glowIn * (1 - 0.7 * clamp01(tau / 0.7)))
       let trainZ: number | null = null
       let speed = 0
       if (!reduced && tau >= 0) {
         const v0 = 12
         const a = 22
-        trainZ = TUNNEL_Z + 12 - (v0 * tau + 0.5 * a * tau * tau)
+        trainZ = TUNNEL_Z + 22 - (v0 * tau + 0.5 * a * tau * tau)
         speed = v0 + a * tau
       }
       const mid = trainZ === null ? 99 : trainZ + TRAIN_LEN / 2
-      const shake = trainZ === null ? (f >= T_GLOW ? 0.12 * clamp01((f - T_GLOW) / 0.5) : 0) : clamp01(1 - Math.abs(mid - 10) / 30) * Math.min(1, speed / 50) + 0.12
+      const shake = trainZ === null ? 0.12 * glowIn : clamp01(1 - Math.abs(mid - 10) / 30) * Math.min(1, speed / 50) + 0.12
 
       // layout: on a phone the board is on top and the station below it, on a wide screen they stand side by side
       const wide = W >= H * 1.25

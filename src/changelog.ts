@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.35.1',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: der Zug kommt wirklich aus dem Tunnel, und du hast Zeit zum Lesen',
+    changes: [
+      {
+        title: 'Zug fährt tief aus dem Tunnel',
+        what: 'Der Zug taucht nicht mehr plötzlich am Tunnelrand auf. Zuerst sieht man nur seine Scheinwerfer tief im dunklen Tunnel, die immer größer werden. Alles, was noch hinter der Tunnelwand liegt, ist nur durch die Öffnung zu sehen.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Der Zug wirkt echt und nicht wie eine Figur, die irgendwo erscheint.',
+      },
+      {
+        title: 'Zwei Sekunden Zeit zum Lesen',
+        what: 'Der Zug kommt erst, wenn die ganze Tafel fertig gedreht ist und die LED-Zeile steht. Dann bleiben noch zwei Sekunden Zeit, bevor das Licht aus dem Tunnel kommt.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Du kannst Version, Gleis und Status in Ruhe lesen.',
+      },
+    ],
+  },
+  {
     version: '0.35.0',
     date: '2026-11-19',
     headline: 'Aktualisieren als Abfahrtstafel im Bahnhof',

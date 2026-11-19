@@ -93,6 +93,8 @@ interface Face {
   /** extra emissive light (windows, lamps): drawn without fog and without the darkness of the tunnel */
   glow?: number
   alpha?: number
+  /** a part of the train: what is behind the tunnel wall is only seen through the opening */
+  thru?: boolean
 }
 
 let glowSprite: HTMLCanvasElement | null = null
@@ -166,7 +168,35 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     return true
   }
 
+  /** the part of a polygon on one side of the tunnel wall (plane z = TUNNEL_Z), in world coordinates */
+  const wallSide = (pts: V3[], far: boolean): V3[] => {
+    const out: V3[] = []
+    const inside = (p: V3) => (far ? p[2] >= TUNNEL_Z : p[2] <= TUNNEL_Z)
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i]
+      const b = pts[(i + 1) % pts.length]
+      if (inside(a)) out.push(a)
+      if (inside(a) !== inside(b)) {
+        const t = (TUNNEL_Z - a[2]) / (b[2] - a[2])
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, TUNNEL_Z])
+      }
+    }
+    return out
+  }
+
   const face = (f: Face) => {
+    if (f.thru && f.pts.some((p) => p[2] > TUNNEL_Z)) {
+      const nearPart = wallSide(f.pts, false)
+      const farPart = wallSide(f.pts, true)
+      if (nearPart.length >= 3) face({ ...f, pts: nearPart, thru: false })
+      if (farPart.length >= 3) {
+        ctx.save()
+        if (path(arch(TUNNEL_Z))) ctx.clip()
+        face({ ...f, pts: farPart, thru: false })
+        ctx.restore()
+      }
+      return
+    }
     if (!path(f.pts)) return
     const z = depthOf([f.pts[0][0], f.pts[0][1], f.pts[0][2]])
     const fog = f.glow ? 0 : fogAt(z)
@@ -190,6 +220,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     const [x, y] = scr(cam, v)
     const px = (cam.f * size) / v[2]
     ctx.save()
+    // a light inside the tunnel is only seen through the opening
+    if (p[2] > TUNNEL_Z + 0.5 && path(arch(TUNNEL_Z))) ctx.clip()
     ctx.globalCompositeOperation = 'lighter'
     ctx.globalAlpha = Math.min(1, alpha)
     ctx.drawImage(tinted(color), x - px / 2, y - px / 2, px, px)
@@ -330,7 +362,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
 
   // the train (also built a few times shifted along its way for the blur)
   const addTrain = (zf: number, out: Item[]) => {
-    const lit = (z: number) => 0.28 + 0.72 * clamp01((Zt - z) / 7) // a car inside the tunnel is dark
+    const tface = (f: Face) => face({ ...f, thru: true })
+    const lit = (z: number) => 0.15 + 0.85 * clamp01((Zt + 10 - z) / 20) // a car inside the tunnel is dark, it gets lighter as it comes out
     for (let i = 0; i < CARS; i++) {
       const z0 = zf + i * (CAR_LEN + CAR_GAP)
       const z1 = z0 + CAR_LEN
@@ -345,10 +378,10 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
           const xl = T - 1.45
           const xr = T + 1.45
           // side (the one facing the platform)
-          face({ pts: [[xl, 0.55, z0], [xl, head ? 1.7 : 3.1, z0], ...(head ? ([[xl, 3.1, z0 + nose]] as V3[]) : []), [xl, 3.1, z1], [xl, 0.55, z1]], fill: body, k: 0.78 * kk })
+          tface({ pts: [[xl, 0.55, z0], [xl, head ? 1.7 : 3.1, z0], ...(head ? ([[xl, 3.1, z0 + nose]] as V3[]) : []), [xl, 3.1, z1], [xl, 0.55, z1]], fill: body, k: 0.78 * kk })
           // dark skirt and the accent stripe
-          face({ pts: [[xl - 0.005, 0.55, z0], [xl - 0.005, 0.95, z0], [xl - 0.005, 0.95, z1], [xl - 0.005, 0.55, z1]], fill: [40, 46, 56], k: kk })
-          face({ pts: [[xl - 0.006, 0.97, z0], [xl - 0.006, 1.22, z0], [xl - 0.006, 1.22, z1], [xl - 0.006, 0.97, z1]], fill: s.accent, k: 0.95 * kk, glow: kk })
+          tface({ pts: [[xl - 0.005, 0.55, z0], [xl - 0.005, 0.95, z0], [xl - 0.005, 0.95, z1], [xl - 0.005, 0.55, z1]], fill: [40, 46, 56], k: kk })
+          tface({ pts: [[xl - 0.006, 0.97, z0], [xl - 0.006, 1.22, z0], [xl - 0.006, 1.22, z1], [xl - 0.006, 0.97, z1]], fill: s.accent, k: 0.95 * kk, glow: kk })
           // windows and doors
           const w0 = z0 + (head ? 4.4 : 0.9)
           const n = head ? 5 : 7
@@ -358,27 +391,27 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
             const a = w0 + w * step + 0.18
             const b = w0 + (w + 1) * step - 0.18
             if (door) {
-              face({ pts: [[xl - 0.008, 1.3, a], [xl - 0.008, 2.95, a], [xl - 0.008, 2.95, b], [xl - 0.008, 1.3, b]], fill: [60, 120, 170], k: 0.9 * kk })
+              tface({ pts: [[xl - 0.008, 1.3, a], [xl - 0.008, 2.95, a], [xl - 0.008, 2.95, b], [xl - 0.008, 1.3, b]], fill: [60, 120, 170], k: 0.9 * kk })
             } else {
-              face({ pts: [[xl - 0.008, 1.75, a], [xl - 0.008, 2.75, a], [xl - 0.008, 2.75, b], [xl - 0.008, 1.75, b]], fill: [255, 226, 160], k: 1, glow: kk, alpha: 0.95 * kk + 0.05 })
+              tface({ pts: [[xl - 0.008, 1.75, a], [xl - 0.008, 2.75, a], [xl - 0.008, 2.75, b], [xl - 0.008, 1.75, b]], fill: [255, 226, 160], k: 1, glow: kk, alpha: 0.95 * kk + 0.05 })
             }
           }
           // roof chamfers and roof
           const shoulder = 3.1
-          face({ pts: [[xl, shoulder, z0 + nose], [xl + 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z1], [xl, shoulder, z1]], fill: body, k: 0.92 * kk })
-          face({ pts: [[xl + 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z1], [xl + 0.35, 3.7, z1]], fill: [214, 220, 229], k: 1 * kk })
+          tface({ pts: [[xl, shoulder, z0 + nose], [xl + 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z1], [xl, shoulder, z1]], fill: body, k: 0.92 * kk })
+          tface({ pts: [[xl + 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z0 + nose], [xr - 0.35, 3.7, z1], [xl + 0.35, 3.7, z1]], fill: [214, 220, 229], k: 1 * kk })
           if (head) {
             // windscreen, lower nose and the two small triangles at the corners
-            face({ pts: [[xl, 1.7, z0], [xr, 1.7, z0], [xr - 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z0 + nose]], fill: [14, 22, 32], k: 1 * kk })
+            tface({ pts: [[xl, 1.7, z0], [xr, 1.7, z0], [xr - 0.35, 3.7, z0 + nose], [xl + 0.35, 3.7, z0 + nose]], fill: [14, 22, 32], k: 1 * kk })
             const sx = (T - 1.0) + 0.25 * Math.sin(s.t * 0.7)
-            face({ pts: [[sx, 2.0, z0 - 0.02], [sx + 0.55, 2.0, z0 - 0.02], [sx + 1.0, 3.55, z0 + nose - 0.03], [sx + 0.45, 3.55, z0 + nose - 0.03]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.1 * kk })
-            face({ pts: [[xl, 0.55, z0], [xr, 0.55, z0], [xr, 1.7, z0], [xl, 1.7, z0]], fill: [232, 236, 242], k: 0.62 * kk })
-            face({ pts: [[xl, 0.98, z0 - 0.004], [xr, 0.98, z0 - 0.004], [xr, 1.2, z0 - 0.004], [xl, 1.2, z0 - 0.004]], fill: s.accent, k: 0.95 * kk, glow: kk })
-            face({ pts: [[xl, 1.7, z0], [xl + 0.35, 3.7, z0 + nose], [xl, 3.1, z0 + nose]], fill: body, k: 0.7 * kk })
-            face({ pts: [[xl + 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.55, z0 + nose - 0.05], [xl + 0.4, 3.55, z0 + nose - 0.05]], fill: [255, 170, 60], k: 1, glow: kk, alpha: 0.9 * kk })
+            tface({ pts: [[sx, 2.0, z0 - 0.02], [sx + 0.55, 2.0, z0 - 0.02], [sx + 1.0, 3.55, z0 + nose - 0.03], [sx + 0.45, 3.55, z0 + nose - 0.03]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.1 * kk })
+            tface({ pts: [[xl, 0.55, z0], [xr, 0.55, z0], [xr, 1.7, z0], [xl, 1.7, z0]], fill: [232, 236, 242], k: 0.62 * kk })
+            tface({ pts: [[xl, 0.98, z0 - 0.004], [xr, 0.98, z0 - 0.004], [xr, 1.2, z0 - 0.004], [xl, 1.2, z0 - 0.004]], fill: s.accent, k: 0.95 * kk, glow: kk })
+            tface({ pts: [[xl, 1.7, z0], [xl + 0.35, 3.7, z0 + nose], [xl, 3.1, z0 + nose]], fill: body, k: 0.7 * kk })
+            tface({ pts: [[xl + 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.3, z0 + nose - 0.05], [xr - 0.4, 3.55, z0 + nose - 0.05], [xl + 0.4, 3.55, z0 + nose - 0.05]], fill: [255, 170, 60], k: 1, glow: kk, alpha: 0.9 * kk })
           } else {
             // the front of a middle car is only seen as a dark gap
-            face({ pts: [[xl, 0.55, z0], [xl, 3.1, z0], [xl + 0.1, 3.1, z0 - 0.7], [xl + 0.1, 0.55, z0 - 0.7]], fill: [10, 12, 16], k: 1 })
+            tface({ pts: [[xl, 0.55, z0], [xl, 3.1, z0], [xl + 0.1, 3.1, z0 - 0.7], [xl + 0.1, 0.55, z0 - 0.7]], fill: [10, 12, 16], k: 1 })
           }
         },
       })
@@ -436,7 +469,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   }
   if (s.trainZ !== null) {
     const zf = s.trainZ
-    const k = clamp01((Zt + 6 - zf) / 8)
+    const k = clamp01((Zt + 24 - zf) / 10)
     for (const dx of [-0.95, 0.95]) {
       light([T + dx, 1.15, zf - 0.05], 2.1, [255, 250, 235], 0.85 * k)
       light([T + dx, 1.15, zf - 0.05], 0.7, [255, 255, 255], 1 * k)
