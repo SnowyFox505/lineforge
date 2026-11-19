@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.32.0',
+    date: '2026-11-19',
+    headline: 'Ideen und Fehler schnell melden',
+    changes: [
+      {
+        title: 'Idee oder Fehler melden',
+        what: 'Fällt dir beim Spielen etwas auf, schreibst du es als einen Satz in die App und sendest es ab. Alle Notizen landen in einer gemeinsamen Liste, die man abhaken und löschen kann.',
+        how: 'Auf dem Startbildschirm der Stift-Knopf oben, oder in den Stadt-Einstellungen „Idee oder Fehler melden“. Idee oder Fehler wählen, Satz schreiben, Senden. Ohne Netz oder Anmeldung wartet die Notiz auf dem Gerät und geht später raus.',
+        benefit: 'Nichts geht mehr in irgendwelchen Notizen-Apps verloren.',
+      },
+    ],
+  },
+  {
     version: '0.31.0',
     date: '2026-11-19',
     headline: 'Neue Straßenbahnen, ICEs und Regionalzüge',

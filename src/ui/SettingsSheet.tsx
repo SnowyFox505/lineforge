@@ -6,6 +6,7 @@ import type { GameMode } from '../model/types'
 import { exportCityJson } from '../persistence/db'
 import { useEditor } from '../store/editorStore'
 import AppearanceSheet from './AppearanceSheet'
+import IdeaSheet from './IdeaSheet'
 import Icon from './Icon'
 import NameQueuesEditor from './NameQueues'
 import { CommitInput, Segmented, Sheet } from './primitives'
@@ -35,6 +36,7 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
   const smaller = MAP_SIZES.filter((m) => m.size < doc.size)
   const startShrink = useEditor((s) => s.startShrink)
   const [look, setLook] = useState(false)
+  const [ideas, setIdeas] = useState(false)
 
   return (
     <>
@@ -116,9 +118,18 @@ export default function SettingsSheet({ open, onClose }: { open: boolean; onClos
         >
           <Icon name="download" size={18} /> Stadt exportieren (JSON)
         </button>
+
+        <button className="btn-soft flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm" onClick={() => setIdeas(true)}>
+          <Icon name="edit" size={20} />
+          <span className="flex-1">
+            <span className="block font-semibold">Idee oder Fehler melden</span>
+            <span className="block text-xs text-white/55">Ein Satz, senden, fertig</span>
+          </span>
+        </button>
       </div>
     </Sheet>
     <AppearanceSheet open={look} onClose={() => setLook(false)} />
+    <IdeaSheet open={ideas} onClose={() => setIdeas(false)} />
     </>
   )
 }

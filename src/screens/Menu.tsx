@@ -14,6 +14,7 @@ import type { IconName } from '../ui/Icon'
 import { Segmented, spring } from '../ui/primitives'
 import AccountSheet, { WELCOME_KEY } from '../ui/AccountSheet'
 import AppearanceSheet from '../ui/AppearanceSheet'
+import IdeaSheet from '../ui/IdeaSheet'
 import UpdateOverlay from '../ui/UpdateOverlay'
 import WhatsNew from '../ui/WhatsNew'
 import NameQueuesEditor from '../ui/NameQueues'
@@ -78,6 +79,7 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
   const [updating, setUpdating] = useState(false)
   const [account, setAccount] = useState(false)
   const [look, setLook] = useState(false)
+  const [ideas, setIdeas] = useState(false)
   const [welcome, setWelcome] = useState(false)
   const status = useAuth((s) => s.status)
   const user = useAuth((s) => s.user)
@@ -154,6 +156,9 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
         <motion.button variants={item} whileTap={{ scale: 0.94 }} onClick={() => setLook(true)} className="glass grid h-10 w-10 place-items-center rounded-full" aria-label="Darstellung">
           <Icon name="palette" size={18} stroke={2.1} />
         </motion.button>
+        <motion.button variants={item} whileTap={{ scale: 0.94 }} onClick={() => setIdeas(true)} className="glass grid h-10 w-10 place-items-center rounded-full" aria-label="Idee oder Fehler melden">
+          <Icon name="edit" size={18} stroke={2.1} />
+        </motion.button>
         {/* update: clears the offline copy and loads the newest version (saved cities stay) */}
         <motion.button
           variants={item}
@@ -170,6 +175,7 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
       {updating && <UpdateOverlay />}
       <WhatsNew open={!!notes} releases={notes?.releases ?? []} title={notes?.title} onClose={closeNotes} />
       <AppearanceSheet open={look} onClose={() => setLook(false)} />
+      <IdeaSheet open={ideas} onClose={() => setIdeas(false)} />
       <AccountSheet open={account} onClose={() => setAccount(false)} welcome={welcome && !user} />
 
       <div>

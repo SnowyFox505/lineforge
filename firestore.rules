@@ -5,5 +5,16 @@ service cloud.firestore {
     match /users/{uid}/{collection}/{id} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // Notes about ideas and bugs, one list for everybody who plays. Anybody signed in may write a note (with their own uid),
+    // only the accounts named here (by uid, shown at the bottom of the idea window in the app) may read, tick off and delete them. Put the uids in before publishing.
+    match /ideas/{id} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 500;
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid in ['UID-1', 'UID-2'];
+    }
   }
 }

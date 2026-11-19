@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth'
 import { create } from 'zustand'
+import { flushIdeas } from '../cloud/ideas'
 import { cancelUpload, deleteCloudCity, flushUploads, pullSettings, pushSettings, startUploads, syncAll } from '../cloud/sync'
 import { useTheme } from '../ui/theme'
 import { adoptGuestCities, clearOwner, countGuestCities, deleteCity, GUEST, setOwner } from '../persistence/db'
@@ -102,6 +103,7 @@ export const useAuth = create<AuthState>((set, get) => {
       startUploads(u.uid, (sync) => set({ sync }))
       set({ status: 'user', user: toAccount(u), ownerTick: get().ownerTick + 1, guestCities: await countGuestCities() })
       void doSync(u.uid)
+      void flushIdeas()
       // the colour chosen on another device
       void pullSettings(u.uid)
         .then((s) => s.accent && useTheme.getState().setAccent(s.accent, s.accent2 || null))
