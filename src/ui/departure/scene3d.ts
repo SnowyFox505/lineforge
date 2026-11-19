@@ -484,9 +484,10 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
       light([T + dx, 1.42, zf - 0.05], 2.1, [255, 250, 235], 0.85 * k)
       light([T + dx, 1.42, zf - 0.05], 0.7, [255, 255, 255], 1 * k)
     }
-    // the beam on the rails and the platform ahead of the train
-    light([T, 0.3, zf - 5], 10, [255, 244, 220], 0.2 * k)
-    light([T - 2, PLATFORM_Y, zf - 4], 8, [255, 236, 200], 0.12 * k)
+    // the beam on the rails and the platform ahead of the train (gone when the train stands right in front of the camera)
+    const beam = clamp01((zf - 9) / 8)
+    light([T, 0.3, zf - 5], 10, [255, 244, 220], 0.2 * k * beam)
+    light([T - 2, PLATFORM_Y, zf - 4], 8, [255, 236, 200], 0.12 * k * beam)
     // lit windows throw light onto the platform
     for (let i = 0; i < CARS; i++) {
       const z0 = zf + i * (CAR_LEN + CAR_GAP)

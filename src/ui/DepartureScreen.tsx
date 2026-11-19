@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { clamp01, easeInOut, easeOut, REDUCED_MOTION } from './netCanvas'
 import { BOARD_H, BOARD_W, boardSettled, drawBoard, FINISH_TEXT, flipStatus, flipVersion, makeBoard, setClock, startBoard, STOPS, stepBoard } from './departure/board'
-import { drawStation, TRAIN_LEN, TUNNEL_Z } from './departure/scene3d'
+import { drawStation, TUNNEL_Z } from './departure/scene3d'
 import { hexRgb } from './splashScene'
 
 export interface DepartureProps {
@@ -19,6 +19,11 @@ const STAGE_MS = 0.7
 const T_STATUS = 0.55
 /** the pause between the last tile turning and the first light from the tunnel, so the text can be read */
 const READ_TIME = 2
+/** the train brakes from about 45 km/h to a stop in 8 s over 45 m (a normal service braking of the underground), then the screen goes dark */
+const BRAKE_T = 8
+const STOP_Z = 7
+const BRAKE_D = TUNNEL_Z + 18 - STOP_Z
+const BRAKE_P = 2.2
 
 const clockText = () => {
   const d = new Date()
@@ -154,13 +159,12 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
       let trainZ: number | null = null
       let speed = 0
       if (!reduced && tau >= 0) {
-        const v0 = 12
-        const a = 22
-        trainZ = TUNNEL_Z + 22 - (v0 * tau + 0.5 * a * tau * tau)
-        speed = v0 + a * tau
+        // the train comes out of the tunnel and brakes to a stop at the platform, slowly letting go of the brake at the end
+        const u = clamp01(tau / BRAKE_T)
+        trainZ = STOP_Z + BRAKE_D * Math.pow(1 - u, BRAKE_P)
+        speed = ((BRAKE_P * BRAKE_D) / BRAKE_T) * Math.pow(1 - u, BRAKE_P - 1)
       }
-      const mid = trainZ === null ? 99 : trainZ + TRAIN_LEN / 2
-      const shake = trainZ === null ? 0.12 * glowIn : clamp01(1 - Math.abs(mid - 10) / 30) * Math.min(1, speed / 50) + 0.12
+      const shake = trainZ === null ? 0.12 * glowIn : 0.03 + 0.4 * clamp01(speed / 12)
 
       // layout: on a phone the board is on top and the station below it, on a wide screen they stand side by side
       const wide = W >= H * 1.25
@@ -228,14 +232,14 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
 
       // The screen fades in at the start. When the train has passed it goes dark (not see-through: the home screen
       // underneath must not show) and the app reloads right then.
-      const out = trainZ === null || reduced ? 1 : clamp01((trainZ + TRAIN_LEN - 1.5) / 14)
+      const out = trainZ === null || reduced ? 1 : 1 - clamp01((tau - BRAKE_T - 0.25) / 0.7)
       if (out < 1) {
         ctx.fillStyle = `rgba(6,8,12,${1 - out})`
         ctx.fillRect(0, 0, W, H)
       }
       root.style.opacity = String(clamp01(el / 0.35))
 
-      const gone = reduced ? f >= 1.4 : trainZ !== null && trainZ + TRAIN_LEN < 1.5
+      const gone = reduced ? f >= 1.4 : trainZ !== null && tau >= BRAKE_T + 1
       if (gone && !finished) {
         finished = true
         cancelAnimationFrame(raf)

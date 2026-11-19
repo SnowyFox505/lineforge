@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.36.3',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: Der Zug hält am Bahnsteig an',
+    changes: [
+      {
+        title: 'Der Zug bremst und bleibt stehen',
+        what: 'Die gelbe U-Bahn fährt nicht mehr durchs Bild, sondern kommt aus dem Tunnel, bremst in etwa acht Sekunden von rund 45 km/h ganz sanft ab und hält am Bahnsteig an. Sobald der Zug steht, ist das Aktualisieren vorbei: der Bildschirm wird dunkel und die App startet neu.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Das Ankommen des Zuges ist das Ende des Ladens, so wie du es dir vorgestellt hast.',
+      },
+    ],
+  },
+  {
     version: '0.36.2',
     date: '2026-11-19',
     headline: 'Aktualisieren: Tafel nach dem Vorbild der neuen Hamburger U-Bahn-Anzeigen',
