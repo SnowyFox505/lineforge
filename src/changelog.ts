@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.36.1',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: Tafel wie im echten Bahnhof',
+    changes: [
+      {
+        title: 'Anzeigetafel wie über einem echten Bahnsteig',
+        what: 'Die Tafel beim Aktualisieren sieht jetzt aus wie die Anzeigen an echten Bahnsteigen: ein schwarzer Bildschirm im Stahlrahmen mit Gleis und Uhrzeit oben, dem Linien-Schild, dem Ziel, der Version, dem Status und einer orangen Infozeile. Die Karten-Optik von vorher ist weg.',
+        how: 'Du musst nichts tun, sie erscheint beim Aktualisieren.',
+        benefit: 'Die Tafel passt zum Bahnhof und wirkt nicht mehr wie ein App-Dashboard.',
+      },
+    ],
+  },
+  {
     version: '0.36.0',
     date: '2026-11-19',
     headline: 'Aktualisieren: moderne Tafel und die gelbe U-Bahn',
