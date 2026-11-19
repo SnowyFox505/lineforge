@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.32.2',
+    date: '2026-11-19',
+    headline: 'Konto-Kennung zum Kopieren',
+    changes: [
+      {
+        title: 'Konto-Kennung per Knopf kopieren',
+        what: 'Im Fenster „Idee oder Fehler melden“ gibt es neben der Konto-Kennung einen Kopieren-Knopf. Außerdem zeigt die App an, wenn das Senden einer Notiz scheitert, und nennt den Grund.',
+        how: 'Fenster öffnen, auf „Kopieren“ tippen und die Kennung in die Firebase-Regeln einfügen.',
+        benefit: 'Kein Abtippen mehr, bei dem man „I“ und „l“ verwechselt.',
+      },
+    ],
+  },
+  {
     version: '0.32.1',
     date: '2026-11-19',
     headline: 'Verlauf auch beim Titel, genauere Fehlermeldung bei den Ideen',

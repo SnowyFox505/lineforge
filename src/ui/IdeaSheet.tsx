@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../auth/authStore'
-import { deleteIdea, flushIdeas, lastIdeaError, ideasAsText, listIdeas, MAX_IDEA, pendingIdeas, setIdeaDone, writeIdea } from '../cloud/ideas'
+import { deleteIdea, flushIdeas, lastIdeaError, lastSendError, ideasAsText, listIdeas, MAX_IDEA, pendingIdeas, setIdeaDone, writeIdea } from '../cloud/ideas'
 import type { Idea } from '../cloud/ideas'
 import { APP_VERSION } from '../version'
 import Icon from './Icon'
@@ -79,7 +79,7 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
         </button>
         {waiting > 0 && (
           <p className="text-xs leading-snug text-amber-300">
-            {waiting} {waiting === 1 ? 'Notiz wartet' : 'Notizen warten'} auf diesem Gerät{user ? ' und gehen raus, sobald du online bist.' : ': Melde dich an, dann gehen sie raus.'}
+            {waiting} {waiting === 1 ? 'Notiz wartet' : 'Notizen warten'} auf diesem Gerät{user ? ` und gehen raus, sobald du online bist${lastSendError ? ` (Senden klappt nicht: ${lastSendError})` : ''}.` : ': Melde dich an, dann gehen sie raus.'}
           </p>
         )}
 
@@ -113,7 +113,12 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
               </div>
             ))}
             {list && !list.length && <p className="text-xs text-white/45">Noch keine Notizen.</p>}
-            <p className="break-all pt-1 text-[10px] text-white/30">Konto-Kennung: {user.uid}</p>
+            <div className="flex items-center gap-2 pt-1">
+              <p className="min-w-0 flex-1 break-all font-mono text-[10px] text-white/30">Konto-Kennung: {user.uid}</p>
+              <button className="btn-soft shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold" onClick={() => void navigator.clipboard.writeText(user.uid).then(() => setNote('Kennung kopiert. Füge sie in den Firebase-Regeln ein, nicht abtippen (I und l sehen ähnlich aus).'))}>
+                Kopieren
+              </button>
+            </div>
           </div>
         )}
       </div>

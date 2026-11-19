@@ -48,6 +48,8 @@ export function writeIdea(text: string, kind: Idea['kind'], version: string): Id
 
 /** What went wrong the last time (a Firestore error code such as permission-denied), for the idea window. */
 export let lastIdeaError = ''
+/** the same for sending a note (kept apart: sending can work while reading is not allowed) */
+export let lastSendError = ''
 
 function errorText(e: unknown): string {
   const x = e as { code?: string; message?: string }
@@ -70,10 +72,10 @@ export async function flushIdeas(): Promise<number> {
       writePending(pendingIdeas().filter((p) => p.id !== idea.id))
       sent++
     }
-    lastIdeaError = ''
+    lastSendError = ''
     return sent
   } catch (e) {
-    lastIdeaError = errorText(e)
+    lastSendError = errorText(e)
     return 0
   }
 }
