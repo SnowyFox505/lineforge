@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.35.2',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: kein Blick mehr auf den alten Startbildschirm',
+    changes: [
+      {
+        title: 'Direkt vom Zug zur neuen App',
+        what: 'Sobald der Zug vorbeigefahren ist, wird der Bildschirm dunkel und die App startet sofort neu. Vorher blendete der Bildschirm aus, und man sah kurz den alten Startbildschirm, bevor sich die App neu lud.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Das Aktualisieren wirkt wie ein Stück: Zug, dunkel, neue App.',
+      },
+    ],
+  },
+  {
     version: '0.35.1',
     date: '2026-11-19',
     headline: 'Aktualisieren: der Zug kommt wirklich aus dem Tunnel, und du hast Zeit zum Lesen',

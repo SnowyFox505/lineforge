@@ -226,10 +226,14 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
 
       drawBoard(ctx, board, bx, by, s, { t: el, go, dpr, font: '', family, tickerAge: el - tickerAt })
 
-      // fade in; at the very end everything is already on its way to the new start
-      // (and the whole picture fades out once the train is gone)
-      const out = trainZ === null ? 1 : clamp01((trainZ + TRAIN_LEN - 1.5) / 14)
-      root.style.opacity = String(Math.min(clamp01(el / 0.35), reduced ? 1 : out))
+      // The screen fades in at the start. When the train has passed it goes dark (not see-through: the home screen
+      // underneath must not show) and the app reloads right then.
+      const out = trainZ === null || reduced ? 1 : clamp01((trainZ + TRAIN_LEN - 1.5) / 14)
+      if (out < 1) {
+        ctx.fillStyle = `rgba(6,8,12,${1 - out})`
+        ctx.fillRect(0, 0, W, H)
+      }
+      root.style.opacity = String(clamp01(el / 0.35))
 
       const gone = reduced ? f >= 1.4 : trainZ !== null && trainZ + TRAIN_LEN < 1.5
       if (gone && !finished) {
