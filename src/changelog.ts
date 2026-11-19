@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.31.0',
+    date: '2026-11-19',
+    headline: 'Neue Straßenbahnen, ICEs und Regionalzüge',
+    changes: [
+      {
+        title: 'Straßenbahnen aus München und Berlin',
+        what: 'Sechs Straßenbahnen nach deinen Fotos: in München Avenio, Avenio T, Variobahn und R2.2, in Berlin Flexity und Urbanliner. Mit Zielanzeige, Scheinwerfern, Türen, Faltenbälgen, Stromabnehmer und Drehgestellen.',
+        how: 'Linien-Werkzeug, Straßenbahn-Linie antippen, unter „Zug“ das Modell wählen. Alle siehst du in der Fahrzeug-Galerie (#fahrzeuge).',
+        benefit: 'Jede Tram-Linie kann wie ein echter Wagen aussehen, in den echten Farben.',
+      },
+      {
+        title: 'ICE 1, ICE 3 und ICE 4',
+        what: 'Der Fernverkehr fährt jetzt als ICE 4 (Standard), ICE 3 oder ICE 1 mit langer Nase, rotem Streifen, DB-Logo, Stromabnehmern und fünf Wagen.',
+        how: 'Fernverkehr-Linie antippen und unter „Zug“ das Modell wählen.',
+        benefit: 'Die Fernzüge sehen aus wie die echten und sind länger, die Bahnsteige wachsen mit.',
+      },
+      {
+        title: 'Nahverkehr: Talent 2, IC 2 KISS, Desiro, ODEG-Desiro und Doppelstock',
+        what: 'Fünf neue Regionalzüge, darunter zwei Doppelstockzüge (Škoda-Doppelstock als Standard und IC 2 KISS), mit Zielanzeige, echten Farben und vielen Details.',
+        how: 'Nahverkehr-Linie antippen und unter „Zug“ das Modell wählen.',
+        benefit: 'Auch der Regionalverkehr hat jetzt echte Vorbilder.',
+      },
+    ],
+  },
+  {
     version: '0.30.0',
     date: '2026-11-18',
     headline: 'Neue U-Bahn-Züge',

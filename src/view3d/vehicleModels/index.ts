@@ -9,6 +9,20 @@ import { ubahnBerlin3 } from './ubahnBerlin3'
 import { ubahnMuc1 } from './ubahnMuc1'
 import { ubahnMuc2 } from './ubahnMuc2'
 import { ubahnNuernberg1 } from './ubahnNuernberg1'
+import { tramMuc1 } from './tramMuc1'
+import { tramMuc2 } from './tramMuc2'
+import { tramMuc3 } from './tramMuc3'
+import { tramMuc4 } from './tramMuc4'
+import { tramBerlin1 } from './tramBerlin1'
+import { tramBerlin2 } from './tramBerlin2'
+import { ice1 } from './ice1'
+import { ice3 } from './ice3'
+import { ice4 } from './ice4'
+import { regTalent2 } from './regTalent2'
+import { regKiss } from './regKiss'
+import { regDesiro } from './regDesiro'
+import { regDesiroOdeg } from './regDesiroOdeg'
+import { regSkoda } from './regSkoda'
 import type { ModelDef } from './types'
 
 /**
@@ -28,6 +42,20 @@ export const MODELS: Record<string, ModelDef> = {
   ubahna2: ubahnMuc2,
   ubahng1: ubahnNuernberg1,
   sbahnm423: sbahnMuc1,
+  tramtm1: tramMuc1,
+  tramtm2: tramMuc2,
+  tramtm3: tramMuc3,
+  tramtm4: tramMuc4,
+  tramtb1: tramBerlin1,
+  tramtb2: tramBerlin2,
+  fernverkehrice1: ice1,
+  fernverkehrice3: ice3,
+  fernverkehrice4: ice4,
+  regionaltalent2: regTalent2,
+  regionalkiss: regKiss,
+  regionaldesiro: regDesiro,
+  regionaldesiroodeg: regDesiroOdeg,
+  regionalskoda: regSkoda,
 }
 
 export const modelKey = (spec: Pick<VehicleSpec, 'kind' | 'model'>) => (spec.model ? `${spec.kind}${spec.model}` : spec.kind)
