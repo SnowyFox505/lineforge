@@ -13,6 +13,13 @@ export interface SplashProps {
   /** go round the messages again and again (otherwise the last one stays) */
   loop?: boolean
   hint?: string
+  /**
+   * Real progress (0..1) reported by the work behind the screen. The ring follows it but never runs ahead of the pace of the animation,
+   * so a fast device still shows the screen for `minMs`. Without it the ring creeps along a made-up curve.
+   */
+  progress?: number
+  /** the step that is going on now (replaces the cycling messages when `progress` is given) */
+  liveMessage?: string
   doneTitle?: string
   doneMessage?: string
   /** the thing that was waited for is there */
@@ -45,25 +52,27 @@ function blobSprite(rgb: [number, number, number]): HTMLCanvasElement {
  * lights run along the lines and a progress ring around the hub fills up. When the work is done a ring bursts out of the hub
  * and the screen opens like an iris (city) or the hub turns into a check mark (update).
  */
-export default function Splash({ variant, eyebrow, title, messages, loop = true, hint, doneTitle, doneMessage, ready, minMs, onDone, z = 70 }: SplashProps) {
+export default function Splash({ variant, eyebrow, title, messages, loop = true, hint, progress, liveMessage, doneTitle, doneMessage, ready, minMs, onDone, z = 70 }: SplashProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const readyRef = useRef(ready)
   const doneRef = useRef(onDone)
+  const progressRef = useRef(progress)
   const [finishing, setFinishing] = useState(false)
   const [msg, setMsg] = useState(0)
 
   useEffect(() => {
     readyRef.current = ready
     doneRef.current = onDone
-  }, [ready, onDone])
+    progressRef.current = progress
+  }, [ready, onDone, progress])
 
   useEffect(() => {
-    if (finishing || messages.length < 2 || REDUCED_MOTION()) return
+    if (finishing || progress !== undefined || messages.length < 2 || REDUCED_MOTION()) return
     const id = window.setInterval(() => setMsg((m) => (loop ? (m + 1) % messages.length : Math.min(m + 1, messages.length - 1))), 1250)
     return () => window.clearInterval(id)
-  }, [finishing, loop, messages.length])
+  }, [finishing, loop, messages.length, progress])
 
   useEffect(() => {
     const root = rootRef.current
@@ -105,6 +114,8 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
     let finishAt = -1
     let from = 0
     let finished = false
+    let disp = 0
+    let lastNow = start
 
     const resize = () => {
       const r = canvas.getBoundingClientRect()
@@ -201,11 +212,11 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       if (head > 0 && head < tr.total) drawLight(ctx, tr.at(head), 34, a)
     }
 
-    const draw = (t: number, el: number, u: number) => {
+    const draw = (t: number, u: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
       const closing = u >= 0
-      const shown = closing ? closingProgress(from, u) : loadProgress(el)
+      const shown = closing ? closingProgress(from, u) : disp
 
       // ripples that leave the hub every two seconds
       const ripples: number[] = []
@@ -363,13 +374,18 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
       raf = requestAnimationFrame(frame)
       const el = (now - start) / 1000
       const t = reduced ? el + 10 : el
+      // the ring: real progress if there is some, held back to the pace of the animation, and smoothed
+      const real = progressRef.current
+      const aim = real === undefined ? loadProgress(el) : Math.min(real, 0.97 * easeOut(clamp01((el * 1000) / minMs)))
+      disp += (aim - disp) * (1 - Math.exp(-((now - lastNow) / 1000) * 7))
+      lastNow = now
       if (finishAt < 0 && el * 1000 >= minMs && readyRef.current) {
         finishAt = now
-        from = loadProgress(el)
+        from = disp
         setFinishing(true)
       }
       const u = finishAt < 0 ? -1 : clamp01((now - finishAt) / 1000 / finishLen)
-      draw(t, el, u)
+      draw(t, u)
       // fade in at the start, close
       root.style.opacity = String(clamp01(el / 0.3))
       if (u >= 0 && variant === 'city') {
@@ -398,7 +414,7 @@ export default function Splash({ variant, eyebrow, title, messages, loop = true,
   }, [minMs, variant])
 
   const shownTitle = finishing && doneTitle ? doneTitle : title
-  const shownMsg = finishing && doneMessage ? doneMessage : messages[Math.min(msg, messages.length - 1)]
+  const shownMsg = finishing && doneMessage ? doneMessage : progress !== undefined && liveMessage ? liveMessage : messages[Math.min(msg, messages.length - 1)]
 
   return (
     <div ref={rootRef} className="fixed inset-0 overflow-hidden" style={{ zIndex: z, opacity: 0, background: 'var(--splash-bg)', color: 'var(--splash-ink)' }} role="status" aria-live="polite">

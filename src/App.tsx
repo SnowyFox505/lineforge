@@ -27,12 +27,13 @@ export default function App() {
   // loading screen whenever a city is opened: at least a few seconds, and until the editor is on screen
   const [prevScreen, setPrevScreen] = useState(screen)
   const [loading, setLoading] = useState(false)
-  const [ready, setReady] = useState(false)
+  // how many of the real loading steps are done (see LOAD_STEPS)
+  const [loadDone, setLoadDone] = useState(0)
   if (screen !== prevScreen) {
     setPrevScreen(screen)
     if (screen === 'editor') {
       setLoading(true)
-      setReady(false)
+      setLoadDone(1) // the city itself is in the store
     }
   }
   // #fahrzeuge opens the vehicle gallery (also linked from the city list)
@@ -99,21 +100,26 @@ export default function App() {
         ) : (
           <motion.div key="editor" className="absolute inset-0" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
             <Editor />
-            <ReadyMarker onReady={() => setReady(true)} />
+            <ReadyMarker onStep={(n) => setLoadDone((d) => Math.max(d, n))} />
           </motion.div>
         )}
       </AnimatePresence>
-      {loading && <LoadingScreen title={doc.name} ready={ready} minMs={3000} onDone={() => setLoading(false)} />}
+      {loading && <LoadingScreen title={doc.name} done={loadDone} minMs={3000} onDone={() => setLoading(false)} />}
     </div>
   )
 }
 
-/** Reports once the editor has been mounted and painted (fonts loaded, two frames drawn). */
-function ReadyMarker({ onReady }: { onReady: () => void }) {
+/** Reports the steps of opening: the editor is mounted (2), fonts are loaded (3), the first frames are painted (4). */
+function ReadyMarker({ onStep }: { onStep: (n: number) => void }) {
   useEffect(() => {
     let alive = true
+    onStep(2)
     const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve()
-    void fonts.then(() => requestAnimationFrame(() => requestAnimationFrame(() => alive && onReady())))
+    void fonts.then(() => {
+      if (!alive) return
+      onStep(3)
+      requestAnimationFrame(() => requestAnimationFrame(() => alive && onStep(4)))
+    })
     return () => {
       alive = false
     }

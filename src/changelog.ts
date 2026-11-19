@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.34.1',
+    date: '2026-11-19',
+    headline: 'Der Ladebildschirm zeigt echten Fortschritt',
+    changes: [
+      {
+        title: 'Echter Fortschritt beim Öffnen einer Stadt',
+        what: 'Der Ring und die Textzeile am Ladebildschirm folgen jetzt den echten Schritten: Stadt öffnen, Editor aufbauen, Schriften laden, Karte zeichnen. Dauert ein Schritt länger, bleibt der Ring genau dort stehen. Auf schnellen Geräten bleibt der Bildschirm wie bisher mindestens drei Sekunden zu sehen.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Du siehst, wie weit das Öffnen wirklich ist, auch bei einer großen Stadt.',
+      },
+    ],
+  },
+  {
     version: '0.34.0',
     date: '2026-11-19',
     headline: 'Komplett neue Ladebildschirme',
