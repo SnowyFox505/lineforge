@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.33.0',
+    date: '2026-11-19',
+    headline: 'Züge auf den Ladebildschirmen, Löschen mit Nachfrage',
+    changes: [
+      {
+        title: 'Kleine Züge beim Laden',
+        what: 'Auf dem Ladebildschirm der Stadt fährt jetzt vor jeder Linie, die gezeichnet wird, ein kleiner Zug in der Farbe der Linie her. Beim Aktualisieren der App fahren die Linien als Züge in die Station in der Mitte ein.',
+        how: 'Du musst nichts tun, die Bildschirme erscheinen beim Öffnen einer Stadt und beim Tippen auf „Aktualisieren“.',
+        benefit: 'Das Warten sieht nach LineForge aus und nicht nach einem leeren Ladebalken.',
+      },
+      {
+        title: 'Notiz löschen mit Nachfrage',
+        what: 'Tippst du in „Idee oder Fehler melden“ auf den Papierkorb, fragt die App erst: „Bist du sicher, dass du es löschen möchtest?“',
+        how: 'Mit „Ja, löschen“ ist die Notiz weg, mit „Abbrechen“ bleibt sie.',
+        benefit: 'Ein versehentlicher Tipp löscht keine Notiz mehr.',
+      },
+    ],
+  },
+  {
     version: '0.32.2',
     date: '2026-11-19',
     headline: 'Konto-Kennung zum Kopieren',

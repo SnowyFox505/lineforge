@@ -79,10 +79,18 @@ export default function UpdateOverlay() {
             <g key={l.d}>
               <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={13} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} filter="url(#upd-glow)" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
               <path className="draw-line" d={l.d} fill="none" stroke={l.color} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray="1 2" style={{ animationDelay: `${0.1 + i * 0.16}s`, animationDuration: '1.3s' }} />
-              <circle r={5} fill="var(--splash-ink, #fff)" opacity={0}>
-                <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="1.6s" begin={`${1.0 + i * 0.22}s`} fill="freeze" />
-                <animateMotion dur="1.6s" begin={`${1.0 + i * 0.22}s`} fill="freeze" path={l.d} />
-              </circle>
+              {/* a little train of three cars drives along the line into the station */}
+              {[0, 1, 2].map((c) => (
+                <g key={c} opacity={0}>
+                  <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.06;0.92;1" dur="1.6s" begin={`${1.0 + i * 0.22 + c * 0.11}s`} fill="freeze" />
+                  <animateMotion dur="1.6s" begin={`${1.0 + i * 0.22 + c * 0.11}s`} fill="freeze" path={l.d} rotate="auto" />
+                  <rect x={-11} y={-6.5} width={22} height={13} rx={c === 0 ? 5 : 3} fill="#fff" stroke="var(--splash-dot, #0a0e14)" strokeWidth={2.5} />
+                  <rect x={-8} y={1} width={16} height={3} fill={l.color} />
+                  <rect x={-8} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
+                  <rect x={-2} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
+                  <rect x={4} y={-4.5} width={4} height={3} fill="var(--splash-dot, #0a0e14)" />
+                </g>
+              ))}
             </g>
           ))}
           {/* the station all lines run into, with a progress ring */}

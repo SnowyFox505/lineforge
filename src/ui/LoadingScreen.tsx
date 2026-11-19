@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { clamp01, drawLight, drawStation, easeInOut, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from './netCanvas'
+import { clamp01, drawLight, drawStation, drawTrain, easeInOut, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from './netCanvas'
 
 const CYCLE = 4.2 // seconds for one line to be drawn and to wipe out again
 const DISSOLVE = 1.05 // seconds the network needs to dissolve
+const TRAIN_LEN = 60 // a train of three cars: it drives on until it has left the end of the line
 
 /**
  * Loading screen: the lines of a network are drawn and wiped out again in an endless loop.
@@ -93,8 +94,11 @@ export default function LoadingScreen({ title, ready, minMs = 3000, onDone }: { 
             ctx.globalAlpha = 1
           }
         }
-        // the light at the head of the line
-        if (!reduced && head > 0 && head < 1) drawLight(ctx, l.track.at(d1), 26, fade)
+        // a train drives ahead of the line while it is drawn, and out along it while it is wiped away
+        if (!reduced && head > 0 && head < 1) {
+          drawTrain(ctx, l.track, d1 + 8 + TRAIN_LEN * clamp01((head - 0.8) / 0.2) ** 2, 0, l.color, fade)
+          drawLight(ctx, l.track.at(d1), 22, fade * 0.7)
+        }
       })
     }
 

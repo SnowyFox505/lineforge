@@ -156,4 +156,42 @@ export function drawLight(ctx: CanvasRenderingContext2D, p: P, size: number, alp
   ctx.globalAlpha = 1
 }
 
-export const REDUCED_MOTION = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const CAR_LEN = 17
+const CAR_GAP = 3
+
+/**
+ * A small train whose first car is at distance `head` of the track, the other cars follow behind it.
+ * Cars that would stand before `tail` (the start of the drawn stretch) or before the track begins are left out.
+ */
+export function drawTrain(ctx: CanvasRenderingContext2D, track: Track, head: number, tail: number, color: string, alpha: number, cars = 3) {
+  if (alpha <= 0.002) return
+  for (let j = cars - 1; j >= 0; j--) {
+    const dEnd = head - j * (CAR_LEN + CAR_GAP) // front of this car
+    const mid = dEnd - CAR_LEN / 2
+    if (dEnd - CAR_LEN < Math.max(0, tail) || mid > track.total) continue
+    const a = track.at(mid - 3)
+    const b = track.at(mid + 3)
+    const p = track.at(mid)
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.translate(p[0], p[1])
+    ctx.rotate(Math.atan2(b[1] - a[1], b[0] - a[0]))
+    const front = j === 0
+    ctx.beginPath()
+    ctx.roundRect(-CAR_LEN / 2, -5, CAR_LEN, 10, front ? [2, 5, 5, 2] : 2)
+    ctx.fillStyle = '#ffffff'
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = '#0a0e14'
+    ctx.stroke()
+    // colour stripe and windows
+    ctx.fillStyle = color
+    ctx.fillRect(-CAR_LEN / 2 + 1.5, 0.8, CAR_LEN - 3, 2.6)
+    ctx.fillStyle = '#0a0e14'
+    for (let w = 0; w < 3; w++) ctx.fillRect(-CAR_LEN / 2 + 3 + w * 4.4, -3.4, 3, 2.6)
+    ctx.restore()
+  }
+  ctx.globalAlpha = 1
+}
+
+export const REDUCED_MOTION =() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches

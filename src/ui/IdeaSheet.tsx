@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../auth/authStore'
 import { deleteIdea, flushIdeas, lastIdeaError, lastSendError, ideasAsText, listIdeas, MAX_IDEA, pendingIdeas, setIdeaDone, writeIdea } from '../cloud/ideas'
 import type { Idea } from '../cloud/ideas'
@@ -15,6 +16,7 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
   const [waiting, setWaiting] = useState(0)
   const [note, setNote] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [askDelete, setAskDelete] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setWaiting(pendingIdeas().length)
@@ -107,7 +109,7 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
                     {i.kind === 'bug' ? 'Fehler' : 'Idee'} · {i.by} · {new Date(i.at).toLocaleDateString('de-DE')} · v{i.version}
                   </div>
                 </div>
-                <button className="shrink-0 p-1 text-white/40" aria-label="Löschen" onClick={() => void deleteIdea(i.id).then(load)}>
+                <button className="shrink-0 p-1 text-white/40" aria-label="Löschen" onClick={() => setAskDelete(i.id)}>
                   <Icon name="trash" size={16} />
                 </button>
               </div>
@@ -122,6 +124,30 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
           </div>
         )}
       </div>
+      {askDelete &&
+        createPortal(
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/60 px-6" role="alertdialog" aria-modal="true" aria-label="Notiz löschen" onClick={() => setAskDelete(null)}>
+          <div className="w-full max-w-xs space-y-4 rounded-3xl bg-[#171c26] p-5 text-[#fff] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-center text-base font-semibold">Bist du sicher, dass du es löschen möchtest?</p>
+            <div className="flex gap-2">
+              <button className="btn-soft flex-1 rounded-2xl py-3 text-sm font-semibold" onClick={() => setAskDelete(null)}>
+                Abbrechen
+              </button>
+              <button
+                className="flex-1 rounded-2xl bg-[#e5484d] py-3 text-sm font-bold text-[#fff]"
+                onClick={() => {
+                  const id = askDelete
+                  setAskDelete(null)
+                  void deleteIdea(id).then(load)
+                }}
+              >
+                Ja, löschen
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+        )}
     </Sheet>
   )
 }
