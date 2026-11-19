@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../auth/authStore'
-import { deleteIdea, flushIdeas, ideasAsText, listIdeas, MAX_IDEA, pendingIdeas, setIdeaDone, writeIdea } from '../cloud/ideas'
+import { deleteIdea, flushIdeas, lastIdeaError, ideasAsText, listIdeas, MAX_IDEA, pendingIdeas, setIdeaDone, writeIdea } from '../cloud/ideas'
 import type { Idea } from '../cloud/ideas'
 import { APP_VERSION } from '../version'
 import Icon from './Icon'
@@ -29,7 +29,7 @@ export default function IdeaSheet({ open, onClose }: { open: boolean; onClose: (
       setNote(null)
     } catch {
       setList(null)
-      setNote('Die Liste kann gerade nicht geladen werden (keine Verbindung oder dein Konto darf sie nicht lesen).')
+      setNote(`Die Liste kann gerade nicht geladen werden (${lastIdeaError || 'unbekannter Fehler'}). Bei „permission-denied“ stimmen die Firebase-Regeln oder die Konto-Kennung nicht, bei „unavailable“ fehlt die Verbindung.`)
     }
   }, [user])
 

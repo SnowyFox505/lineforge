@@ -188,7 +188,10 @@ function Home({ latest, count, go, onContinue }: { latest?: Saved; count: number
         <motion.h1 variants={item} className="mt-2 text-[68px] font-bold leading-[0.88] tracking-[-0.045em] md:text-[88px]">
           Line
           <br />
-          <span className="text-accent" style={{ textShadow: '0 0 40px rgba(var(--accent-rgb),0.35)' }}>
+          <span
+            className="inline-block bg-clip-text text-transparent"
+            style={{ backgroundImage: 'var(--accent-fill, linear-gradient(180deg, var(--accent-hi), var(--accent-lo)))', filter: 'drop-shadow(0 0 20px rgba(var(--accent-rgb),0.35))', paddingBottom: '0.08em' }}
+          >
             Forge
           </span>
         </motion.h1>

@@ -46,6 +46,14 @@ export function writeIdea(text: string, kind: Idea['kind'], version: string): Id
   return idea
 }
 
+/** What went wrong the last time (a Firestore error code such as permission-denied), for the idea window. */
+export let lastIdeaError = ''
+
+function errorText(e: unknown): string {
+  const x = e as { code?: string; message?: string }
+  return x?.code || x?.message || 'unbekannt'
+}
+
 /** Send what waits on the device. Returns how many went out (0 when nobody is signed in or there is no connection). */
 export async function flushIdeas(): Promise<number> {
   const waiting = pendingIdeas()
@@ -62,18 +70,25 @@ export async function flushIdeas(): Promise<number> {
       writePending(pendingIdeas().filter((p) => p.id !== idea.id))
       sent++
     }
+    lastIdeaError = ''
     return sent
-  } catch {
+  } catch (e) {
+    lastIdeaError = errorText(e)
     return 0
   }
 }
 
 /** All notes, newest first. Throws when the list may not be read (the account is not on the list of the rules). */
 export async function listIdeas(): Promise<Idea[]> {
-  const { db } = await firebase()
-  const { collection, getDocs } = await import('firebase/firestore')
-  const snap = await getDocs(collection(db, 'ideas'))
-  return snap.docs.map((d) => d.data() as Idea).sort((a, b) => b.at - a.at)
+  try {
+    const { db } = await firebase()
+    const { collection, getDocs } = await import('firebase/firestore')
+    const snap = await getDocs(collection(db, 'ideas'))
+    return snap.docs.map((d) => d.data() as Idea).sort((a, b) => b.at - a.at)
+  } catch (e) {
+    lastIdeaError = errorText(e)
+    throw e
+  }
 }
 
 export async function setIdeaDone(id: string, done: boolean): Promise<void> {

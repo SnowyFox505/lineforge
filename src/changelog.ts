@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.32.1',
+    date: '2026-11-19',
+    headline: 'Verlauf auch beim Titel, genauere Fehlermeldung bei den Ideen',
+    changes: [
+      {
+        title: 'Titel „Forge“ mit Farbverlauf',
+        what: 'Das Wort „Forge“ im Titel auf dem Startbildschirm zeigt jetzt den ganzen Farbverlauf, den du bei der Darstellung gewählt hast, und nicht nur die erste Farbe.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Der Startbildschirm passt zu deinen gewählten Farben.',
+      },
+      {
+        title: 'Ideen-Liste nennt den Grund bei Problemen',
+        what: 'Kann die Liste der Ideen nicht geladen werden, steht jetzt der genaue Grund dabei.',
+        how: 'Im Fenster „Idee oder Fehler melden“ erscheint die Meldung automatisch.',
+        benefit: 'Der Fehler lässt sich schneller finden.',
+      },
+    ],
+  },
+  {
     version: '0.32.0',
     date: '2026-11-19',
     headline: 'Ideen und Fehler schnell melden',
