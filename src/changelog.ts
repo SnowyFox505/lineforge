@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.36.2',
+    date: '2026-11-19',
+    headline: 'Aktualisieren: Tafel nach dem Vorbild der neuen Hamburger U-Bahn-Anzeigen',
+    changes: [
+      {
+        title: 'Die Anzeige wie über einem echten U-Bahn-Gleis',
+        what: 'Die Tafel beim Aktualisieren ist jetzt einer modernen Bahnsteig-Anzeige nachempfunden: tiefblauer Bildschirm in einem grauen Gehäuse, das gelbe Linien-Schild und das Ziel oben, darunter wie bei einer Fahrt „über ...“ die Schritte des Updates, eine dünne Linie und unten die Version und der Status.',
+        how: 'Du musst nichts tun. Die Schritte (Suche nach Updates, Speicher leeren, Städte sichern, Neustart) werden nacheinander hervorgehoben, am Ende steht dort „Bitte zurücktreten“.',
+        benefit: 'Es sieht aus wie ein echtes Display im Bahnhof und nicht mehr wie eine App-Oberfläche.',
+      },
+    ],
+  },
+  {
     version: '0.36.1',
     date: '2026-11-19',
     headline: 'Aktualisieren: Tafel wie im echten Bahnhof',
