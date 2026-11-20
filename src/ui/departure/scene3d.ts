@@ -473,8 +473,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     const A_W = 2.2
     const A_H = (A_W * TEX_H) / TEX_W
     const PHI = 0.2
-    const dsp = (cam.f * A_W) / (wide ? rw * 0.4 : rw * 0.6)
-    const tx = rx + rw * (wide ? 0.4 : 0.42)
+    const dsp = (cam.f * A_W) / (wide ? rw * 0.4 : rw * 0.68)
+    const tx = rx + rw * (wide ? 0.42 : 0.5)
     const ty = ry + rh * (wide ? 0.27 : 0.25)
     const ccx = ((tx - (rx + rw * 0.5)) * dsp) / cam.f
     const ccy = ((baseCy - ty) * dsp) / cam.f
@@ -497,12 +497,10 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     }
     const at = (f: Fr, a: number, b: number, k: number): V3 => [f.c[0] + f.r[0] * a + f.u[0] * b + f.n[0] * k, f.c[1] + f.r[1] * a + f.u[1] * b + f.n[1] * k, f.c[2] + f.r[2] * a + f.u[2] * b + f.n[2] * k]
     const neg = (v: V3): V3 => [-v[0], -v[1], -v[2]]
-    const azA = Math.atan2(yc[0], yc[2]) + 0.14
+    // turned a little to the left, so the right side of the housing shows: the second screen sits back to back with this one,
+    // looking the other way along the platform (it can not be seen from here, only its housing)
+    const azA = Math.atan2(yc[0], yc[2]) + 0.44
     const frA = frame(yc, azA)
-    const apex = at(frA, A_W / 2 + 0.03, 0, 0)
-    const azB = azA - 0.9
-    const rB: V3 = [Math.cos(azB), 0, -Math.sin(azB)]
-    const frB = frame([apex[0] + (rB[0] * A_W) / 2, apex[1], apex[2] + (rB[2] * A_W) / 2], azB)
     const bluish = (c: RGB, t: number): RGB => mix(c, [70, 100, 230], t)
 
     const box = (f: Fr, a0: number, a1: number, b0: number, b1: number, c0: number, c1: number, fill: RGB, kk: number) => {
@@ -613,24 +611,25 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     const hh = A_H / 2
     // the stem from the ceiling, in the middle between the two screens
     const stemTop = HALL_TOP - cam.y
-    const stemFr: Fr = { c: [apex[0], apex[1] + hh + 0.02, apex[2]], r: [Math.cos(azA), 0, -Math.sin(azA)], u: [0, 1, 0], n: [-Math.sin(azA), 0, -Math.cos(azA)] }
+    const top = at(frA, 0, hh + 0.02, -0.17)
+    const stemFr: Fr = { c: top, r: [Math.cos(azA), 0, -Math.sin(azA)], u: [0, 1, 0], n: [-Math.sin(azA), 0, -Math.cos(azA)] }
     box(stemFr, -0.08, 0.08, 0, Math.max(0.2, stemTop - stemFr.c[1]), -0.08, 0.08, [92, 98, 106], 0.9)
-    for (const fr of [frB, frA]) {
-      box(fr, -hw, hw, -hh - 0.04, hh + 0.04, -0.3, 0, HOUSE, 0.95)
+    for (const fr of [frA]) {
+      box(fr, -hw, hw, -hh - 0.04, hh + 0.04, -0.34, 0, HOUSE, 0.95)
       drawTex(fr)
       // the grey slab below the screen, with the vent slots on its underside
-      box(fr, -hw - 0.02, hw + 0.04, -hh - 0.22, -hh - 0.04, -0.3, 0.05, SLAB, 1)
+      box(fr, -hw - 0.02, hw + 0.04, -hh - 0.22, -hh - 0.04, -0.46, 0.05, SLAB, 1)
       const bn = -hh - 0.22
-      const bp = at(fr, 0, bn, -0.1)
+      const bp = at(fr, 0, bn, -0.2)
       if (fr.u[0] * bp[0] + fr.u[1] * bp[1] + fr.u[2] * bp[2] > 0) {
         for (let a = -hw + 0.12; a < hw - 0.1; a += 0.14) {
-          face({ pts: [at(fr, a, bn, -0.24), at(fr, a + 0.06, bn, -0.24), at(fr, a + 0.06, bn, -0.06), at(fr, a, bn, -0.06)].map(yw), fill: [60, 64, 70], k: 0.9 })
+          face({ pts: [at(fr, a, bn, -0.4), at(fr, a + 0.06, bn, -0.4), at(fr, a + 0.06, bn, -0.06), at(fr, a, bn, -0.06)].map(yw), fill: [60, 64, 70], k: 0.9 })
         }
       }
     }
 
     // the blue light of the screens on the ceiling and the platform
-    for (const fr of [frA, frB]) {
+    for (const fr of [frA]) {
       const w = yw(fr.c)
       light(w, 5.5, [70, 100, 255], 0.1)
       add([[w[0] - 3, HALL_TOP - 0.02, w[2] - 2.4], [w[0] + 3, HALL_TOP - 0.02, w[2] - 2.4], [w[0] + 3, HALL_TOP - 0.02, w[2] + 2.4], [w[0] - 3, HALL_TOP - 0.02, w[2] + 2.4]], [60, 90, 255], 0.05)

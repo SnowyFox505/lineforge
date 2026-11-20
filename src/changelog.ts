@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.37.1',
+    date: '2026-11-20',
+    headline: 'Aktualisieren: Doppel-Anzeige mit Rücken an Rücken',
+    changes: [
+      {
+        title: 'Die zweite Anzeige schaut in die andere Richtung',
+        what: 'Das Doppel-Display hängt jetzt so wie in echten Bahnhöfen: Die beiden Bildschirme sitzen Rücken an Rücken in einem gemeinsamen Gehäuse, einer schaut in die eine Richtung des Bahnsteigs, der andere genau in die entgegengesetzte. Von deinem Blickwinkel siehst du den vorderen Bildschirm und die Seite des Gehäuses mit der Platte und den Lüftungsschlitzen darunter.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Die Anzeige sieht aus wie das echte Vorbild und nimmt weniger Platz weg, sodass der vordere Bildschirm größer und lesbarer ist.',
+      },
+    ],
+  },
+  {
     version: '0.37.0',
     date: '2026-11-20',
     headline: 'Aktualisieren: Die Anzeige hängt jetzt wirklich im Bahnhof',
