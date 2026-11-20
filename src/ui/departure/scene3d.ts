@@ -11,13 +11,43 @@ type RGB = [number, number, number]
 
 export const TUNNEL_Z = 34 // the wall with the tunnel mouth
 export const TRACK_X = 4.2
-export const CAR_LEN = 17
-export const CAR_GAP = 0.3
-export const CAR_W = 2.6
+/** the cars are the Berlin U-Bahn J / JK of the game: one game unit is K metres */
+const K = 8.125
+const CAR_UNITS = 1.9
+export const CAR_LEN = CAR_UNITS * K
+export const CAR_GAP = 0.06 * K
+export const CAR_W = 0.32 * K
 export const CARS = 3
 export const TRAIN_LEN = CARS * CAR_LEN + (CARS - 1) * CAR_GAP
 
 const PLATFORM_Y = 0.95
+
+/** x-intervals (game units from the middle of the car, +x towards the nose) of windows and doors of a J / JK car with a nose of nF / nR at its ends (the layout of `layoutSide` in vehicles3d.tsx) */
+function jLayout(nF: number, nR: number) {
+  const DOORS = [0.17, 0.5, 0.83]
+  const DOOR_W = 0.17
+  const WIN_W = 0.15
+  const WIN_GAP = 0.04
+  const a = -CAR_UNITS / 2 + (nR > 0 ? nR + 0.04 : 0.13)
+  const b = CAR_UNITS / 2 - (nF > 0 ? nF + 0.04 : 0.13)
+  const span = Math.max(0.2, b - a)
+  const doors = DOORS.map((f) => a + span * f)
+    .filter((c) => c - DOOR_W / 2 > a - 0.001 && c + DOOR_W / 2 < b + 0.001)
+    .map((c) => [c - DOOR_W / 2, c + DOOR_W / 2] as [number, number])
+  const wins: [number, number][] = []
+  const cuts = [a, ...doors.flatMap((d) => d), b]
+  for (let i = 0; i < cuts.length; i += 2) {
+    const x0 = cuts[i] + (i === 0 ? 0 : 0.035)
+    const x1 = cuts[i + 1] - (i + 1 === cuts.length - 1 ? 0 : 0.035)
+    const seg = x1 - x0
+    if (seg < 0.14) continue
+    const n = Math.max(1, Math.round((seg + WIN_GAP) / (WIN_W + WIN_GAP)))
+    const w = (seg - WIN_GAP * (n - 1)) / n
+    for (let k = 0; k < n; k++) wins.push([x0 + k * (w + WIN_GAP), x0 + k * (w + WIN_GAP) + w])
+  }
+  return { doors, wins }
+}
+const CAR_LAYOUT = [jLayout(0.13, 0), jLayout(0, 0), jLayout(0, 0.13)]
 const EDGE_X = TRACK_X - 1.75
 const HALL_TOP = 7.5
 const FOG: RGB = [6, 9, 14]
@@ -391,73 +421,193 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   }
   for (let z = 9; z < Zt - 3; z += 11) box(T - 6.2, T - 5.6, PLATFORM_Y, HALL_TOP, z, z + 0.6, [40, 48, 62])
 
-  // the train: three articulated cars of the yellow U-Bahn (BLN J / JK of the vehicle gallery), also built a few times shifted for the blur
+  // the train: the three cars of the Berlin U-Bahn series J / JK, built from the same measures as the model of the game
+  // (src/view3d/vehicleModels/ubahnBerlin1.ts and the style `ubahnj` in vehicles3d.tsx; one game unit is K metres here).
+  // Only what the camera can see is drawn: the side facing the platform, the front of the head car, the gangways.
   const addTrain = (zf: number, out: Item[]) => {
     const tface = (f: Face) => face({ ...f, thru: true })
     const lit = (z: number) => 0.15 + 0.85 * clamp01((Zt + 10 - z) / 20) // a car inside the tunnel is dark, it gets lighter as it comes out
-    const YELLOW: RGB = [252, 205, 22]
-    const GLASS: RGB = [22, 26, 33]
-    const BLACK: RGB = [14, 16, 20]
+    const YEL: RGB = [252, 205, 22]
+    const ROOF: RGB = [244, 193, 15]
+    const STRIPE: RGB = [77, 83, 91]
+    const DOORC: RGB = [21, 25, 29]
+    const GLASS: RGB = [37, 56, 76]
+    const BLACK: RGB = [11, 14, 18]
+    const INK: RGB = [18, 26, 34]
     const xl = T - CAR_W / 2
-    const xr = T + CAR_W / 2
-    const top = 3.35
+    const BY = 0.7 // the underside of the body above the rails (the door sill is level with the platform)
+    const H = 0.4 * K
+    const TOP = BY + H
+    const Y = (f: number) => BY + f * H
+    const NOSE = 0.13 * K
+    const RAKE = 0.05 * K
+    const CAP_TOP = BY + 0.38 * K
+    const CAP_HW = 0.1408 * K
+    const WALL_TOP = TOP - 0.0416 * K // where the rounded roof edge begins
     for (let i = 0; i < CARS; i++) {
+      const head = i === 0
+      const tail = i === CARS - 1
+      const lay = CAR_LAYOUT[head ? 0 : tail ? 2 : 1]
       const z0 = zf + i * (CAR_LEN + CAR_GAP)
       const z1 = z0 + CAR_LEN
-      const head = i === 0
-      const rake = head ? 0.8 : 0
+      const zc = z0 + CAR_LEN / 2
+      /** car x (forward, game units from the middle of the car) to the z of the scene */
+      const Z = (x: number) => zc - x * K
+      const xFront = CAR_UNITS / 2 - (head ? 0.13 : 0)
+      const xRear = -CAR_UNITS / 2 + (tail ? 0.13 : 0)
       out.push({
-        depth: depthOf([T, 2, z0 + CAR_LEN / 2]),
+        depth: depthOf([T, 2, zc]),
         draw: () => {
           ctx.save()
           ctx.globalAlpha *= s.trainFade
-          const kk = lit(z0 + CAR_LEN / 2)
-          // side (the one facing the platform), the dark running gear below it and the roof edge
-          tface({ pts: [[xl, 0.5, z0], [xl, top, z0 + rake], [xl, top, z1], [xl, 0.5, z1]], fill: YELLOW, k: 0.8 * kk })
-          tface({ pts: [[xl - 0.004, 0.5, z0 + 0.3], [xl - 0.004, 0.8, z0 + 0.3], [xl - 0.004, 0.8, z1 - 0.3], [xl - 0.004, 0.5, z1 - 0.3]], fill: [30, 32, 37], k: kk })
-          tface({ pts: [[xl, top, z0 + rake], [xl + 0.28, top + 0.26, z0 + rake], [xl + 0.28, top + 0.26, z1], [xl, top, z1]], fill: YELLOW, k: 0.92 * kk })
-          tface({ pts: [[xl + 0.28, top + 0.26, z0 + rake], [xr - 0.28, top + 0.26, z0 + rake], [xr - 0.28, top + 0.26, z1], [xl + 0.28, top + 0.26, z1]], fill: [200, 160, 16], k: kk })
-          // doors and windows: dark glass with the warm light of the inside
-          const w0 = z0 + (head ? 3.6 : 0.9)
-          const w1 = z1 - 0.9
-          const n = Math.max(1, Math.floor((w1 - w0) / 2))
-          const step = (w1 - w0) / n
-          for (let w = 0; w < n; w++) {
-            const a = w0 + w * step + 0.1
-            const b = w0 + (w + 1) * step - 0.1
-            if (w % 3 === 1) {
-              const m = (a + b) / 2
-              const o = s.doors
-              const h1: [number, number] = [a, a + (m - 0.04 - a) * (1 - o * 0.92)]
-              const h2: [number, number] = [b - (b - (m + 0.04)) * (1 - o * 0.92), b]
-              if (o > 0.02) tface({ pts: [[xl - 0.007, 0.95, h1[1]], [xl - 0.007, 3.0, h1[1]], [xl - 0.007, 3.0, h2[0]], [xl - 0.007, 0.95, h2[0]]], fill: [255, 238, 196], k: 1, glow: kk, alpha: 0.95 * o })
-              for (const [p, q] of [h1, h2]) {
-                tface({ pts: [[xl - 0.008, 0.95, p], [xl - 0.008, 3.0, p], [xl - 0.008, 3.0, q], [xl - 0.008, 0.95, q]], fill: GLASS, k: kk })
-                if (q - p > 0.2) tface({ pts: [[xl - 0.01, 1.2, p + 0.08], [xl - 0.01, 2.9, p + 0.08], [xl - 0.01, 2.9, q - 0.08], [xl - 0.01, 1.2, q - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.2 * kk })
+          const kk = lit(zc)
+          const sq = (y0: number, y1: number, xa: number, xb: number, fill: RGB, k: number, off = 0.004, extra: Partial<Face> = {}) =>
+            tface({ pts: [[xl - off, y0, Z(xa)], [xl - off, y1, Z(xa)], [xl - off, y1, Z(xb)], [xl - off, y0, Z(xb)]], fill, k: k * kk, ...extra })
+          // the wall: yellow, with the dark grey base stripe, then the rounded roof edge
+          sq(BY, WALL_TOP, xFront, xRear, YEL, 0.8, 0)
+          sq(BY, Y(0.1), xFront, xRear, STRIPE, 0.82, 0.002)
+          tface({ pts: [[xl, WALL_TOP, Z(xFront)], [xl + 0.09, TOP - 0.11, Z(xFront)], [xl + 0.09, TOP - 0.11, Z(xRear)], [xl, WALL_TOP, Z(xRear)]], fill: YEL, k: 0.92 * kk })
+          tface({ pts: [[xl + 0.09, TOP - 0.11, Z(xFront)], [xl + 0.34, TOP, Z(xFront)], [xl + 0.34, TOP, Z(xRear)], [xl + 0.09, TOP - 0.11, Z(xRear)]], fill: ROOF, k: 0.95 * kk })
+
+          // windows: dark rim and dark glass with the warm light of the inside
+          const wy0 = Y(0.44)
+          const wy1 = Y(0.84)
+          lay.wins.forEach(([x0, x1], wi) => {
+            const cab = (head && x1 > CAR_UNITS / 2 - NOSE / K - 0.07 && wi === lay.wins.length - 1) || (tail && x0 < -CAR_UNITS / 2 + NOSE / K + 0.07 && wi === 0)
+            const tn = head ? 1 : -1
+            if (cab) {
+              // the yellow cab door with its tall narrow window
+              const w = x1 - x0
+              const cx = (x0 + x1) / 2
+              sq(Y(0.08), Y(0.88), cx - w / 2 - 0.004, cx + w / 2 + 0.004, [15, 18, 22], 0.9, 0.006)
+              sq(Y(0.09), Y(0.86), cx - w / 2 + 0.002, cx + w / 2 - 0.002, YEL, 0.8, 0.008)
+              sq(Y(0.43), Y(0.86), cx + tn * w * 0.06 - w * 0.28, cx + tn * w * 0.06 + w * 0.28, [16, 22, 28], 0.9, 0.01)
+              sq(Y(0.4) - 0.02, Y(0.4) + 0.03, cx - tn * w * 0.36 - 0.007, cx - tn * w * 0.36 + 0.007, [39, 44, 50], 0.9, 0.011)
+              return
+            }
+            sq(wy0 - 0.04, wy1 + 0.04, x0 - 0.005, x1 + 0.005, [15, 19, 24], 0.9, 0.006)
+            sq(wy0, wy1, x0, x1, GLASS, 1, 0.008)
+            sq(wy0 + 0.05, wy1 - 0.05, x0 + 0.012, x1 - 0.012, [255, 214, 140], 1, 0.01, { glow: kk, alpha: 0.2 * kk })
+          })
+
+          // doors: black frame, two leaves with glass in the upper part, a light bar above, kick plate, stickers beside
+          const o = s.doors
+          for (const [x0, x1] of lay.doors) {
+            const cx = (x0 + x1) / 2
+            const gl = [x0, x0 + (cx - 0.003 - x0) * (1 - o * 0.92)]
+            const gr = [x1 - (x1 - cx - 0.003) * (1 - o * 0.92), x1]
+            sq(Y(0.08), Y(0.86), x0 - 0.005, x1 + 0.005, [13, 16, 19], 0.9, 0.006)
+            if (o > 0.02) sq(Y(0.09), Y(0.85), gl[1], gr[0], [255, 238, 196], 1, 0.007, { glow: kk, alpha: 0.95 * o })
+            for (const [p, q] of [gl, gr]) {
+              sq(Y(0.09), Y(0.85), p, q, DOORC, 0.9, 0.008)
+              if (q - p > 0.02) {
+                sq(Y(0.24), Y(0.84), p + 0.008, q - 0.008, GLASS, 1, 0.01)
+                if (q - p > 0.05) sq(Y(0.3), Y(0.8), p + 0.02, q - 0.02, [255, 214, 140], 1, 0.011, { glow: kk, alpha: 0.2 * kk })
               }
-            } else {
-              tface({ pts: [[xl - 0.008, 1.65, a], [xl - 0.008, 2.85, a], [xl - 0.008, 2.85, b], [xl - 0.008, 1.65, b]], fill: GLASS, k: kk })
-              tface({ pts: [[xl - 0.01, 1.75, a + 0.08], [xl - 0.01, 2.75, a + 0.08], [xl - 0.01, 2.75, b - 0.08], [xl - 0.01, 1.75, b - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.24 * kk })
             }
+            if (o < 0.05) sq(Y(0.09), Y(0.85), cx - 0.003, cx + 0.003, [5, 6, 7], 1, 0.012)
+            sq(Y(0.87), Y(0.89), cx - (x1 - x0) * 0.3, cx + (x1 - x0) * 0.3, [217, 221, 226], 1, 0.008, { glow: kk, alpha: 0.85 * kk })
+            sq(Y(0.1), Y(0.13), x0, x1, [38, 43, 49], 0.9, 0.012)
+            // stickers beside the door on the yellow wall
+            sq(Y(0.32) - 0.08, Y(0.32) + 0.08, x1 + 0.0165, x1 + 0.0285, [238, 240, 242], 0.85, 0.006)
+            sq(Y(0.32) - 0.045, Y(0.32) + 0.045, x1 + 0.0195, x1 + 0.0255, [42, 47, 53], 0.85, 0.008)
+            sq(Y(0.22) - 0.03, Y(0.22) + 0.03, x1 + 0.0205, x1 + 0.0245, [214, 47, 34], 0.85, 0.006)
           }
-          if (i < CARS - 1) {
-            // the dark bellows between two cars
-            tface({ pts: [[xl, 0.6, z1], [xl, 3.3, z1], [xl, 3.3, z1 + CAR_GAP], [xl, 0.6, z1 + CAR_GAP]], fill: BLACK, k: kk })
-          }
+          // the BERLIN plate low on the wall behind the nose
           if (head) {
-            const zy = (y: number) => z0 + (rake * (y - 0.5)) / (top - 0.5) - 0.012
-            // the cab door
-            tface({ pts: [[xl - 0.008, 0.95, z0 + 1.3], [xl - 0.008, 3.0, z0 + 1.3], [xl - 0.008, 3.0, z0 + 2.9], [xl - 0.008, 0.95, z0 + 2.9]], fill: GLASS, k: kk })
-            // front: yellow, with a big dark windscreen, the destination display and two white light bars
-            tface({ pts: [[xl, 0.5, z0], [xr, 0.5, z0], [xr, top, z0 + rake], [xl, top, z0 + rake]], fill: YELLOW, k: 0.66 * kk })
-            tface({ pts: [[xl + 0.16, 1.25, zy(1.25)], [xr - 0.16, 1.25, zy(1.25)], [xr - 0.16, 3.12, zy(3.12)], [xl + 0.16, 3.12, zy(3.12)]], fill: BLACK, k: kk })
-            const sx = T - 0.9 + 0.25 * Math.sin(s.t * 0.7)
-            tface({ pts: [[sx, 1.5, zy(1.5) - 0.006], [sx + 0.5, 1.5, zy(1.5) - 0.006], [sx + 0.95, 3.0, zy(3.0) - 0.006], [sx + 0.45, 3.0, zy(3.0) - 0.006]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.09 * kk })
-            tface({ pts: [[xl + 0.4, 2.78, zy(2.78) - 0.006], [xl + 1.5, 2.78, zy(2.78) - 0.006], [xl + 1.5, 2.96, zy(2.96) - 0.006], [xl + 0.4, 2.96, zy(2.96) - 0.006]], fill: [255, 170, 60], k: 1, glow: kk, alpha: 0.9 * kk })
-            for (const [p, q] of [[xl + 0.3, xl + 0.95], [xr - 0.95, xr - 0.3]]) {
-              tface({ pts: [[p, 1.38, zy(1.38) - 0.006], [q, 1.38, zy(1.38) - 0.006], [q, 1.46, zy(1.46) - 0.006], [p, 1.46, zy(1.46) - 0.006]], fill: [255, 255, 255], k: 1, glow: kk, alpha: 1 })
+            const px = xFront - 0.065
+            sq(Y(0.2) - 0.08, Y(0.2) + 0.08, px - 0.03, px + 0.03, [241, 243, 245], 0.85, 0.006)
+            sq(Y(0.2) - 0.035, Y(0.2) + 0.035, px - 0.034, px + 0.006, [23, 25, 29], 0.85, 0.008)
+          }
+
+          // between two cars: the dark gangway with its folds
+          if (!tail) {
+            const gz0 = z1
+            const gz1 = z1 + CAR_GAP
+            tface({ pts: [[xl + 0.1, Y(0.05), gz0], [xl + 0.1, Y(0.92), gz0], [xl + 0.1, Y(0.92), gz1], [xl + 0.1, Y(0.05), gz1]], fill: [29, 33, 39], k: kk })
+            for (const f of [0.25, 0.5, 0.75]) tface({ pts: [[xl + 0.095, Y(0.05), gz0 + CAR_GAP * f - 0.015], [xl + 0.095, Y(0.92), gz0 + CAR_GAP * f - 0.015], [xl + 0.095, Y(0.92), gz0 + CAR_GAP * f + 0.015], [xl + 0.095, Y(0.05), gz0 + CAR_GAP * f + 0.015]], fill: [48, 54, 62], k: kk })
+          }
+          // the dark underframe, seen below the base stripe where the platform edge does not hide it
+          tface({ pts: [[xl + 0.15, 0.3, Z(xFront)], [xl + 0.15, BY, Z(xFront)], [xl + 0.15, BY, Z(xRear)], [xl + 0.15, 0.3, Z(xRear)]], fill: [24, 27, 32], k: kk })
+
+          if (tail) tface({ pts: [[xl, BY, z1 - NOSE], [T - CAP_HW, BY, z1], [T - CAP_HW, CAP_TOP, z1 - RAKE], [xl, WALL_TOP, z1 - NOSE]], fill: YEL, k: 0.7 * kk })
+          if (head) {
+            const fz = (y: number) => z0 + (RAKE * clamp01((y - BY) / H))
+            // the nose: the side turns in to the narrower flat front
+            tface({ pts: [[xl, BY, z0 + NOSE], [T - CAP_HW, BY, z0], [T - CAP_HW, CAP_TOP, fz(CAP_TOP)], [xl, WALL_TOP, z0 + NOSE]], fill: YEL, k: 0.7 * kk })
+            // the flat front, yellow
+            tface({ pts: [[T - CAP_HW, BY, z0], [T + CAP_HW, BY, z0], [T + CAP_HW, CAP_TOP, fz(CAP_TOP)], [T - CAP_HW, CAP_TOP, fz(CAP_TOP)]], fill: YEL, k: 0.66 * kk })
+            // the huge black windscreen unit with its darker glass, two reflections, the driver's pane and the destination display
+            const yb = BY + 0.115 * K
+            const yt = BY + (0.38 - 0.013) * K
+            const hw = CAP_HW - 0.007 * K
+            const hwt = hw * 0.975
+            const zy = (y: number) => fz(y) - 0.012
+            tface({ pts: [[T - hw, yb, zy(yb)], [T + hw, yb, zy(yb)], [T + hwt, yt, zy(yt)], [T - hwt, yt, zy(yt)]], fill: BLACK, k: kk })
+            const iw = hw - 0.057
+            const iy0 = yb + 0.05
+            const iy1 = yt - 0.05
+            tface({ pts: [[T - iw, iy0, zy(iy0) - 0.004], [T + iw, iy0, zy(iy0) - 0.004], [T + iw * 0.975, iy1, zy(iy1) - 0.004], [T - iw * 0.975, iy1, zy(iy1) - 0.004]], fill: INK, k: kk })
+            const gx = T - hw * 0.3
+            const gy0 = yb + 0.25
+            const gy1 = yt - 0.5
+            tface({ pts: [[gx - 0.29, gy0, zy(gy0) - 0.008], [gx + 0.29, gy0, zy(gy0) - 0.008], [gx + 0.16, gy1, zy(gy1) - 0.008], [gx - 0.16, gy1, zy(gy1) - 0.008]], fill: [27, 40, 51], k: kk })
+            const gx2 = T - hw * 0.52
+            tface({ pts: [[gx2 - 0.07, gy0, zy(gy0) - 0.008], [gx2 + 0.07, gy0, zy(gy0) - 0.008], [gx2 + 0.04, gy1, zy(gy1) - 0.008], [gx2 - 0.04, gy1, zy(gy1) - 0.008]], fill: [27, 40, 51], k: kk })
+            const sweep = T - 0.5 + 0.3 * Math.sin(s.t * 0.7)
+            tface({ pts: [[sweep, yb + 0.1, zy(yb) - 0.012], [sweep + 0.5, yb + 0.1, zy(yb) - 0.012], [sweep + 0.95, iy1 - 0.1, zy(iy1) - 0.012], [sweep + 0.45, iy1 - 0.1, zy(iy1) - 0.012]], fill: [120, 150, 190], k: 1, glow: 1, alpha: 0.08 * kk })
+            const px = T + hw * 0.62
+            tface({ pts: [[px - 0.02, yb + 0.06, zy(yb) - 0.01], [px + 0.02, yb + 0.06, zy(yb) - 0.01], [px + 0.02, yt - 0.06, zy(yt) - 0.01], [px - 0.02, yt - 0.06, zy(yt) - 0.01]], fill: BLACK, k: kk })
+            // destination display on top of the glass: a dark recess with amber light
+            const sy = yt - 0.026 * K
+            const sw = hw * 2 * 0.6
+            tface({ pts: [[T - sw / 2 - 0.05, sy - 0.15, zy(sy) - 0.014], [T + sw / 2 + 0.05, sy - 0.15, zy(sy) - 0.014], [T + sw / 2 + 0.05, sy + 0.15, zy(sy) - 0.014], [T - sw / 2 - 0.05, sy + 0.15, zy(sy) - 0.014]], fill: [3, 4, 5], k: kk })
+            tface({ pts: [[T - sw / 2, sy - 0.09, zy(sy) - 0.018], [T - sw / 2 + 0.22, sy - 0.09, zy(sy) - 0.018], [T - sw / 2 + 0.22, sy + 0.09, zy(sy) - 0.018], [T - sw / 2, sy + 0.09, zy(sy) - 0.018]], fill: [255, 176, 50], k: 1, glow: kk, alpha: 0.95 * kk })
+            for (let d = 0; d < 5; d++) {
+              const dx0 = T - sw / 2 + 0.3 + d * 0.17
+              tface({ pts: [[dx0, sy - 0.07, zy(sy) - 0.018], [dx0 + 0.12, sy - 0.07, zy(sy) - 0.018], [dx0 + 0.12, sy + 0.07, zy(sy) - 0.018], [dx0, sy + 0.07, zy(sy) - 0.018]], fill: [255, 176, 50], k: 1, glow: kk, alpha: 0.75 * kk })
             }
-            tface({ pts: [[xl, 0.5, z0 - 0.02], [xr, 0.5, z0 - 0.02], [xr, 0.82, z0 - 0.02], [xl, 0.82, z0 - 0.02]], fill: [30, 32, 37], k: kk })
+            // the two flat white LED bars low in the glass, in their housings
+            const ly = BY + (0.115 + 0.021) * K
+            const lz = hw * 0.62
+            for (const sg of [-1, 1]) {
+              const lx = T + sg * lz
+              tface({ pts: [[lx - 0.333, ly - 0.075, zy(ly) - 0.02], [lx + 0.333, ly - 0.075, zy(ly) - 0.02], [lx + 0.333, ly + 0.075, zy(ly) - 0.02], [lx - 0.333, ly + 0.075, zy(ly) - 0.02]], fill: [6, 8, 10], k: kk })
+              tface({ pts: [[lx - 0.285, ly - 0.043, zy(ly) - 0.024], [lx + 0.285, ly - 0.043, zy(ly) - 0.024], [lx + 0.285, ly + 0.043, zy(ly) - 0.024], [lx - 0.285, ly + 0.043, zy(ly) - 0.024]], fill: [255, 255, 255], k: 1, glow: kk, alpha: 1 })
+            }
+            // marker light at the driver's corner
+            tface({ pts: [[T + hw * 0.88 - 0.045, ly - 0.045, zy(ly) - 0.02], [T + hw * 0.88 + 0.045, ly - 0.045, zy(ly) - 0.02], [T + hw * 0.88 + 0.045, ly + 0.045, zy(ly) - 0.02], [T + hw * 0.88 - 0.045, ly + 0.045, zy(ly) - 0.02]], fill: [233, 237, 242], k: 1, glow: kk, alpha: 0.9 })
+            // the white plate with BERLIN and the plate with the car number, on the yellow panel under the glass
+            const py = BY + 0.077 * K
+            for (const [cxp, fillp] of [[T - 0.078 * K, [241, 243, 245]], [T + 0.078 * K, [230, 233, 237]]] as [number, RGB][]) {
+              tface({ pts: [[cxp - 0.25, py - 0.085, fz(py) - 0.012], [cxp + 0.25, py - 0.085, fz(py) - 0.012], [cxp + 0.25, py + 0.085, fz(py) - 0.012], [cxp - 0.25, py + 0.085, fz(py) - 0.012]], fill: fillp, k: 0.85 * kk })
+            }
+            tface({ pts: [[T - 0.078 * K - 0.14, py - 0.045, fz(py) - 0.014], [T - 0.078 * K + 0.14, py - 0.045, fz(py) - 0.014], [T - 0.078 * K + 0.14, py + 0.045, fz(py) - 0.014], [T - 0.078 * K - 0.14, py + 0.045, fz(py) - 0.014]], fill: [21, 24, 28], k: kk })
+            for (let d = 0; d < 4; d++) {
+              const dx = T + 0.078 * K - 0.19 + d * 0.095
+              tface({ pts: [[dx, py - 0.04, fz(py) - 0.014], [dx + 0.055, py - 0.04, fz(py) - 0.014], [dx + 0.055, py + 0.04, fz(py) - 0.014], [dx, py + 0.04, fz(py) - 0.014]], fill: [21, 24, 28], k: kk })
+            }
+            // below the front: the dark underfloor, bumper ears, apron and the Scharfenberg coupler between them
+            tface({ pts: [[T - 1.1, 0.3, z0 - 0.02], [T + 1.1, 0.3, z0 - 0.02], [T + 1.1, BY - 0.26, z0 - 0.02], [T - 1.1, BY - 0.26, z0 - 0.02]], fill: [20, 23, 27], k: kk })
+            tface({ pts: [[T - 1.06, BY - 0.28, z0 - 0.04], [T + 1.06, BY - 0.28, z0 - 0.04], [T + 1.06, BY + 0.16, z0 - 0.04], [T - 1.06, BY + 0.16, z0 - 0.04]], fill: [35, 39, 45], k: kk })
+            tface({ pts: [[T - 0.37, BY - 0.28, z0 - 0.09], [T + 0.37, BY - 0.28, z0 - 0.09], [T + 0.37, BY + 0.22, z0 - 0.09], [T - 0.37, BY + 0.22, z0 - 0.09]], fill: [24, 27, 32], k: kk })
+            for (const sg of [-1, 1]) {
+              const ex = T + sg * 0.86
+              tface({ pts: [[ex - 0.285, BY - 0.34, z0 - 0.1], [ex + 0.285, BY - 0.34, z0 - 0.1], [ex + 0.285, BY + 0.29, z0 - 0.1], [ex - 0.285, BY + 0.29, z0 - 0.1]], fill: [85, 91, 99], k: kk })
+              tface({ pts: [[ex - 0.26, BY + 0.27, z0 - 0.11], [ex + 0.26, BY + 0.27, z0 - 0.11], [ex + 0.26, BY + 0.34, z0 - 0.11], [ex - 0.26, BY + 0.34, z0 - 0.11]], fill: [47, 52, 58], k: kk })
+              tface({ pts: [[ex - 0.23, BY + 0.34, z0 - 0.12], [ex + 0.23, BY + 0.34, z0 - 0.12], [ex + 0.23, BY + 0.37, z0 - 0.12], [ex - 0.23, BY + 0.37, z0 - 0.12]], fill: [138, 145, 154], k: kk })
+              for (const dy of [-0.2, -0.1]) tface({ pts: [[ex - 0.2, BY + dy, z0 - 0.115], [ex + 0.2, BY + dy, z0 - 0.115], [ex + 0.2, BY + dy + 0.055, z0 - 0.115], [ex - 0.2, BY + dy + 0.055, z0 - 0.115]], fill: [43, 48, 54], k: kk })
+            }
+            tface({ pts: [[T - 0.2, BY - 0.1, z0 - 0.22], [T + 0.2, BY - 0.1, z0 - 0.22], [T + 0.2, BY + 0.06, z0 - 0.22], [T - 0.2, BY + 0.06, z0 - 0.22]], fill: [126, 134, 145], k: kk })
+            const disc = (r: number, z: number, fill: RGB) => {
+              const pts: V3[] = []
+              for (let a = 0; a < 14; a++) pts.push([T + Math.cos((a / 14) * Math.PI * 2) * r, BY - 0.03 + Math.sin((a / 14) * Math.PI * 2) * r, z])
+              tface({ pts, fill, k: kk })
+            }
+            disc(0.17, z0 - 0.3, [154, 161, 171])
+            disc(0.09, z0 - 0.32, [12, 14, 17])
+            for (const sg of [-1, 1]) tface({ pts: [[T + sg * 0.33 - 0.025, BY - 0.24, z0 - 0.26], [T + sg * 0.33 + 0.025, BY - 0.24, z0 - 0.26], [T + sg * 0.33 + 0.025, BY - 0.08, z0 - 0.26], [T + sg * 0.33 - 0.025, BY - 0.08, z0 - 0.26]], fill: [200, 50, 31], k: kk })
+            tface({ pts: [[T + 0.36, BY + 0.2, z0 - 0.2], [T + 0.45, BY + 0.2, z0 - 0.2], [T + 0.45, BY + 0.31, z0 - 0.2], [T + 0.36, BY + 0.31, z0 - 0.2]], fill: [200, 50, 31], k: kk })
           }
           ctx.restore()
         },
@@ -473,13 +623,16 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     const A_W = 2.2
     const A_H = (A_W * TEX_H) / TEX_W
     const PHI = 0.2
-    const dsp = (cam.f * A_W) / (wide ? rw * 0.4 : rw * 0.68)
-    const tx = rx + rw * (wide ? 0.42 : 0.5)
+    const dsp = (cam.f * A_W) / (wide ? rw * 0.4 : rw * 0.58)
     const ty = ry + rh * (wide ? 0.27 : 0.25)
-    const ccx = ((tx - (rx + rw * 0.5)) * dsp) / cam.f
     const ccy = ((baseCy - ty) * dsp) / cam.f
-    // the middle of the first screen in "yaw space" (the world turned like the camera, before the camera looks up)
-    const yc: V3 = [ccx, ccy * cam.cp + dsp * cam.sp, dsp * cam.cp - ccy * cam.sp]
+    const ycy = ccy * cam.cp + dsp * cam.sp
+    const ycz = dsp * cam.cp - ccy * cam.sp
+    // the screen hangs 0.5 m beside the line of sight along the platform, so it is seen almost straight on (as in the photo);
+    // yaw space is the world turned like the camera (before the camera looks up), so the x position follows from the yaw
+    const WX = 0.5
+    const ycx = (WX - ycz * cam.sin) / cam.cos
+    const yc: V3 = [ycx, ycy, ycz]
     /** yaw space to world */
     const yw = (v: V3): V3 => [v[0] * cam.cos + v[2] * cam.sin, v[1] + cam.y, -v[0] * cam.sin + v[2] * cam.cos]
     interface Fr {
@@ -497,10 +650,12 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     }
     const at = (f: Fr, a: number, b: number, k: number): V3 => [f.c[0] + f.r[0] * a + f.u[0] * b + f.n[0] * k, f.c[1] + f.r[1] * a + f.u[1] * b + f.n[1] * k, f.c[2] + f.r[2] * a + f.u[2] * b + f.n[2] * k]
     const neg = (v: V3): V3 => [-v[0], -v[1], -v[2]]
-    // turned a little to the left, so the right side of the housing shows: the second screen sits back to back with this one,
-    // looking the other way along the platform (it can not be seen from here, only its housing)
-    const azA = Math.atan2(yc[0], yc[2]) + 0.44
+    // the screen faces along the platform, straight at whoever stands there (in yaw space that is the opposite of the camera's yaw);
+    // the second screen sits back to back with it and looks the other way, so from here only its back is seen
+    const azA = -Math.atan2(cam.sin, cam.cos)
     const frA = frame(yc, azA)
+    // the rear unit: 0.68 behind the first, a little to the side so that its back shows next to it, looking the other way
+    const frB = frame(at(frA, 0.5, 0, -0.68), azA + Math.PI)
     const bluish = (c: RGB, t: number): RGB => mix(c, [70, 100, 230], t)
 
     const box = (f: Fr, a0: number, a1: number, b0: number, b1: number, c0: number, c1: number, fill: RGB, kk: number) => {
@@ -611,12 +766,21 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     const hh = A_H / 2
     // the stem from the ceiling, in the middle between the two screens
     const stemTop = HALL_TOP - cam.y
-    const top = at(frA, 0, hh + 0.02, -0.17)
+    const top = at(frA, 0.25, hh + 0.02, -0.34)
     const stemFr: Fr = { c: top, r: [Math.cos(azA), 0, -Math.sin(azA)], u: [0, 1, 0], n: [-Math.sin(azA), 0, -Math.cos(azA)] }
     box(stemFr, -0.08, 0.08, 0, Math.max(0.2, stemTop - stemFr.c[1]), -0.08, 0.08, [92, 98, 106], 0.9)
-    for (const fr of [frA]) {
+    const unit = (fr: Fr, front: boolean) => {
       box(fr, -hw, hw, -hh - 0.04, hh + 0.04, -0.34, 0, HOUSE, 0.95)
-      drawTex(fr)
+      if (front) drawTex(fr)
+      else {
+        // the back of the screen that looks the other way: a darker rear panel with cooling slots, a plate and the cable gland
+        const bk = -0.345
+        face({ pts: [at(fr, -hw + 0.1, -hh + 0.06, bk), at(fr, hw - 0.1, -hh + 0.06, bk), at(fr, hw - 0.1, hh - 0.06, bk), at(fr, -hw + 0.1, hh - 0.06, bk)].map(yw), fill: [92, 98, 106], k: 0.55 })
+        for (let b = -hh + 0.14; b < hh - 0.1; b += 0.09) {
+          face({ pts: [at(fr, -hw + 0.22, b, bk - 0.003), at(fr, hw - 0.22, b, bk - 0.003), at(fr, hw - 0.22, b + 0.03, bk - 0.003), at(fr, -hw + 0.22, b + 0.03, bk - 0.003)].map(yw), fill: [48, 52, 58], k: 0.6 })
+        }
+        face({ pts: [at(fr, hw - 0.5, hh - 0.3, bk - 0.004), at(fr, hw - 0.2, hh - 0.3, bk - 0.004), at(fr, hw - 0.2, hh - 0.16, bk - 0.004), at(fr, hw - 0.5, hh - 0.16, bk - 0.004)].map(yw), fill: [200, 204, 208], k: 0.6 })
+      }
       // the grey slab below the screen, with the vent slots on its underside
       box(fr, -hw - 0.02, hw + 0.04, -hh - 0.22, -hh - 0.04, -0.46, 0.05, SLAB, 1)
       const bn = -hh - 0.22
@@ -627,6 +791,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
         }
       }
     }
+    unit(frB, false)
+    unit(frA, true)
 
     // the blue light of the screens on the ceiling and the platform
     for (const fr of [frA]) {
@@ -673,9 +839,9 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   if (s.trainZ !== null) {
     const zf = s.trainZ
     const k = clamp01((Zt + 24 - zf) / 10)
-    for (const dx of [-0.62, 0.62]) {
-      light([T + dx, 1.42, zf - 0.05], 2.1, [255, 250, 235], 0.85 * k)
-      light([T + dx, 1.42, zf - 0.05], 0.7, [255, 255, 255], 1 * k)
+    for (const dx of [-0.674, 0.674]) {
+      light([T + dx, 1.8, zf - 0.1], 2.1, [255, 250, 235], 0.85 * k)
+      light([T + dx, 1.8, zf - 0.1], 0.7, [255, 255, 255], 1 * k)
     }
     // the beam on the rails and the platform ahead of the train (gone when the train stands right in front of the camera)
     const beam = clamp01((zf - 9) / 8)

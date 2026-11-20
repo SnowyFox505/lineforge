@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.37.2',
+    date: '2026-11-20',
+    headline: 'Aktualisieren: Die Anzeige schaut den Bahnsteig entlang, die U-Bahn ist viel detaillierter',
+    changes: [
+      {
+        title: 'Die Anzeige hängt gerade zum Bahnsteig',
+        what: 'Der vordere Bildschirm schaut jetzt genau in Richtung des Bahnsteigs und nicht mehr schräg ins Bild gedreht, leicht nach unten geneigt wie bei der Vorlage aus Hamburg. Hinter ihm ist die zweite Anzeige nur noch angedeutet: Du siehst ihr Gehäuse von hinten mit Lüftungsschlitzen und Schild, sie schaut ja in die andere Richtung.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Die Anzeige wirkt ruhig und echt, wie sie in einem U-Bahnhof hängt, und nichts sieht mehr verdreht aus.',
+      },
+      {
+        title: 'Die gelbe U-Bahn mit viel mehr Details',
+        what: 'Der Zug (Berliner Kleinprofil, wie im Spiel) ist komplett neu gebaut, mit den Maßen und Proportionen aus dem Spiel: dunkler Sockelstreifen, abgerundete Dachkanten, Fenster mit Rahmen, zweiflügelige Türen mit Fenster, Lichtleiste und Aufklebern, Führerstandstüren, ein faltiger Übergang zwischen den Wagen und ein dunkler Unterboden. Vorne hat er eine große dunkle Frontscheibe mit Spiegelungen, eine Zielanzeige, zwei weiße Lichtleisten, Nummernschild, Stoßfänger und eine Kupplung mit Schläuchen. Die Türen öffnen sich beim Halt weiterhin.',
+        how: 'Du musst nichts tun, der Zug fährt beim Aktualisieren ein.',
+        benefit: 'Der Zug sieht aus wie das Fahrzeug aus deinem Spiel und nicht mehr wie ein einfacher Kasten.',
+      },
+    ],
+  },
+  {
     version: '0.37.1',
     date: '2026-11-20',
     headline: 'Aktualisieren: Doppel-Anzeige mit Rücken an Rücken',
