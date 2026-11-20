@@ -1,4 +1,5 @@
 import { clamp01 } from '../netCanvas'
+import { TEX_H, TEX_W } from './board'
 
 /**
  * A small perspective renderer on a 2D canvas, just enough for the station of the update screen:
@@ -31,13 +32,18 @@ interface Cam {
   f: number
   cx: number
   cy: number
+  /** the camera looks up by this much (cosine and sine) */
+  cp: number
+  sp: number
 }
 
 function toCam(c: Cam, p: V3): V3 {
   const rx = p[0] - c.x
   const ry = p[1] - c.y
   const rz = p[2] - c.z
-  return [rx * c.cos - rz * c.sin, ry, rx * c.sin + rz * c.cos]
+  const x = rx * c.cos - rz * c.sin
+  const z = rx * c.sin + rz * c.cos
+  return [x, ry * c.cp - z * c.sp, z * c.cp + ry * c.sp]
 }
 
 function scr(c: Cam, v: V3): [number, number] {
@@ -74,6 +80,10 @@ export interface StationState {
   trainZ: number | null
   /** 0..1 the train fades in (it starts far inside the tunnel) */
   trainFade: number
+  /** the picture of the information display (see board.ts), null while there is none */
+  board: HTMLCanvasElement | null
+  /** 0..1 the doors of the train are open */
+  doors: number
   /** speed of the train in m/s (for the blur) */
   speed: number
   /** 0..1 light coming out of the tunnel before the train */
@@ -139,15 +149,21 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   const shakeX = Math.sin(s.t * 71) * 2.2 * s.shake
   const shakeY = Math.cos(s.t * 53) * 1.6 * s.shake
   const yaw = 0.3
+  // a phone held upright sees much more of the ceiling than a wide window: the wide view looks up a little
+  const wide = rw >= rh * 1.25
+  const pitch = wide ? 0.2 : 0
+  const baseCy = ry + rh * (wide ? 0.42 : 0.54)
   const cam: Cam = {
     x: 0,
     y: 2.3,
     z: 0,
     cos: Math.cos(yaw),
     sin: Math.sin(yaw),
-    f: Math.min(rw * 1.0, rh * 1.55),
+    f: wide ? Math.min(rw * 0.62, rh * 1.05) : Math.min(rw, rh * 1.55),
     cx: rx + rw * 0.5 + shakeX,
-    cy: ry + rh * 0.4 + shakeY,
+    cy: baseCy + shakeY,
+    cp: Math.cos(pitch),
+    sp: Math.sin(pitch),
   }
 
   ctx.save()
@@ -312,6 +328,13 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     face({ pts: [[wallR - 0.05, 1.8, z], [wallR - 0.05, 4.4, z], [wallR - 0.05, 4.4, z + 5.4], [wallR - 0.05, 1.8, z + 5.4]], fill: hue, k: 0.5, glow: 1, alpha: 0.5 })
     add([[wallR - 0.05, 1.2, z - 0.5], [wallR - 0.05, 5.0, z - 0.5], [wallR - 0.05, 5.0, z + 5.9], [wallR - 0.05, 1.2, z + 5.9]], hue, 0.045)
   }
+  // tiles on the wall beyond the track
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+  ctx.lineWidth = 1
+  for (let z = 0.4; z < Zt; z += 1.2) seg([wallR - 0.02, 0.2, z], [wallR - 0.02, 4.4, z])
+  for (let y = 0.2; y < 4.5; y += 0.6) seg([wallR - 0.02, y, 0.4], [wallR - 0.02, y, Zt])
+  ctx.restore()
   // left wall
   face({ pts: [[wallL, -3, 0.4], [wallL, HALL_TOP, 0.4], [wallL, HALL_TOP, Zt], [wallL, -3, Zt]], fill: [20, 26, 36], k: 0.7 })
 
@@ -347,6 +370,11 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     face({ pts: [[rxp - 0.06, 0.2, 0.4], [rxp + 0.06, 0.2, 0.4], [rxp + 0.06, 0.2, Zt], [rxp - 0.06, 0.2, Zt]], fill: [150, 156, 166], k: 0.9 })
   }
 
+  // the polished floor mirrors the ceiling lights as long soft streaks
+  for (const lx of [T - 3.4, T + 0.4, T + 4.4]) {
+    const fy = lx < EDGE_X ? PLATFORM_Y : 0.03
+    add([[lx - 0.5, fy + 0.014, 0.4], [lx + 0.5, fy + 0.014, 0.4], [lx + 0.18, fy + 0.014, Zt], [lx - 0.18, fy + 0.014, Zt]], [255, 226, 180], 0.045)
+  }
   // ---- things that can stand in front of each other: columns and the train -----------------------------------------
   type Item = { depth: number; draw: () => void }
   const items: Item[] = []
@@ -399,9 +427,13 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
             const b = w0 + (w + 1) * step - 0.1
             if (w % 3 === 1) {
               const m = (a + b) / 2
-              for (const [p, q] of [[a, m - 0.04], [m + 0.04, b]]) {
+              const o = s.doors
+              const h1: [number, number] = [a, a + (m - 0.04 - a) * (1 - o * 0.92)]
+              const h2: [number, number] = [b - (b - (m + 0.04)) * (1 - o * 0.92), b]
+              if (o > 0.02) tface({ pts: [[xl - 0.007, 0.95, h1[1]], [xl - 0.007, 3.0, h1[1]], [xl - 0.007, 3.0, h2[0]], [xl - 0.007, 0.95, h2[0]]], fill: [255, 238, 196], k: 1, glow: kk, alpha: 0.95 * o })
+              for (const [p, q] of [h1, h2]) {
                 tface({ pts: [[xl - 0.008, 0.95, p], [xl - 0.008, 3.0, p], [xl - 0.008, 3.0, q], [xl - 0.008, 0.95, q]], fill: GLASS, k: kk })
-                tface({ pts: [[xl - 0.01, 1.2, p + 0.08], [xl - 0.01, 2.9, p + 0.08], [xl - 0.01, 2.9, q - 0.08], [xl - 0.01, 1.2, q - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.2 * kk })
+                if (q - p > 0.2) tface({ pts: [[xl - 0.01, 1.2, p + 0.08], [xl - 0.01, 2.9, p + 0.08], [xl - 0.01, 2.9, q - 0.08], [xl - 0.01, 1.2, q - 0.08]], fill: [255, 214, 140], k: 1, glow: kk, alpha: 0.2 * kk })
               }
             } else {
               tface({ pts: [[xl - 0.008, 1.65, a], [xl - 0.008, 2.85, a], [xl - 0.008, 2.85, b], [xl - 0.008, 1.65, b]], fill: GLASS, k: kk })
@@ -434,20 +466,176 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
   }
   if (s.trainZ !== null) addTrain(s.trainZ, items)
 
-  // the platform sign hanging over the track
-  const signZ = 19
-  for (const rxp of [T - 1.0, T + 1.0]) face({ pts: [[rxp - 0.03, 5.9, signZ], [rxp + 0.03, 5.9, signZ], [rxp + 0.03, HALL_TOP, signZ], [rxp - 0.03, HALL_TOP, signZ]], fill: [90, 98, 110], k: 0.8 })
-  face({ pts: [[T - 1.35, 4.8, signZ], [T + 1.35, 4.8, signZ], [T + 1.35, 5.9, signZ], [T - 1.35, 5.9, signZ]], fill: [14, 92, 66], k: 1, glow: 1 })
-  add([[T - 1.5, 4.6, signZ], [T + 1.5, 4.6, signZ], [T + 1.5, 6.1, signZ], [T - 1.5, 6.1, signZ]], [60, 255, 170], 0.05 + 0.04 * s.go)
-  {
-    const v = toCam(cam, [T, 5.35, signZ])
-    if (v[2] > NEAR) {
-      const [tx, ty] = scr(cam, v)
-      ctx.font = `700 ${(cam.f * 0.62) / v[2]}px ${s.family}`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillStyle = 'rgba(255,255,255,0.95)'
-      ctx.fillText('GLEIS 1', tx, ty)
+  // ---- the information display: two screens hang side by side from the ceiling above the platform, tilted a little down ----
+  const drawDisplay = () => {
+    const tex = s.board
+    if (!tex) return
+    const A_W = 2.2
+    const A_H = (A_W * TEX_H) / TEX_W
+    const PHI = 0.2
+    const dsp = (cam.f * A_W) / (wide ? rw * 0.4 : rw * 0.6)
+    const tx = rx + rw * (wide ? 0.4 : 0.42)
+    const ty = ry + rh * (wide ? 0.27 : 0.25)
+    const ccx = ((tx - (rx + rw * 0.5)) * dsp) / cam.f
+    const ccy = ((baseCy - ty) * dsp) / cam.f
+    // the middle of the first screen in "yaw space" (the world turned like the camera, before the camera looks up)
+    const yc: V3 = [ccx, ccy * cam.cp + dsp * cam.sp, dsp * cam.cp - ccy * cam.sp]
+    /** yaw space to world */
+    const yw = (v: V3): V3 => [v[0] * cam.cos + v[2] * cam.sin, v[1] + cam.y, -v[0] * cam.sin + v[2] * cam.cos]
+    interface Fr {
+      c: V3
+      r: V3
+      u: V3
+      n: V3
+    }
+    const frame = (c: V3, az: number): Fr => {
+      const sa = Math.sin(az)
+      const ca = Math.cos(az)
+      const sp = Math.sin(PHI)
+      const cp = Math.cos(PHI)
+      return { c, r: [ca, 0, -sa], n: [-sa * cp, -sp, -ca * cp], u: [-sa * sp, cp, -ca * sp] }
+    }
+    const at = (f: Fr, a: number, b: number, k: number): V3 => [f.c[0] + f.r[0] * a + f.u[0] * b + f.n[0] * k, f.c[1] + f.r[1] * a + f.u[1] * b + f.n[1] * k, f.c[2] + f.r[2] * a + f.u[2] * b + f.n[2] * k]
+    const neg = (v: V3): V3 => [-v[0], -v[1], -v[2]]
+    const azA = Math.atan2(yc[0], yc[2]) + 0.14
+    const frA = frame(yc, azA)
+    const apex = at(frA, A_W / 2 + 0.03, 0, 0)
+    const azB = azA - 0.9
+    const rB: V3 = [Math.cos(azB), 0, -Math.sin(azB)]
+    const frB = frame([apex[0] + (rB[0] * A_W) / 2, apex[1], apex[2] + (rB[2] * A_W) / 2], azB)
+    const bluish = (c: RGB, t: number): RGB => mix(c, [70, 100, 230], t)
+
+    const box = (f: Fr, a0: number, a1: number, b0: number, b1: number, c0: number, c1: number, fill: RGB, kk: number) => {
+      const P = (a: number, b: number, c: number) => at(f, a, b, c)
+      const faces: [V3, V3[], number][] = [
+        [f.n, [P(a0, b0, c1), P(a1, b0, c1), P(a1, b1, c1), P(a0, b1, c1)], 1],
+        [neg(f.n), [P(a1, b0, c0), P(a0, b0, c0), P(a0, b1, c0), P(a1, b1, c0)], 0.5],
+        [neg(f.r), [P(a0, b0, c0), P(a0, b0, c1), P(a0, b1, c1), P(a0, b1, c0)], 0.78],
+        [f.r, [P(a1, b0, c1), P(a1, b0, c0), P(a1, b1, c0), P(a1, b1, c1)], 0.78],
+        [f.u, [P(a0, b1, c1), P(a1, b1, c1), P(a1, b1, c0), P(a0, b1, c0)], 0.9],
+        [neg(f.u), [P(a0, b0, c0), P(a1, b0, c0), P(a1, b0, c1), P(a0, b0, c1)], 0.7],
+      ]
+      for (const [N, pts, k] of faces) {
+        const p = pts[0]
+        if (N[0] * p[0] + N[1] * p[1] + N[2] * p[2] < 0) face({ pts: pts.map(yw), fill: k < 0.75 ? bluish(fill, 0.18) : fill, k: k * kk })
+      }
+    }
+
+    // a screen's picture, mapped onto the tilted quad (small triangles, each with its own affine map)
+    const drawTex = (f: Fr) => {
+      const front = f.n[0] * f.c[0] + f.n[1] * f.c[1] + f.n[2] * f.c[2] < 0
+      if (!front) return
+      const NX = 12
+      const NY = 5
+      const grid: [number, number][][] = []
+      for (let i = 0; i <= NX; i++) {
+        const col: [number, number][] = []
+        for (let j = 0; j <= NY; j++) {
+          const v = toCam(cam, yw(at(f, -A_W / 2 + (A_W * i) / NX, A_H / 2 - (A_H * j) / NY, 0)))
+          if (v[2] < 0.6) return
+          col.push(scr(cam, v))
+        }
+        grid.push(col)
+      }
+      const tw = tex.width
+      const th = tex.height
+      const tri = (p0: [number, number], p1: [number, number], p2: [number, number], t0: [number, number], t1: [number, number], t2: [number, number]) => {
+        const det = (t1[0] - t0[0]) * (t2[1] - t0[1]) - (t2[0] - t0[0]) * (t1[1] - t0[1])
+        if (!det) return
+        const a = ((p1[0] - p0[0]) * (t2[1] - t0[1]) - (p2[0] - p0[0]) * (t1[1] - t0[1])) / det
+        const c = ((t1[0] - t0[0]) * (p2[0] - p0[0]) - (t2[0] - t0[0]) * (p1[0] - p0[0])) / det
+        const b = ((p1[1] - p0[1]) * (t2[1] - t0[1]) - (p2[1] - p0[1]) * (t1[1] - t0[1])) / det
+        const d = ((t1[0] - t0[0]) * (p2[1] - p0[1]) - (t2[0] - t0[0]) * (p1[1] - p0[1])) / det
+        const e = p0[0] - a * t0[0] - c * t0[1]
+        const g = p0[1] - b * t0[0] - d * t0[1]
+        const mx = (p0[0] + p1[0] + p2[0]) / 3
+        const my = (p0[1] + p1[1] + p2[1]) / 3
+        ctx.save()
+        ctx.beginPath()
+        ;[p0, p1, p2].forEach((p, i) => {
+          const dx = p[0] - mx
+          const dy = p[1] - my
+          const l = Math.hypot(dx, dy) || 1
+          const x = p[0] + (dx / l) * 0.8
+          const y = p[1] + (dy / l) * 0.8
+          if (i) ctx.lineTo(x, y)
+          else ctx.moveTo(x, y)
+        })
+        ctx.closePath()
+        ctx.clip()
+        ctx.transform(a, b, c, d, e, g)
+        ctx.drawImage(tex, 0, 0)
+        ctx.restore()
+      }
+      for (let i = 0; i < NX; i++) {
+        for (let j = 0; j < NY; j++) {
+          const u0 = (i / NX) * tw
+          const u1 = ((i + 1) / NX) * tw
+          const v0 = (j / NY) * th
+          const v1 = ((j + 1) / NY) * th
+          tri(grid[i][j], grid[i + 1][j], grid[i][j + 1], [u0, v0], [u1, v0], [u0, v1])
+          tri(grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1], [u1, v0], [u1, v1], [u0, v1])
+        }
+      }
+      // gloss: the ceiling lights are reflected in the glass, and the lit screen glows a little into the dark
+      const corners = [grid[0][0], grid[NX][0], grid[NX][NY], grid[0][NY]]
+      ctx.save()
+      ctx.beginPath()
+      corners.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])))
+      ctx.closePath()
+      ctx.clip()
+      const gl = ctx.createLinearGradient(corners[0][0], corners[0][1], corners[2][0], corners[2][1])
+      gl.addColorStop(0, 'rgba(255,255,255,0.13)')
+      gl.addColorStop(0.28, 'rgba(255,255,255,0.03)')
+      gl.addColorStop(0.3, 'rgba(255,255,255,0)')
+      gl.addColorStop(0.62, 'rgba(255,255,255,0)')
+      gl.addColorStop(0.7, 'rgba(255,255,255,0.05)')
+      gl.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = gl
+      ctx.fillRect(0, 0, rx + rw, ry + rh)
+      ctx.restore()
+      const gx = (corners[0][0] + corners[2][0]) / 2
+      const gy = (corners[0][1] + corners[2][1]) / 2
+      const gr = Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]) * 0.95
+      ctx.save()
+      ctx.globalCompositeOperation = 'lighter'
+      const halo = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr)
+      halo.addColorStop(0, 'rgba(70,100,255,0.16)')
+      halo.addColorStop(1, 'rgba(70,100,255,0)')
+      ctx.fillStyle = halo
+      ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2)
+      ctx.restore()
+    }
+
+    const HOUSE: RGB = [126, 132, 140]
+    const SLAB: RGB = [172, 176, 182]
+    const hw = A_W / 2 + 0.04
+    const hh = A_H / 2
+    // the stem from the ceiling, in the middle between the two screens
+    const stemTop = HALL_TOP - cam.y
+    const stemFr: Fr = { c: [apex[0], apex[1] + hh + 0.02, apex[2]], r: [Math.cos(azA), 0, -Math.sin(azA)], u: [0, 1, 0], n: [-Math.sin(azA), 0, -Math.cos(azA)] }
+    box(stemFr, -0.08, 0.08, 0, Math.max(0.2, stemTop - stemFr.c[1]), -0.08, 0.08, [92, 98, 106], 0.9)
+    for (const fr of [frB, frA]) {
+      box(fr, -hw, hw, -hh - 0.04, hh + 0.04, -0.3, 0, HOUSE, 0.95)
+      drawTex(fr)
+      // the grey slab below the screen, with the vent slots on its underside
+      box(fr, -hw - 0.02, hw + 0.04, -hh - 0.22, -hh - 0.04, -0.3, 0.05, SLAB, 1)
+      const bn = -hh - 0.22
+      const bp = at(fr, 0, bn, -0.1)
+      if (fr.u[0] * bp[0] + fr.u[1] * bp[1] + fr.u[2] * bp[2] > 0) {
+        for (let a = -hw + 0.12; a < hw - 0.1; a += 0.14) {
+          face({ pts: [at(fr, a, bn, -0.24), at(fr, a + 0.06, bn, -0.24), at(fr, a + 0.06, bn, -0.06), at(fr, a, bn, -0.06)].map(yw), fill: [60, 64, 70], k: 0.9 })
+        }
+      }
+    }
+
+    // the blue light of the screens on the ceiling and the platform
+    for (const fr of [frA, frB]) {
+      const w = yw(fr.c)
+      light(w, 5.5, [70, 100, 255], 0.1)
+      add([[w[0] - 3, HALL_TOP - 0.02, w[2] - 2.4], [w[0] + 3, HALL_TOP - 0.02, w[2] - 2.4], [w[0] + 3, HALL_TOP - 0.02, w[2] + 2.4], [w[0] - 3, HALL_TOP - 0.02, w[2] + 2.4]], [60, 90, 255], 0.05)
+      const fy = w[0] < EDGE_X ? PLATFORM_Y : 0.02
+      add([[w[0] - 1.6, fy + 0.01, w[2] - 3.4], [w[0] + 1.6, fy + 0.01, w[2] - 3.4], [w[0] + 1.6, fy + 0.01, w[2] + 0.6], [w[0] - 1.6, fy + 0.01, w[2] + 0.6]], [60, 90, 255], 0.045)
     }
   }
 
@@ -466,6 +654,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     }
   }
   for (const it of items) it.draw()
+  drawDisplay()
 
   // ---- light: headlights, windows on the platform, the tunnel mouth, dust -------------------------------------------
   if (s.portalGlow > 0.003) {
@@ -497,7 +686,17 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
     for (let i = 0; i < CARS; i++) {
       const z0 = zf + i * (CAR_LEN + CAR_GAP)
       if (z0 > Zt + 2) continue
-      add([[EDGE_X - 0.1, PLATFORM_Y + 0.012, z0 + 1], [EDGE_X - 2.4, PLATFORM_Y + 0.012, z0 + 1.6], [EDGE_X - 2.4, PLATFORM_Y + 0.012, z0 + CAR_LEN - 1.6], [EDGE_X - 0.1, PLATFORM_Y + 0.012, z0 + CAR_LEN - 1]], [255, 222, 150], 0.1 * k)
+      add([[EDGE_X - 0.1, PLATFORM_Y + 0.012, z0 + 1], [EDGE_X - 2.4, PLATFORM_Y + 0.012, z0 + 1.6], [EDGE_X - 2.4, PLATFORM_Y + 0.012, z0 + CAR_LEN - 1.6], [EDGE_X - 0.1, PLATFORM_Y + 0.012, z0 + CAR_LEN - 1]], [255, 222, 150], (0.1 + 0.12 * s.doors) * k)
+    }
+  }
+  // the draught of the arriving train blows dust and bits of paper along the platform
+  if (s.trainZ !== null && s.speed > 0.4) {
+    const wind = clamp01(s.speed / 10) * clamp01((Zt + 6 - s.trainZ) / 10)
+    for (let i = 0; i < 16; i++) {
+      const zz = s.trainZ - 1.5 - ((i * 1.9) % 16) + Math.sin(s.t * 5 + i) * 0.5 * wind
+      const xx = EDGE_X - 0.4 - ((i * 0.37) % 1.8) + Math.sin(s.t * 6.3 + i * 1.7) * 0.25 * wind
+      const yy = PLATFORM_Y + 0.15 + (((i * 0.53) % 1) * 0.7 + Math.sin(s.t * 7 + i * 2) * 0.15) * wind
+      if (zz > 0.8) light([xx, yy, zz], 0.2, [255, 250, 240], 0.5 * wind)
     }
   }
   // floating dust in the light

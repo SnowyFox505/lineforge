@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { clamp01, easeInOut, easeOut, REDUCED_MOTION } from './netCanvas'
-import { BOARD_H, BOARD_W, boardSettled, drawBoard, FINISH_TEXT, flipStatus, flipVersion, makeBoard, setClock, startBoard, STOPS, stepBoard } from './departure/board'
+import { boardSettled, drawBoardTexture, FINISH_TEXT, flipStatus, flipVersion, makeBoard, setClock, setTicker, startBoard, STOPS, stepBoard, TEX_H, TEX_W } from './departure/board'
 import { drawStation, TUNNEL_Z } from './departure/scene3d'
 import { hexRgb } from './splashScene'
 
@@ -21,12 +21,12 @@ const T_STATUS = 0.55
 const READ_TIME = 2
 /**
  * The train starts deep in the tunnel (nobody sees it appear), drives at about 43 km/h towards the mouth while the light grows,
- * and brakes to a stop at the platform (33 m in 5.5 s, the brake eases off towards the end). Then the screen goes dark.
+ * and brakes to a stop at the platform (30 m in 5 s, the brake eases off towards the end). Then the screen goes dark.
  */
 const V0 = 12
 const START_Z = TUNNEL_Z + 44
 const STOP_Z = 7
-const BRAKE_D = 33
+const BRAKE_D = 30
 const BRAKE_T = (2 * BRAKE_D) / V0
 const BRAKE_Z = STOP_Z + BRAKE_D
 const CRUISE_T = (START_Z - BRAKE_Z) / V0
@@ -63,6 +63,10 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
     const accent = hexRgb(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())
     const board = makeBoard(oldVersion, newVersion)
     startBoard(board, oldVersion, clockText(), reduced)
+    // the picture of the display is drawn on a texture that the station hangs up
+    const tex = document.createElement('canvas')
+    const texCtx = tex.getContext('2d')
+    if (!texCtx) return
     const safeTop = parseFloat(getComputedStyle(root).paddingTop) || 0
 
     let W = 0
@@ -80,7 +84,7 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
     let settledAt: number | null = null
     let tickerAt = 0
     let tickerText = TICKER[0]
-    board.ticker = tickerText
+    setTicker(board, tickerText, reduced, 1.1)
     let lastClock = clockText()
     let finished = false
 
@@ -133,7 +137,7 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
       const wantText = finishAt >= 0 ? FINISH_TEXT : text
       if (wantText !== tickerText) {
         tickerText = wantText
-        board.ticker = wantText
+        setTicker(board, wantText, reduced)
         tickerAt = el
       }
 
@@ -183,80 +187,47 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
             : Math.max(0.04, easeOut(clamp01(tau / 3)) * (1 - 0.7 * clamp01((TUNNEL_Z - trainZ) / 12)))
       const shake = trainZ === null ? 0.12 * glowIn : 0.03 + 0.4 * clamp01(speed / 12)
 
-      // layout: on a phone the board is on top and the station below it, on a wide screen they stand side by side
-      const wide = W >= H * 1.25
-      let s: number
-      let by: number
-      let bx: number
-      let scene: [number, number, number, number]
-      let logoX: number
-      if (wide) {
-        s = Math.max(0.5, Math.min((H - 100 - safeTop) / (BOARD_H + 48), (W * 0.42) / BOARD_W, 2.4))
-        bx = Math.max(W * 0.05, 24)
-        by = (H - BOARD_H * s) / 2 + 24 * s
-        scene = [bx + BOARD_W * s + 16 * s, 0, W - (bx + BOARD_W * s + 16 * s), H]
-        logoX = bx + 65 * s
-      } else {
-        s = Math.max(0.5, Math.min((W * 0.93) / BOARD_W, (H - 210 - safeTop) / (BOARD_H + 74), 2.6))
-        by = safeTop + 24 * s + 26 * s + 18 * s
-        bx = (W - BOARD_W * s) / 2
-        const top = by + BOARD_H * s + 4 * s
-        scene = [0, top, W, H - top]
-        logoX = W / 2 - 52 * s + 52 * s
-      }
-      const logoSize = 26 * s
-      const logoY = by - 18 * s - logoSize
-
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, W, H)
 
-      // soft light behind the board
-      const bg = ctx.createRadialGradient(bx + (BOARD_W * s) / 2, by + BOARD_H * s * 0.4, 0, bx + (BOARD_W * s) / 2, by + BOARD_H * s * 0.4, Math.max(W, H) * 0.7)
-      bg.addColorStop(0, 'rgba(255,176,46,0.06)')
-      bg.addColorStop(1, 'rgba(255,176,46,0)')
-      ctx.fillStyle = bg
-      ctx.fillRect(0, 0, W, H)
-
-      // the station
-      const [sx, sy, sw, sh] = scene
-      drawStation(ctx, sx, sy, sw, sh, { t: el, trainZ, trainFade: clamp01(tau / 1), speed, portalGlow, go, accent, shake, family })
-      // fade the edge of the picture next to the board into the background
-      if (wide) {
-        const fade = ctx.createLinearGradient(sx, 0, sx + sw * 0.22, 0)
-        fade.addColorStop(0, '#06080c')
-        fade.addColorStop(1, 'rgba(6,8,12,0)')
-        ctx.fillStyle = fade
-        ctx.fillRect(sx - 1, 0, sw * 0.22 + 1, H)
-      } else {
-        const fade = ctx.createLinearGradient(0, sy, 0, sy + sh * 0.3)
-        fade.addColorStop(0, '#06080c')
-        fade.addColorStop(1, 'rgba(6,8,12,0)')
-        ctx.fillStyle = fade
-        ctx.fillRect(0, sy - 1, W, sh * 0.3 + 1)
+      // the picture of the display, as sharp as the screen needs it
+      const tw = Math.round(Math.min(1280, Math.max(640, W * dpr * 0.85)))
+      if (tw !== tex.width) {
+        tex.width = tw
+        tex.height = Math.round((tw * TEX_H) / TEX_W)
       }
+      drawBoardTexture(texCtx, tex.width, tex.height, board, { go, t: el })
+
+      // the doors of the train open when it stands
+      const doors = reduced || tau < TOTAL_T + 0.15 ? 0 : easeInOut(clamp01((tau - TOTAL_T - 0.15) / 0.6))
+
+      // the station, with the display hanging in it
+      drawStation(ctx, 0, 0, W, H, { t: el, trainZ, trainFade: clamp01(tau / 1), board: tex, doors, speed, portalGlow, go, accent, shake, family })
 
       // mark and name
-      logo(logoX - 52 * s, logoY, logoSize, el)
-      ctx.font = `700 ${12 * s}px ${family}`
-      ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${3.4 * s}px`
+      const ls = Math.max(0.9, Math.min(1.3, W / 380))
+      const logoSize = 26 * ls
+      const logoX = W / 2 - 52 * ls
+      const logoY = safeTop + 18 * ls
+      logo(logoX, logoY, logoSize, el)
+      ctx.font = `700 ${12 * ls}px ${family}`
+      ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${3.4 * ls}px`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = 'rgba(255,255,255,0.78)'
-      ctx.fillText('LINEFORGE', logoX - 52 * s + logoSize * 0.7, logoY + logoSize / 2 + 1)
+      ctx.fillText('LINEFORGE', logoX + logoSize * 0.7, logoY + logoSize / 2 + 1)
       ;(ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = '0px'
-
-      drawBoard(ctx, board, bx, by, s, { go, tickerAge: el - tickerAt })
 
       // The screen fades in at the start. When the train has passed it goes dark (not see-through: the home screen
       // underneath must not show) and the app reloads right then.
-      const out = trainZ === null || reduced ? 1 : 1 - clamp01((tau - TOTAL_T - 0.2) / 0.6)
+      const out = trainZ === null || reduced ? 1 : 1 - clamp01((tau - TOTAL_T - 0.9) / 0.6)
       if (out < 1) {
         ctx.fillStyle = `rgba(6,8,12,${1 - out})`
         ctx.fillRect(0, 0, W, H)
       }
       root.style.opacity = String(clamp01(el / 0.35))
 
-      const gone = reduced ? f >= 1.4 : trainZ !== null && tau >= TOTAL_T + 0.9
+      const gone = reduced ? f >= 1.4 : trainZ !== null && tau >= TOTAL_T + 1.55
       if (gone && !finished) {
         finished = true
         cancelAnimationFrame(raf)

@@ -28,6 +28,31 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.37.0',
+    date: '2026-11-20',
+    headline: 'Aktualisieren: Die Anzeige hängt jetzt wirklich im Bahnhof',
+    changes: [
+      {
+        title: 'Zwei Anzeigen an der Decke, wie in Hamburg',
+        what: 'Die Tafel liegt nicht mehr flach auf dem Bildschirm, sondern hängt als echtes Doppel-Display von der Decke über dem Bahnsteig: zwei Bildschirme nebeneinander, leicht nach unten geneigt und in zwei Richtungen gedreht, mit grauem Gehäuse und Lüftungsschlitzen. Das Bild ist einer echten S-Bahn-Anzeige nachgebaut: blauer Bildschirm, links „Es folgen / followed by“ mit den nächsten Schritten des Updates und der Uhrzeit, rechts „Nächster Zug / next train“ mit „Neue Version“, der Versionsnummer und dem Status, unten ein heller Infostreifen und „Gleis 1“ auf dem schwarzen Rahmen.',
+        how: 'Du musst nichts tun, es erscheint beim Aktualisieren.',
+        benefit: 'Es sieht aus wie ein echter U-Bahnhof und nicht mehr wie eine Oberfläche in der App.',
+      },
+      {
+        title: 'Realistischerer Bahnhof',
+        what: 'Das blaue Licht der Anzeigen fällt auf Decke und Bahnsteig, der polierte Boden spiegelt die Deckenlampen, die Wand ist gekachelt, und beim Einfahren wirbelt der Zug Staub und Papier auf. Nach dem Halt öffnen sich die Türen, dann startet die App neu.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Das Warten wird zu einem kleinen Film.',
+      },
+      {
+        title: 'Strafferes Bremsen',
+        what: 'Der Zug bremst jetzt in etwa 5 Sekunden bis zum Stillstand.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Es dauert nicht länger als nötig.',
+      },
+    ],
+  },
+  {
     version: '0.36.4',
     date: '2026-11-20',
     headline: 'Aktualisieren: Zug kommt von tief hinten und bremst kürzer',

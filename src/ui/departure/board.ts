@@ -2,26 +2,28 @@ import { clamp01 } from '../netCanvas'
 import { padTo, Roll } from './roll'
 
 /**
- * The passenger information display of the update screen, modelled on the new displays above the platforms of the
- * Hamburg underground (2026): a deep blue screen in a grey housing, the line badge and the destination on top, the
- * stops "über ..." below, a thin line, and at the bottom the departure info. Here the "stops" are the steps of the update
- * and the departure info is the version and the status. Texts change by rolling (see `Roll`).
- * Everything is laid out in "design units" of a board that is 350 wide and scaled as a whole.
+ * The picture on the passenger information display of the update screen. It is modelled on the displays of the Hamburg
+ * S-Bahn and underground (blue screen, a narrow column "Es folgen / followed by" on the left, the big "Nächster Zug / next
+ * train" on the right, a light information strip at the bottom, "Gleis" on the black frame). Here the "trains" are the steps
+ * of the update, the destination is the new version and the information strip tells what happens right now.
+ * This file only draws the front of the display onto a texture canvas (in design units of 1024 x 430); `scene3d.ts` hangs it in
+ * the station. Texts change by rolling (see `Roll`).
  */
-export const BOARD_W = 350
-export const BOARD_H = 196
+export const TEX_W = 1024
+export const TEX_H = 430
 
-/** the steps of the update, shown as the stops of the journey; the update screen sets `Board.ticker` to one of them */
+/** the steps of the update, shown as the stops of the journey; the update screen sets the ticker to one of them */
 export const STOPS = ['Suche nach Updates', 'Speicher leeren', 'Städte sichern', 'Neustart']
+/** the same steps, short enough for the narrow column */
+const ROW_NAMES = ['Updates suchen', 'Speicher leeren', 'Städte sichern', 'Neustart']
 export const FINISH_TEXT = 'Bitte zurücktreten'
 
 type RGB = [number, number, number]
-const BLUE_TOP: RGB = [18, 46, 132]
-const BLUE_BOTTOM: RGB = [9, 28, 98]
 const WHITE: RGB = [255, 255, 255]
-const SOFT: RGB = [186, 202, 238]
 const MINT: RGB = [150, 244, 178]
 const YELLOW: RGB = [252, 205, 22]
+const INFO_BG: RGB = [234, 242, 255]
+const INFO_INK: RGB = [20, 38, 152]
 /** the lettering of platform displays: a plain grotesque, on purpose not the font of the app */
 const SIGN = `'Helvetica Neue', Helvetica, Arial, 'Segoe UI', system-ui, sans-serif`
 
@@ -35,6 +37,12 @@ export interface Board {
   version: Roll[]
   ziel: Roll
   status: Roll
+  row1: Roll
+  row1s: Roll
+  row2: Roll
+  row2s: Roll
+  info1: Roll
+  info2: Roll
   ticker: string
 }
 
@@ -45,11 +53,32 @@ export function makeBoard(oldVersion: string, newVersion: string): Board {
     version: Array.from({ length: n }, () => new Roll()),
     ziel: new Roll(),
     status: new Roll(),
+    row1: new Roll(),
+    row1s: new Roll(),
+    row2: new Roll(),
+    row2s: new Roll(),
+    info1: new Roll(),
+    info2: new Roll(),
     ticker: '',
   }
 }
 
-const allRolls = (b: Board): Roll[] => [b.clock, ...b.version, b.ziel, b.status]
+const allRolls = (b: Board): Roll[] => [b.clock, ...b.version, b.ziel, b.status, b.row1, b.row1s, b.row2, b.row2s, b.info1, b.info2]
+
+/** What the display says about the step that is shown now: the two rows of the left column and the information strip. */
+export function setTicker(b: Board, text: string, instant: boolean, delay = 0) {
+  b.ticker = text
+  const idx = STOPS.indexOf(text)
+  const fin = text !== '' && idx < 0
+  const put = (r: Roll, t: string, d: number) => (instant ? r.jump(t) : r.set(t, delay + d))
+  const cur = fin ? 3 : Math.max(0, idx)
+  put(b.row1, ROW_NAMES[cur], 0)
+  put(b.row1s, fin ? 'jetzt' : 'läuft', 0.06)
+  put(b.row2, ROW_NAMES[cur + 1] ?? '', 0.12)
+  put(b.row2s, cur + 1 < ROW_NAMES.length ? 'danach' : '', 0.18)
+  put(b.info1, fin ? 'Bitte zurücktreten.' : 'LineForge wird aktualisiert.', 0.1)
+  put(b.info2, fin ? 'Der Zug fährt gleich ein.' : `${STOPS[cur]} …`, 0.2)
+}
 
 /** The display comes to life: the texts roll in, top to bottom. */
 export function startBoard(b: Board, oldVersion: string, clock: string, instant: boolean) {
@@ -85,11 +114,6 @@ export function setClock(b: Board, clock: string) {
 
 // ---- drawing ----------------------------------------------------------------------------------------------------------
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath()
-  ctx.roundRect(x, y, w, h, r)
-}
-
 interface TextLook {
   size: number
   weight: number
@@ -116,199 +140,156 @@ function drawRoll(ctx: CanvasRenderingContext2D, r: Roll, x: number, y: number, 
     ctx.fillStyle = css(t.color, 1 - e)
     ctx.fillText(r.cur, x, y - e * t.rise)
   }
-  if (e > 0.01) {
+  if (e > 0.01 && r.next) {
     ctx.fillStyle = css(t.color, e)
     ctx.fillText(r.next, x, y + (1 - e) * t.rise)
   }
 }
 
+function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: number, color: RGB, align: CanvasTextAlign = 'left') {
+  ctx.font = `${weight} ${size}px ${SIGN}`
+  ctx.textAlign = align
+  ctx.textBaseline = 'alphabetic'
+  ctx.fillStyle = css(color)
+  ctx.fillText(s, x, y)
+}
+
+function pill(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: RGB, ink: RGB, label: string, size: number) {
+  ctx.beginPath()
+  ctx.roundRect(x, y, w, h, h / 2)
+  ctx.fillStyle = css(fill)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+  ctx.lineWidth = 2.5
+  ctx.stroke()
+  ctx.font = `700 ${size}px ${SIGN}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = css(ink)
+  ctx.fillText(label, x + w / 2, y + h / 2 + size * 0.04)
+}
+
 export interface BoardLook {
   /** 0 = waiting, 1 = on time (the status turns mint) */
   go: number
-  /** seconds since the info text changed */
-  tickerAge: number
+  /** seconds, for the slow breathing of the backlight */
+  t: number
 }
 
-/** Draws the display with its top left corner at (bx, by), `s` pixels per design unit. */
-export function drawBoard(ctx: CanvasRenderingContext2D, b: Board, bx: number, by: number, s: number, look: BoardLook) {
+/** Draws the front of the display (frame and screen) into a canvas of any size, scaled from the design units TEX_W x TEX_H. */
+export function drawBoardTexture(ctx: CanvasRenderingContext2D, w: number, h: number, b: Board, look: BoardLook) {
   ctx.save()
-  ctx.translate(bx, by)
-  const W = BOARD_W * s
-  const H = BOARD_H * s
-  const clipRect = (x: number, y: number, w: number, h: number) => {
+  ctx.scale(w / TEX_W, h / TEX_H)
+  ctx.clearRect(0, 0, TEX_W, TEX_H)
+  const clipRect = (x: number, y: number, cw: number, ch: number) => {
     ctx.beginPath()
-    ctx.rect(x, y, w, h)
+    ctx.rect(x, y, cw, ch)
     ctx.clip()
   }
 
-  // the two short poles it hangs on
-  for (const px of [58 * s, W - 58 * s]) {
-    const g = ctx.createLinearGradient(px - 3 * s, 0, px + 3 * s, 0)
-    g.addColorStop(0, '#4c525a')
-    g.addColorStop(0.5, '#9aa1ab')
-    g.addColorStop(1, '#474c53')
-    ctx.fillStyle = g
-    ctx.fillRect(px - 3 * s, -14 * s, 6 * s, 16 * s)
-  }
-
-  // the housing: grey metal, a little deeper at the bottom
-  ctx.save()
-  ctx.shadowColor = 'rgba(0,0,0,0.6)'
-  ctx.shadowBlur = 26 * s
-  ctx.shadowOffsetY = 10 * s
-  roundRect(ctx, 0, 0, W, H, 5 * s)
-  const hg = ctx.createLinearGradient(0, 0, 0, H)
-  hg.addColorStop(0, '#6d747d')
-  hg.addColorStop(0.08, '#565c64')
-  hg.addColorStop(1, '#2c3037')
-  ctx.fillStyle = hg
+  // the black frame, thicker at the bottom where "Gleis" stands
+  ctx.beginPath()
+  ctx.roundRect(0, 0, TEX_W, TEX_H, 20)
+  ctx.fillStyle = '#07090d'
   ctx.fill()
-  ctx.restore()
-  ctx.fillStyle = 'rgba(255,255,255,0.18)'
-  ctx.fillRect(5 * s, 0.5, W - 10 * s, Math.max(1, s * 0.8))
+  text(ctx, 'Gleis 1', 38, 411, 31, 400, [196, 202, 212])
 
   // the screen
-  const sx = 7 * s
-  const sy = 7 * s
-  const sw = W - 14 * s
-  const sh = 172 * s
-  roundRect(ctx, sx - 1.5 * s, sy - 1.5 * s, sw + 3 * s, sh + 3 * s, 3 * s)
-  ctx.fillStyle = '#05070b'
-  ctx.fill()
+  const X0 = 24
+  const Y0 = 22
+  const X1 = TEX_W - 24
+  const Y1 = 376
   ctx.save()
-  roundRect(ctx, sx, sy, sw, sh, 1.5 * s)
+  ctx.beginPath()
+  ctx.roundRect(X0, Y0, X1 - X0, Y1 - Y0, 4)
   ctx.clip()
-  ctx.translate(sx, sy)
-  const bg = ctx.createLinearGradient(0, 0, 0, sh)
-  bg.addColorStop(0, css(BLUE_TOP))
-  bg.addColorStop(1, css(BLUE_BOTTOM))
+  const bg = ctx.createLinearGradient(0, Y0, 0, Y1)
+  bg.addColorStop(0, '#2036cc')
+  bg.addColorStop(1, '#1427ab')
   ctx.fillStyle = bg
-  ctx.fillRect(0, 0, sw, sh)
-  // the backlight is a little brighter in the middle
-  const vg = ctx.createRadialGradient(sw / 2, sh * 0.4, 0, sw / 2, sh * 0.4, sw * 0.65)
-  vg.addColorStop(0, 'rgba(70,110,230,0.2)')
-  vg.addColorStop(1, 'rgba(70,110,230,0)')
+  ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0)
+  const breath = 0.13 + 0.015 * Math.sin(look.t * 1.3)
+  const vg = ctx.createRadialGradient(TEX_W * 0.5, 190, 0, TEX_W * 0.5, 190, 620)
+  vg.addColorStop(0, `rgba(90,120,255,${breath})`)
+  vg.addColorStop(1, 'rgba(90,120,255,0)')
   ctx.fillStyle = vg
-  ctx.fillRect(0, 0, sw, sh)
+  ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0)
 
-  const pad = 15 * s
-  const textX = 58 * s
-  const textW = sw - textX - pad
+  const LEFT = 494
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'
+  const hline = (y: number, x0: number, x1: number) => ctx.fillRect(x0, y - 1, x1 - x0, 2)
+  hline(76, X0, LEFT)
+  hline(226, X0, LEFT)
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.fillRect(LEFT - 1, Y0, 2, Y1 - Y0)
 
-  // line badge, destination and the time
-  const bw = 36 * s
-  const bh = 27 * s
-  roundRect(ctx, pad, 14 * s, bw, bh, 2.5 * s)
-  ctx.fillStyle = css(YELLOW)
-  ctx.fill()
-  ctx.font = `700 ${19 * s}px ${SIGN}`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = '#16140a'
-  ctx.fillText('U1', pad + bw / 2, 14 * s + bh / 2 + 1 * s)
+  // left column: "Es folgen / followed by", the clock and two rows
+  text(ctx, 'Es folgen / followed by:', 44, 58, 22, 400, WHITE)
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+  ctx.lineWidth = 2
+  ctx.strokeRect(352, 31, 130, 40)
   ctx.save()
-  clipRect(textX, 10 * s, textW - 46 * s, 36 * s)
-  drawRoll(ctx, b.ziel, textX, 37 * s, { size: 25 * s, weight: 500, color: WHITE, align: 'left', rise: 20 * s })
+  clipRect(354, 33, 76, 36)
+  drawRoll(ctx, b.clock, 424, 61, { size: 25, weight: 500, color: WHITE, align: 'right', rise: 22 })
   ctx.restore()
-  ctx.save()
-  clipRect(sw - pad - 50 * s, 10 * s, 50 * s, 18 * s)
-  drawRoll(ctx, b.clock, sw - pad, 24 * s, { size: 11.5 * s, weight: 500, color: SOFT, align: 'right', rise: 10 * s })
-  ctx.restore()
-
-  // "über" and the stops: the steps of the update
-  const fin = b.ticker !== '' && !STOPS.includes(b.ticker)
-  const cur = STOPS.indexOf(b.ticker)
-  const e = easeOutCubic(look.tickerAge / 0.4)
-  ctx.textBaseline = 'alphabetic'
-  if (!fin) {
-    ctx.font = `400 ${13.5 * s}px ${SIGN}`
-    ctx.textAlign = 'left'
-    ctx.fillStyle = css(SOFT)
-    ctx.fillText('über', pad, 69 * s)
-    const fs = 12.5 * s
-    const gap = 6 * s
-    ctx.font = `400 ${fs}px ${SIGN}`
-    const dash = ctx.measureText('–').width
-    let x = textX
-    let y = 69 * s
-    STOPS.forEach((name, i) => {
-      ctx.font = `600 ${fs}px ${SIGN}`
-      const w = ctx.measureText(name).width
-      const first = x === textX
-      const need = (first ? 0 : dash + gap * 2) + w
-      if (!first && x - textX + need > textW) {
-        x = textX
-        y += 21 * s
-      }
-      if (x !== textX) {
-        ctx.font = `400 ${fs}px ${SIGN}`
-        ctx.fillStyle = css(SOFT, 0.7)
-        ctx.fillText('–', x + gap, y)
-        x += dash + gap * 2
-      }
-      const now = i === cur
-      const done = i < cur
-      ctx.font = `${now ? 700 : 400} ${fs}px ${SIGN}`
-      ctx.fillStyle = css(now ? WHITE : done ? SOFT : WHITE, now ? 1 : done ? 0.5 : 0.88)
-      ctx.fillText(name, x, y)
-      x += w
-    })
-  } else {
+  text(ctx, 'Uhr', 434, 61, 18, 400, WHITE)
+  const rows: [Roll, Roll, number][] = [
+    [b.row1, b.row1s, 76],
+    [b.row2, b.row2s, 226],
+  ]
+  for (const [name, state, top] of rows) {
+    if (name.cur || name.next) pill(ctx, 44, top + 53, 84, 44, YELLOW, [22, 20, 8], 'U1', 26)
     ctx.save()
-    clipRect(textX - 4 * s, 52 * s, textW + 8 * s, 44 * s)
-    ctx.font = `500 ${17 * s}px ${SIGN}`
-    ctx.textAlign = 'left'
-    ctx.fillStyle = css(WHITE, e)
-    ctx.fillText(b.ticker, textX, 72 * s + (1 - e) * 16 * s)
+    clipRect(138, top + 40, 232, 70)
+    drawRoll(ctx, name, 144, top + 86, { size: 31, weight: 500, color: WHITE, align: 'left', rise: 30 })
+    ctx.restore()
+    ctx.save()
+    clipRect(372, top + 40, 112, 70)
+    drawRoll(ctx, state, 478, top + 86, { size: 29, weight: 500, color: WHITE, align: 'right', rise: 30 })
     ctx.restore()
   }
 
-  // the thin line
-  ctx.fillStyle = 'rgba(255,255,255,0.9)'
-  ctx.fillRect(pad, 108 * s, sw - 2 * pad, Math.max(1, 1 * s))
-
-  // the departure info: the version on the left, the status on the right
-  ctx.font = `400 ${11.5 * s}px ${SIGN}`
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = css(SOFT)
-  ctx.fillText('Version', pad, 128 * s)
-  const vsize = 31 * s
-  ctx.font = `600 ${vsize}px ${SIGN}`
+  // right: the next train
+  text(ctx, 'Nächster Zug / next train:', 516, 58, 22, 400, WHITE)
+  pill(ctx, 516, 92, 118, 62, YELLOW, [22, 20, 8], 'U1', 38)
+  ctx.save()
+  clipRect(650, 84, 350, 84)
+  drawRoll(ctx, b.ziel, 656, 146, { size: 52, weight: 500, color: WHITE, align: 'left', rise: 44 })
+  ctx.restore()
+  text(ctx, 'Version', 656, 226, 28, 400, WHITE)
+  ctx.font = `600 58px ${SIGN}`
+  const vx0 = 764
   const widths = b.version.map((r) => {
     const ch = r.target === ' ' ? (r.next !== null ? r.cur : '') : r.target
     return ch ? ctx.measureText(ch).width : 0
   })
-  let vx = pad
+  let vx = vx0
   b.version.forEach((r, i) => {
     ctx.save()
-    clipRect(vx - 2 * s, 130 * s, widths[i] + 4 * s, 38 * s)
-    drawRoll(ctx, r, vx + widths[i] / 2, 160 * s, { size: vsize, weight: 600, color: WHITE, align: 'center', rise: 26 * s })
+    clipRect(vx - 2, 172, widths[i] + 4, 70)
+    drawRoll(ctx, r, vx + widths[i] / 2, 226, { size: 58, weight: 600, color: WHITE, align: 'center', rise: 50 })
     ctx.restore()
     vx += widths[i]
   })
   ctx.save()
-  clipRect(sw - pad - 150 * s, 134 * s, 150 * s, 32 * s)
-  drawRoll(ctx, b.status, sw - pad, 159 * s, { size: 19 * s, weight: 500, color: mixC(WHITE, MINT, look.go), align: 'right', rise: 16 * s })
+  clipRect(650, 246, 350, 50)
+  drawRoll(ctx, b.status, 656, 286, { size: 38, weight: 500, color: mixC(WHITE, MINT, look.go), align: 'left', rise: 34 })
   ctx.restore()
 
-  // the glass: a faint reflection across the corner
-  const gl = ctx.createLinearGradient(0, 0, sw * 0.9, sh)
-  gl.addColorStop(0, 'rgba(255,255,255,0.07)')
-  gl.addColorStop(0.32, 'rgba(255,255,255,0.02)')
-  gl.addColorStop(0.33, 'rgba(255,255,255,0)')
-  gl.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.fillStyle = gl
-  ctx.fillRect(0, 0, sw, sh)
-  ctx.restore()
-
-  // the lower lip of the housing with a tiny status light
-  ctx.fillStyle = 'rgba(0,0,0,0.25)'
-  ctx.fillRect(7 * s, 183 * s, W - 14 * s, 1)
-  ctx.fillStyle = css(mixC([255, 176, 46], MINT, look.go), 0.9)
+  // the light information strip
+  ctx.fillStyle = css(INFO_BG)
+  ctx.fillRect(LEFT, 308, X1 - LEFT, Y1 - 308)
   ctx.beginPath()
-  ctx.arc(W - 14 * s, 190 * s, 1.6 * s, 0, Math.PI * 2)
+  ctx.roundRect(510, 320, 44, 44, 7)
+  ctx.fillStyle = '#16279e'
   ctx.fill()
+  text(ctx, 'i', 532, 354, 36, 700, WHITE, 'center')
+  ctx.save()
+  clipRect(570, 312, X1 - 570, 62)
+  drawRoll(ctx, b.info1, 572, 338, { size: 22, weight: 500, color: INFO_INK, align: 'left', rise: 22 })
+  drawRoll(ctx, b.info2, 572, 364, { size: 22, weight: 400, color: INFO_INK, align: 'left', rise: 22 })
+  ctx.restore()
 
+  ctx.restore()
   ctx.restore()
 }
