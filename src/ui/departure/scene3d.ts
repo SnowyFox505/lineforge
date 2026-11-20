@@ -72,6 +72,8 @@ export interface StationState {
   t: number
   /** z of the front of the train; null while there is none */
   trainZ: number | null
+  /** 0..1 the train fades in (it starts far inside the tunnel) */
+  trainFade: number
   /** speed of the train in m/s (for the blur) */
   speed: number
   /** 0..1 light coming out of the tunnel before the train */
@@ -379,6 +381,8 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
       out.push({
         depth: depthOf([T, 2, z0 + CAR_LEN / 2]),
         draw: () => {
+          ctx.save()
+          ctx.globalAlpha *= s.trainFade
           const kk = lit(z0 + CAR_LEN / 2)
           // side (the one facing the platform), the dark running gear below it and the roof edge
           tface({ pts: [[xl, 0.5, z0], [xl, top, z0 + rake], [xl, top, z1], [xl, 0.5, z1]], fill: YELLOW, k: 0.8 * kk })
@@ -423,6 +427,7 @@ export function drawStation(ctx: CanvasRenderingContext2D, rx: number, ry: numbe
             }
             tface({ pts: [[xl, 0.5, z0 - 0.02], [xr, 0.5, z0 - 0.02], [xr, 0.82, z0 - 0.02], [xl, 0.82, z0 - 0.02]], fill: [30, 32, 37], k: kk })
           }
+          ctx.restore()
         },
       })
     }

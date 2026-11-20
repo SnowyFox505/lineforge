@@ -19,11 +19,18 @@ const STAGE_MS = 0.7
 const T_STATUS = 0.55
 /** the pause between the last tile turning and the first light from the tunnel, so the text can be read */
 const READ_TIME = 2
-/** the train brakes from about 45 km/h to a stop in 8 s over 45 m (a normal service braking of the underground), then the screen goes dark */
-const BRAKE_T = 8
+/**
+ * The train starts deep in the tunnel (nobody sees it appear), drives at about 43 km/h towards the mouth while the light grows,
+ * and brakes to a stop at the platform (33 m in 5.5 s, the brake eases off towards the end). Then the screen goes dark.
+ */
+const V0 = 12
+const START_Z = TUNNEL_Z + 44
 const STOP_Z = 7
-const BRAKE_D = TUNNEL_Z + 18 - STOP_Z
-const BRAKE_P = 2.2
+const BRAKE_D = 33
+const BRAKE_T = (2 * BRAKE_D) / V0
+const BRAKE_Z = STOP_Z + BRAKE_D
+const CRUISE_T = (START_Z - BRAKE_Z) / V0
+const TOTAL_T = CRUISE_T + BRAKE_T
 
 const clockText = () => {
   const d = new Date()
@@ -155,15 +162,25 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
       const go = f < 0 ? 0 : easeInOut(clamp01((f - T_STATUS) / 0.6))
       const tau = settledAt === null ? -1 : f - settledAt - READ_TIME
       const glowIn = settledAt === null ? 0 : easeOut(clamp01((f - settledAt - READ_TIME) / 0.9))
-      const portalGlow = f < 0 ? 0.04 + 0.03 * Math.sin(el * 3) : Math.max(0.04, glowIn * (1 - 0.7 * clamp01(tau / 0.7)))
       let trainZ: number | null = null
       let speed = 0
       if (!reduced && tau >= 0) {
-        // the train comes out of the tunnel and brakes to a stop at the platform, slowly letting go of the brake at the end
-        const u = clamp01(tau / BRAKE_T)
-        trainZ = STOP_Z + BRAKE_D * Math.pow(1 - u, BRAKE_P)
-        speed = ((BRAKE_P * BRAKE_D) / BRAKE_T) * Math.pow(1 - u, BRAKE_P - 1)
+        if (tau < CRUISE_T) {
+          trainZ = START_Z - V0 * tau
+          speed = V0
+        } else {
+          const u = clamp01((tau - CRUISE_T) / BRAKE_T)
+          trainZ = STOP_Z + BRAKE_D * (1 - u) * (1 - u)
+          speed = V0 * (1 - u)
+        }
       }
+      // the light in the tunnel mouth grows slowly as the train comes closer, and calms down when it has come out
+      const portalGlow =
+        f < 0 || glowIn === 0 && tau < 0
+          ? 0.04 + 0.03 * Math.sin(el * 3)
+          : trainZ === null
+            ? 0.04
+            : Math.max(0.04, easeOut(clamp01(tau / 3)) * (1 - 0.7 * clamp01((TUNNEL_Z - trainZ) / 12)))
       const shake = trainZ === null ? 0.12 * glowIn : 0.03 + 0.4 * clamp01(speed / 12)
 
       // layout: on a phone the board is on top and the station below it, on a wide screen they stand side by side
@@ -202,7 +219,7 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
 
       // the station
       const [sx, sy, sw, sh] = scene
-      drawStation(ctx, sx, sy, sw, sh, { t: el, trainZ, speed, portalGlow, go, accent, shake, family })
+      drawStation(ctx, sx, sy, sw, sh, { t: el, trainZ, trainFade: clamp01(tau / 1), speed, portalGlow, go, accent, shake, family })
       // fade the edge of the picture next to the board into the background
       if (wide) {
         const fade = ctx.createLinearGradient(sx, 0, sx + sw * 0.22, 0)
@@ -232,14 +249,14 @@ export default function DepartureScreen({ oldVersion, newVersion, stage, onDone 
 
       // The screen fades in at the start. When the train has passed it goes dark (not see-through: the home screen
       // underneath must not show) and the app reloads right then.
-      const out = trainZ === null || reduced ? 1 : 1 - clamp01((tau - BRAKE_T - 0.25) / 0.7)
+      const out = trainZ === null || reduced ? 1 : 1 - clamp01((tau - TOTAL_T - 0.2) / 0.6)
       if (out < 1) {
         ctx.fillStyle = `rgba(6,8,12,${1 - out})`
         ctx.fillRect(0, 0, W, H)
       }
       root.style.opacity = String(clamp01(el / 0.35))
 
-      const gone = reduced ? f >= 1.4 : trainZ !== null && tau >= BRAKE_T + 1
+      const gone = reduced ? f >= 1.4 : trainZ !== null && tau >= TOTAL_T + 0.9
       if (gone && !finished) {
         finished = true
         cancelAnimationFrame(raf)

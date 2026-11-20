@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.36.4',
+    date: '2026-11-20',
+    headline: 'Aktualisieren: Zug kommt von tief hinten und bremst kürzer',
+    changes: [
+      {
+        title: 'Der Zug fährt wirklich aus dem Tunnel heraus',
+        what: 'Der Zug startet jetzt weit hinten im Tunnel, sodass man ihn nie auftauchen sieht. Zuerst wird es im Tunnel durch seine Lichter langsam heller, dann fährt er mit gleichmäßigem Tempo aus dem Tunnel heraus.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Die Einfahrt wirkt echt, ohne dass der Zug plötzlich da ist.',
+      },
+      {
+        title: 'Kürzeres, strafferes Bremsen',
+        what: 'Der Zug bremst jetzt in etwa 5 Sekunden bis zum Stillstand statt in 8 und lässt die Bremse zum Schluss sanft los.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Das Aktualisieren dauert nicht länger als nötig.',
+      },
+    ],
+  },
+  {
     version: '0.36.3',
     date: '2026-11-19',
     headline: 'Aktualisieren: Der Zug hält am Bahnsteig an',
