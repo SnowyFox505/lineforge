@@ -1,10 +1,37 @@
-# LineForge 🚆
+<div align="center">
 
-**Baue fiktive Städte und zeichne ihre Liniennetze – von der Straßenbahn bis zum ICE.**
+<img src="docs/logo.png" alt="LineForge logo" width="96">
+
+# LineForge
+
+**Baue fiktive Städte und zeichne ihre Liniennetze.**<br>
+Von der Straßenbahn bis zum ICE: erst die Karte, dann der Netzplan im BVG-Stil, dann alles in 3D.
+
+<br>
+
+<a href="https://lineforge-app.vercel.app"><img src="https://img.shields.io/badge/%E2%96%B6%20Live-lineforge--app.vercel.app-c6f24a?style=for-the-badge&labelColor=090c13&logoColor=black" alt="Live app"></a>
+
+<br>
+
+<img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&labelColor=090c13&logo=react&logoColor=white" alt="React">
+<img src="https://img.shields.io/badge/TypeScript-3178c6?style=flat-square&labelColor=090c13&logo=typescript&logoColor=white" alt="TypeScript">
+<img src="https://img.shields.io/badge/three.js-ffffff?style=flat-square&labelColor=090c13&logo=threedotjs&logoColor=white" alt="three.js">
+<img src="https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat-square&labelColor=090c13&logo=tailwindcss&logoColor=white" alt="Tailwind">
+<img src="https://img.shields.io/badge/Vite-a78bfa?style=flat-square&labelColor=090c13&logo=vite&logoColor=white" alt="Vite">
+<img src="https://img.shields.io/badge/Zustand-c6f24a?style=flat-square&labelColor=090c13&logo=react&logoColor=white" alt="Zustand">
+<img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-ffca28?style=flat-square&labelColor=090c13&logo=firebase&logoColor=white" alt="Firebase">
+<img src="https://img.shields.io/badge/Vercel-ffffff?style=flat-square&labelColor=090c13&logo=vercel&logoColor=white" alt="Vercel">
+<img src="https://img.shields.io/badge/PWA-installierbar-c6f24a?style=flat-square&labelColor=090c13&logo=pwa&logoColor=black" alt="PWA">
+
+<br><br>
+
+<img src="docs/hero.jpg" alt="LineForge auf Tablet und Handy: 2D-Karte, Netzplan und 3D-Ansicht mit Hauptbahnhof" width="100%">
+
+</div>
+
+<br>
 
 LineForge ist eine Web-App (PWA, iPhone zuerst, läuft auch am Desktop), in der du eine Stadt auf einer 2D-Karte formst, Stationen setzt und Linien im Stil der Berliner und Münchner Netzpläne ziehst. Wenn du sehen willst, wie es in echt aussieht, schaltest du auf 3D um: Dort wachsen Gebäude aus dem Straßenraster, und deine Züge fahren auf Brücken, Viadukten und durch mehrgeschossige Bahnhöfe.
-
-**Live ausprobieren:** [lineforge-app.vercel.app](https://lineforge-app.vercel.app)
 
 ![Hauptbahnhof mit Glashalle, Zügen und Stadt in 3D](docs/screenshots/hero-hbf.jpg)
 
