@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.38.0',
+    date: '2026-11-23',
+    headline: 'Städte duplizieren und seltener abgemeldet',
+    changes: [
+      {
+        title: 'Stadt duplizieren',
+        what: 'In „Meine Städte“ hat jede Stadt einen neuen Knopf mit den zwei Ebenen. Er legt eine Kopie der Stadt an, so wie sie gerade ist.',
+        how: 'Tippe in „Meine Städte“ neben der Stadt auf den Duplizieren-Knopf. Die Kopie heißt „… (Kopie)“ und steht gleich in der Liste.',
+        benefit: 'Du kannst Neues ausprobieren, ohne deinen Spielstand zu riskieren: das Original bleibt unberührt.',
+      },
+      {
+        title: 'Anmeldung bleibt besser erhalten',
+        what: 'Die Anmeldung wird jetzt sicherer auf dem Gerät gespeichert, und die App bittet den Browser, sie nicht zu löschen.',
+        how: 'Du musst nichts tun. Melde dich nach dem Update einmal neu an.',
+        benefit: 'Du wirst nicht mehr so oft ohne Grund abgemeldet.',
+      },
+    ],
+  },
+  {
     version: '0.37.2',
     date: '2026-11-20',
     headline: 'Aktualisieren: Die Anzeige schaut den Bahnsteig entlang, die U-Bahn ist viel detaillierter',

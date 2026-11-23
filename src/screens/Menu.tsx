@@ -397,6 +397,19 @@ function Cities({ items, back, onOpen, refresh }: { items: Saved[]; back: () => 
     }
   }
 
+  /** a copy of the city as it stands now: new id, the name gets " (Kopie)", the original stays untouched */
+  async function duplicate(src: CityDoc) {
+    try {
+      const copy = importCityJson(exportCityJson(src))
+      copy.name = `${src.name} (Kopie)`
+      await saveCity(copy)
+      refresh()
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Duplizieren fehlgeschlagen')
+    }
+  }
+
   return (
     <motion.div
       className="relative z-10 flex h-full flex-col px-6 pb-[calc(20px+var(--safe-bottom))] pt-[calc(16px+var(--safe-top))]"
@@ -450,6 +463,9 @@ function Cities({ items, back, onOpen, refresh }: { items: Saved[]; back: () => 
                   onClick={() => downloadBlob(new Blob([exportCityJson(c.doc)], { type: 'application/json' }), `${c.name}.lineforge.json`)}
                 >
                   <Icon name="download" size={17} />
+                </button>
+                <button className="btn-soft grid h-10 w-10 place-items-center rounded-full" aria-label="Duplizieren" onClick={() => void duplicate(c.doc)}>
+                  <Icon name="layers" size={17} />
                 </button>
                 {confirm === c.id ? (
                   <button

@@ -21,9 +21,19 @@ let boot: Promise<{ auth: import('firebase/auth').Auth; db: import('firebase/fir
 export function firebase() {
   if (!accountsAvailable) return Promise.reject(new Error('Konten sind noch nicht eingerichtet'))
   boot ??= (async () => {
-    const [{ initializeApp }, { getAuth }, { getFirestore }] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore')])
+    const [{ initializeApp }, authMod, { getFirestore }] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore')])
     const app = initializeApp(firebaseConfig)
-    const auth = getAuth(app)
+    // The sign-in lives in IndexedDB first, localStorage second (never session storage, it dies with the tab); the browser is asked
+    // not to clear the site's storage, because iOS and some browsers drop it under pressure and the person is then signed out.
+    try {
+      void navigator.storage?.persist?.()
+    } catch {
+      // not supported: fine
+    }
+    const auth = authMod.initializeAuth(app, {
+      persistence: [authMod.indexedDBLocalPersistence, authMod.browserLocalPersistence],
+      popupRedirectResolver: authMod.browserPopupRedirectResolver,
+    })
     auth.languageCode = 'de'
     return { auth, db: getFirestore(app) }
   })()
