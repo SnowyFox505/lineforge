@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { clamp01, drawLight, easeInOut, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from './netCanvas'
+import { blobSprite, clamp01, drawLight, easeInOut, easeOut, easeOutBack, prepareNet, REDUCED_MOTION, strokeGlowing } from './netCanvas'
 import type { P } from './netCanvas'
-import { ACCENT_LINE, closingProgress, DIAL_R, EMBLEM, emblemBox, FINISH_CITY, hexRgb, HUB, IRIS_FEATHER, irisRadius, loadProgress } from './splashScene'
+import { ABORT_MS, ACCENT_LINE, closingProgress, DIAL_R, EMBLEM, emblemBox, FINISH_CITY, hexRgb, HUB, IRIS_FEATHER, irisRadius, lerpRgb, loadProgress, OFFLINE_RED } from './splashScene'
 
 export interface SplashProps {
   eyebrow: string
@@ -21,44 +21,37 @@ export interface SplashProps {
   minMs: number
   onDone: () => void
   z?: number
+  /**
+   * The thing behind the screen cannot go on (no connection): the splash stops where it is, the ring turns red, the picture shakes,
+   * flickers and goes dim. It never closes after that, whoever put it there takes it away (the offline splash fades in over it).
+   */
+  abort?: boolean
 }
 
 const TAIL = 110 // length of the light that runs along a line (design units)
 const PULSE_STEPS = 12
-
-/** A blurry coloured blob, drawn big and soft behind everything. */
-function blobSprite(rgb: [number, number, number]): HTMLCanvasElement {
-  const c = document.createElement('canvas')
-  c.width = c.height = 192
-  const g = c.getContext('2d')!
-  const grad = g.createRadialGradient(96, 96, 0, 96, 96, 96)
-  grad.addColorStop(0, `rgba(${rgb.join(',')},1)`)
-  grad.addColorStop(0.45, `rgba(${rgb.join(',')},0.35)`)
-  grad.addColorStop(1, `rgba(${rgb.join(',')},0)`)
-  g.fillStyle = grad
-  g.fillRect(0, 0, 192, 192)
-  return c
-}
 
 /**
  * Full-screen splash: a transit hub that draws itself line by line while soft colours drift behind it,
  * lights run along the lines and a progress ring around the hub fills up. When the work is done a ring bursts out of the hub
  * and the screen opens like an iris (city) or the hub turns into a check mark (update).
  */
-export default function Splash({ eyebrow, title, messages, progress, liveMessage, ready, minMs, onDone, z = 70 }: SplashProps) {
+export default function Splash({ eyebrow, title, messages, progress, liveMessage, ready, minMs, onDone, z = 70, abort = false }: SplashProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const readyRef = useRef(ready)
   const doneRef = useRef(onDone)
   const progressRef = useRef(progress)
+  const abortRef = useRef(abort)
   const [msg, setMsg] = useState(0)
 
   useEffect(() => {
     readyRef.current = ready
     doneRef.current = onDone
     progressRef.current = progress
-  }, [ready, onDone, progress])
+    abortRef.current = abort
+  }, [ready, onDone, progress, abort])
 
   useEffect(() => {
     if (progress !== undefined || messages.length < 2 || REDUCED_MOTION()) return
@@ -108,6 +101,8 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
     let finished = false
     let disp = 0
     let lastNow = start
+    let abortAt = -1
+    const red = hexRgb(OFFLINE_RED)
 
     const resize = () => {
       const r = canvas.getBoundingClientRect()
@@ -204,11 +199,16 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
       if (head > 0 && head < tr.total) drawLight(ctx, tr.at(head), 34, a)
     }
 
-    const draw = (t: number, u: number) => {
+    /** `ab` (0..1) is how far the break-off has gone, see the `abort` prop */
+    const draw = (t: number, u: number, ab: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
       const closing = u >= 0
       const shown = closing ? closingProgress(from, u) : disp
+      // the ring and the hub turn from the accent to red while the screen breaks off
+      const ringCss = ab > 0 ? `rgb(${lerpRgb(accent, red, Math.min(1, ab * 2.5)).join(',')})` : accentCss
+      // a quick flicker, then dimmer and dimmer
+      const flick = 1 - ab * (0.3 + 0.35 * (0.5 + 0.5 * Math.sin(t * 38)))
 
       // ripples that leave the hub every two seconds
       const ripples: number[] = []
@@ -219,12 +219,12 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
         }
       }
       if (closing && u > 0.25) ripples.push((DIAL_R + easeOut((u - 0.25) / 0.45) * 520) * (size / 400))
-      drawBackground(t, ripples, 1)
+      drawBackground(t, ripples, 1 - 0.45 * ab)
 
       // everything of the emblem lives in the 400 x 400 design space around the hub
       const zoom = closing ? 1 + 0.14 * easeInOut(clamp01((u - 0.25) / 0.6)) : 1
       const k = (size / 400) * zoom
-      const alpha = closing ? 1 - clamp01((u - 0.5) / 0.3) : 1
+      const alpha = (closing ? 1 - clamp01((u - 0.5) / 0.3) : 1) * flick
       ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (cx - HUB[0] * k), dpr * (cy - HUB[1] * k))
 
       net.forEach((l, i) => {
@@ -298,7 +298,7 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
         for (const [lw, la] of [[10, 0.18], [3.8, 1]] as [number, number][]) {
           ctx.globalAlpha = la * alpha
           ctx.lineWidth = lw
-          ctx.strokeStyle = accentCss
+          ctx.strokeStyle = ringCss
           ctx.beginPath()
           ctx.arc(0, 0, DIAL_R, a0, a1)
           ctx.stroke()
@@ -316,7 +316,7 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
         ctx.stroke()
         ctx.beginPath()
         ctx.arc(0, 0, 5.5 * beat, 0, Math.PI * 2)
-        ctx.fillStyle = accentCss
+        ctx.fillStyle = ringCss
         ctx.fill()
         ctx.restore()
       }
@@ -336,6 +336,16 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
         }
       }
       ctx.globalAlpha = 1
+
+      // the warning: a red-orange edge flashes up and settles
+      if (ab > 0) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.15, cx, cy, Math.hypot(w, h) * 0.6)
+        g.addColorStop(0, 'rgba(255,90,70,0)')
+        g.addColorStop(1, `rgba(255,110,50,${(0.34 * Math.sin(Math.PI * Math.min(1, ab * 1.4)) + 0.1 * ab).toFixed(3)})`)
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, w, h)
+      }
     }
 
     const frame = (now: number) => {
@@ -343,16 +353,25 @@ export default function Splash({ eyebrow, title, messages, progress, liveMessage
       const el = (now - start) / 1000
       const t = reduced ? el + 10 : el
       // the ring: real progress if there is some, held back to the pace of the animation, and smoothed
+      if (abortRef.current && abortAt < 0 && finishAt < 0) abortAt = now
       const real = progressRef.current
-      const aim = real === undefined ? loadProgress(el) : Math.min(real, 0.97 * easeOut(clamp01((el * 1000) / minMs)))
+      // a broken-off screen stands still
+      const aim = abortAt >= 0 ? disp : real === undefined ? loadProgress(el) : Math.min(real, 0.97 * easeOut(clamp01((el * 1000) / minMs)))
       disp += (aim - disp) * (1 - Math.exp(-((now - lastNow) / 1000) * 7))
       lastNow = now
-      if (finishAt < 0 && el * 1000 >= minMs && readyRef.current) {
+      if (finishAt < 0 && abortAt < 0 && el * 1000 >= minMs && readyRef.current) {
         finishAt = now
         from = disp
       }
       const u = finishAt < 0 ? -1 : clamp01((now - finishAt) / 1000 / finishLen)
-      draw(t, u)
+      const ab = abortAt < 0 ? 0 : clamp01((now - abortAt) / ABORT_MS)
+      draw(t, u, ab)
+      // a short shake that dies down, the text goes out
+      if (abortAt >= 0) {
+        const amp = 9 * (1 - ab) ** 2 * Math.min(1, ab * 10)
+        canvas.style.transform = amp > 0.05 ? `translate(${(Math.sin(el * 83) * amp).toFixed(2)}px, ${(Math.cos(el * 61) * amp * 0.5).toFixed(2)}px)` : ''
+        text.style.opacity = String(1 - ab)
+      }
       // fade in at the start, close
       root.style.opacity = String(clamp01(el / 0.3))
       if (u >= 0) {

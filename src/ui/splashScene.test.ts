@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { closingProgress, DIAL_R, EMBLEM, emblemBox, hexRgb, HUB, irisRadius, loadProgress } from './splashScene'
+import {
+  closingProgress,
+  DIAL_R,
+  EMBLEM,
+  emblemBox,
+  hexRgb,
+  HUB,
+  irisRadius,
+  lerpRgb,
+  litCells,
+  loadProgress,
+  MEMORY_CELLS,
+  OFFLINE_MESSAGES,
+  OFFLINE_MIN_MS,
+  offlineMessage,
+  offlinePace,
+  offlineSymbols,
+  restoreFront,
+  RESTORE_AT,
+} from './splashScene'
 
 describe('splash scene', () => {
   it('draws an octilinear emblem whose lines all run through the hub', () => {
@@ -48,6 +67,45 @@ describe('splash scene', () => {
     expect(p.cy + p.size / 2).toBeLessThan(844 * 0.7)
     const l = emblemBox(1000, 500)
     expect(l.size).toBeLessThanOrEqual(500)
+  })
+
+  it('plays the offline story in order: signal lost, crossed out, memory, rebuild', () => {
+    expect(offlineSymbols(0).wifi).toBe(0)
+    expect(offlineSymbols(1.2).wifi).toBeGreaterThan(0.9)
+    expect(offlineSymbols(1.2).slash).toBeGreaterThan(0.5)
+    expect(offlineSymbols(2.2).wifi).toBeLessThan(0.5)
+    expect(offlineSymbols(3).wifi).toBeCloseTo(0)
+    expect(offlineSymbols(1).store).toBe(0)
+    expect(offlineSymbols(3)).toMatchObject({ store: expect.closeTo(1, 1) })
+    // nothing is rebuilt before the memory is shown, the lines follow one after the other
+    expect(restoreFront(RESTORE_AT - 0.01, 0)).toBe(0)
+    expect(restoreFront(RESTORE_AT + 0.7, 0)).toBeGreaterThan(restoreFront(RESTORE_AT + 0.7, 3))
+    expect(restoreFront(RESTORE_AT + 4, 3)).toBe(1)
+  })
+
+  it('holds the ring back until the rebuild and has it full when the minimum time is over', () => {
+    expect(offlinePace(1, OFFLINE_MIN_MS)).toBe(0)
+    expect(offlinePace(OFFLINE_MIN_MS / 1000, OFFLINE_MIN_MS)).toBe(1)
+    let last = -1
+    for (let s = 0; s <= 6; s += 0.25) {
+      const p = offlinePace(s, OFFLINE_MIN_MS)
+      expect(p).toBeGreaterThanOrEqual(last)
+      last = p
+    }
+  })
+
+  it('lights the memory cells with the ring and picks fitting texts', () => {
+    expect(litCells(0)).toBe(0)
+    expect(litCells(0.5)).toBe(MEMORY_CELLS / 2)
+    expect(litCells(1)).toBe(MEMORY_CELLS)
+    expect(litCells(2)).toBe(MEMORY_CELLS)
+    expect(offlineMessage(0.5, 0, false)).toBe(0)
+    expect(offlineMessage(3, 0.1, false)).toBe(1)
+    expect(offlineMessage(4, 0.5, false)).toBe(2)
+    expect(offlineMessage(5, 0.8, false)).toBe(3)
+    expect(offlineMessage(6, 0.5, true)).toBe(4)
+    expect(OFFLINE_MESSAGES).toHaveLength(5)
+    expect(lerpRgb([0, 0, 0], [100, 200, 50], 0.5)).toEqual([50, 100, 25])
   })
 
   it('reads colours', () => {

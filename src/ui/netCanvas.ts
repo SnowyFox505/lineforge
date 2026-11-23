@@ -156,4 +156,18 @@ export function drawLight(ctx: CanvasRenderingContext2D, p: P, size: number, alp
   ctx.globalAlpha = 1
 }
 
+/** A blurry coloured blob, drawn big and soft behind everything. */
+export function blobSprite(rgb: [number, number, number]): HTMLCanvasElement {
+  const c = document.createElement('canvas')
+  c.width = c.height = 192
+  const g = c.getContext('2d')!
+  const grad = g.createRadialGradient(96, 96, 0, 96, 96, 96)
+  grad.addColorStop(0, `rgba(${rgb.join(',')},1)`)
+  grad.addColorStop(0.45, `rgba(${rgb.join(',')},0.35)`)
+  grad.addColorStop(1, `rgba(${rgb.join(',')},0)`)
+  g.fillStyle = grad
+  g.fillRect(0, 0, 192, 192)
+  return c
+}
+
 export const REDUCED_MOTION =() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches

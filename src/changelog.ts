@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.39.0',
+    date: '2026-11-23',
+    headline: 'Neue Ladeanimation, wenn du offline bist',
+    changes: [
+      {
+        title: 'Stadt öffnen ohne Verbindung',
+        what: 'Öffnest du eine Stadt ohne Internet, bricht die normale Ladeanimation kurz ab: sie flackert, wackelt und wird rot. Dann blendet eine neue Animation darüber ein: das Verbindungssymbol wird durchgestrichen, das Netz wird zum blassen Geisternetz, und dein Gerätespeicher liest die Stadt ein. Aus ihm baut sich das Netz Linie für Linie neu auf, während sich ein Ring aus Speicherzellen füllt.',
+        how: 'Du musst nichts tun. Sie startet von selbst, wenn du offline bist, auch wenn die Verbindung erst beim Laden abbricht.',
+        benefit: 'Du siehst sofort, dass du offline bist und dass deine Stadt sicher auf dem Gerät liegt. Alles wird später abgeglichen, sobald du wieder Netz hast.',
+      },
+    ],
+  },
+  {
     version: '0.38.0',
     date: '2026-11-23',
     headline: 'Städte duplizieren und seltener abgemeldet',

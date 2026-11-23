@@ -1,4 +1,4 @@
-import { clamp01, easeInOut } from './netCanvas'
+import { clamp01, easeInOut, easeOut, easeOutBack } from './netCanvas'
 import type { P } from './netCanvas'
 
 /**
@@ -56,6 +56,72 @@ export function emblemBox(w: number, h: number): { size: number; cx: number; cy:
   const portrait = h >= w
   const size = Math.min(w * 0.88, h * (portrait ? 0.46 : 0.52), 460)
   return { size, cx: w / 2, cy: h * (portrait ? 0.38 : 0.42) }
+}
+
+// --- opening a city without a connection ---------------------------------------------------------------------------------
+// The city splash notices the missing connection, breaks off (ABORT_MS) and the offline splash fades in over it
+// (OFFLINE_FADE_IN). That one shows "no signal", then reads the city from the memory of the device and rebuilds the network from it.
+
+export const OFFLINE_AMBER = '#ffb02e'
+export const OFFLINE_RED = '#ff5a4a'
+/** an offline start lets the city splash run this long (it looks like the connection is being tried) before it breaks off */
+export const OFFLINE_CHECK_MS = 1300
+/** a connection that drops later than this after the start is ignored (the city splash is about to close anyway) */
+export const OFFLINE_LATE_MS = 2400
+/** the city splash shakes, flickers and goes red for this long */
+export const ABORT_MS = 800
+/** the offline splash fades in over the breaking city splash during this many seconds */
+export const OFFLINE_FADE_IN = 0.9
+/** the city splash is removed this long after the break (the offline splash is fully there by then) */
+export const OFFLINE_SWAP_MS = 1000
+/** the offline splash is shown at least this long, there is more to see than in the city splash */
+export const OFFLINE_MIN_MS = 4800
+/** seconds into the offline splash at which the network is rebuilt from the memory */
+export const RESTORE_AT = 2.5
+/** cells of the memory ring around the dial */
+export const MEMORY_CELLS = 28
+
+export type OfflineStage = 'city' | 'abort' | 'offline'
+
+/** The symbols in the dial over time: the connection symbol flickers and is crossed out, then turns into the memory of the device. */
+export function offlineSymbols(t: number): { wifi: number; slash: number; store: number } {
+  const wifiIn = easeOut((t - 0.15) / 0.6)
+  const wifiOut = easeInOut((t - 1.9) / 0.5)
+  return { wifi: wifiIn * (1 - wifiOut), slash: easeOut((t - 0.9) / 0.4), store: easeOutBack((t - 2.1) / 0.6) }
+}
+
+/** How far the rebuilt part of line `i` reaches (0..1): it grows out of the hub, one line after the other. */
+export function restoreFront(t: number, i: number): number {
+  return easeInOut((t - RESTORE_AT - i * 0.35) / 1.7)
+}
+
+/** The pace of the ring: it waits until the network is rebuilt and then fills up by the time `minMs` is over. */
+export function offlinePace(el: number, minMs: number): number {
+  const from = RESTORE_AT - 0.1
+  const to = Math.max(from + 1, minMs / 1000 - 0.3)
+  return easeInOut((el - from) / (to - from))
+}
+
+/** how many of the memory cells are lit when the ring is `progress` full */
+export function litCells(progress: number, n = MEMORY_CELLS): number {
+  return Math.min(n, Math.floor(clamp01(progress) * n + 1e-6))
+}
+
+export const OFFLINE_MESSAGES = ['Keine Verbindung', 'Gerätespeicher wird gelesen', 'Stadt wird aus dem Speicher geholt', 'Karte wird gezeichnet', 'Gleich geht es los']
+
+/** which of the OFFLINE_MESSAGES fits now (`t` seconds in, ring `shown` full) */
+export function offlineMessage(t: number, shown: number, closing: boolean): number {
+  if (closing) return 4
+  if (t < 2.2) return 0
+  if (shown < 0.35) return 1
+  if (shown < 0.7) return 2
+  if (shown < 0.97) return 3
+  return 4
+}
+
+export function lerpRgb(a: [number, number, number], b: [number, number, number], k: number): [number, number, number] {
+  const q = clamp01(k)
+  return [Math.round(a[0] + (b[0] - a[0]) * q), Math.round(a[1] + (b[1] - a[1]) * q), Math.round(a[2] + (b[2] - a[2]) * q)]
 }
 
 export function hexRgb(hex: string, fallback: [number, number, number] = [196, 240, 58]): [number, number, number] {
