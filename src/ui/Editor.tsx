@@ -13,6 +13,7 @@ import { spring } from './primitives'
 import { formatClock, gameTime } from '../sim/clock'
 import WorldSim from '../sim/WorldSim'
 import SettingsSheet from './SettingsSheet'
+import ConnectionToast from './ConnectionToast'
 import OutsideAsk from './OutsideAsk'
 import ShrinkBar from './ShrinkBar'
 import TimeDial from './TimeDial'
@@ -268,6 +269,7 @@ export default function Editor() {
 
       <WorldSim />
       <TopBar onSettings={() => setSettings(true)} onClock={() => setTimeOpen((o) => !o)} />
+      <ConnectionToast />
 
       {shrinking ? (
         <ShrinkBar />

@@ -28,6 +28,25 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.40.0',
+    date: '2026-11-23',
+    headline: 'Hinweis bei Verbindungsverlust und längere Offline-Animation',
+    changes: [
+      {
+        title: 'Verbindungs-Hinweis in der Stadt',
+        what: 'Wenn du in einer Stadt bist und die Verbindung ganz weg ist, fällt oben in der Mitte ein kleiner Hinweis herein: das Verbindungssymbol zeichnet sich, flackert und wird rot durchgestrichen. Kommt das Netz wieder, erscheint ein grüner Hinweis „Wieder online“, bei dem sich das Symbol Balken für Balken aufbaut.',
+        how: 'Du musst nichts tun. Der Hinweis verschwindet nach ein paar Sekunden von selbst, oder tippe ihn an, dann geht er sofort weg. Ein kurzes Flackern der Verbindung wird ignoriert.',
+        benefit: 'Du merkst sofort, wenn du offline bist, und weißt, dass deine Stadt trotzdem sicher gespeichert wird und später abgeglichen wird.',
+      },
+      {
+        title: 'Offline-Animation etwas länger',
+        what: 'Die Animation beim Öffnen einer Stadt ohne Internet dauert jetzt knapp eine Sekunde länger, und die Texte bleiben noch länger stehen.',
+        how: 'Du musst nichts tun.',
+        benefit: 'Noch mehr Zeit, die Texte zu lesen und die Animation zu genießen.',
+      },
+    ],
+  },
+  {
     version: '0.39.1',
     date: '2026-11-23',
     headline: 'Texte der Offline-Animation besser lesbar',

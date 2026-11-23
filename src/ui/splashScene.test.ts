@@ -102,8 +102,8 @@ describe('splash scene', () => {
     expect(litCells(2)).toBe(MEMORY_CELLS)
     expect(offlineMessage(0.5, false)).toBe(0)
     expect(offlineMessage(3, false)).toBe(1)
-    expect(offlineMessage(4.5, false)).toBe(2)
-    expect(offlineMessage(5.8, false)).toBe(3)
+    expect(offlineMessage(4.6, false)).toBe(2)
+    expect(offlineMessage(6.5, false)).toBe(3)
     expect(offlineMessage(1, true)).toBe(3)
     expect(OFFLINE_MESSAGES).toHaveLength(OFFLINE_MESSAGE_AT.length)
     // every text stays on screen for at least a second and a half before the loading may close

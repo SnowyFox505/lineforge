@@ -75,7 +75,7 @@ export const OFFLINE_FADE_IN = 0.9
 /** the city splash is removed this long after the break (the offline splash is fully there by then) */
 export const OFFLINE_SWAP_MS = 1000
 /** the offline splash is shown at least this long, there is more to see than in the city splash (and every text needs time to be read) */
-export const OFFLINE_MIN_MS = 6000
+export const OFFLINE_MIN_MS = 6900
 /** seconds into the offline splash at which the network is rebuilt from the memory */
 export const RESTORE_AT = 2.5
 /** cells of the memory ring around the dial */
@@ -109,7 +109,7 @@ export function litCells(progress: number, n = MEMORY_CELLS): number {
 
 export const OFFLINE_MESSAGES = ['Keine Verbindung', 'Gerätespeicher wird gelesen', 'Stadt wird aus dem Speicher geholt', 'Gleich geht es los']
 /** seconds into the offline splash at which the text changes to the next one: each one stays long enough to be read */
-export const OFFLINE_MESSAGE_AT = [0, 2.3, 4.0, 5.7]
+export const OFFLINE_MESSAGE_AT = [0, 2.5, 4.5, 6.4]
 
 /** which of the OFFLINE_MESSAGES is shown `el` real seconds in (it only depends on time, not on how fast the loading is) */
 export function offlineMessage(el: number, closing: boolean): number {
