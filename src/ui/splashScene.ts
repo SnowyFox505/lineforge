@@ -74,8 +74,8 @@ export const ABORT_MS = 800
 export const OFFLINE_FADE_IN = 0.9
 /** the city splash is removed this long after the break (the offline splash is fully there by then) */
 export const OFFLINE_SWAP_MS = 1000
-/** the offline splash is shown at least this long, there is more to see than in the city splash */
-export const OFFLINE_MIN_MS = 4800
+/** the offline splash is shown at least this long, there is more to see than in the city splash (and every text needs time to be read) */
+export const OFFLINE_MIN_MS = 6000
 /** seconds into the offline splash at which the network is rebuilt from the memory */
 export const RESTORE_AT = 2.5
 /** cells of the memory ring around the dial */
@@ -107,16 +107,18 @@ export function litCells(progress: number, n = MEMORY_CELLS): number {
   return Math.min(n, Math.floor(clamp01(progress) * n + 1e-6))
 }
 
-export const OFFLINE_MESSAGES = ['Keine Verbindung', 'Gerätespeicher wird gelesen', 'Stadt wird aus dem Speicher geholt', 'Karte wird gezeichnet', 'Gleich geht es los']
+export const OFFLINE_MESSAGES = ['Keine Verbindung', 'Gerätespeicher wird gelesen', 'Stadt wird aus dem Speicher geholt', 'Gleich geht es los']
+/** seconds into the offline splash at which the text changes to the next one: each one stays long enough to be read */
+export const OFFLINE_MESSAGE_AT = [0, 2.3, 4.0, 5.7]
 
-/** which of the OFFLINE_MESSAGES fits now (`t` seconds in, ring `shown` full) */
-export function offlineMessage(t: number, shown: number, closing: boolean): number {
-  if (closing) return 4
-  if (t < 2.2) return 0
-  if (shown < 0.35) return 1
-  if (shown < 0.7) return 2
-  if (shown < 0.97) return 3
-  return 4
+/** which of the OFFLINE_MESSAGES is shown `el` real seconds in (it only depends on time, not on how fast the loading is) */
+export function offlineMessage(el: number, closing: boolean): number {
+  if (closing) return OFFLINE_MESSAGES.length - 1
+  let m = 0
+  OFFLINE_MESSAGE_AT.forEach((at, i) => {
+    if (el >= at) m = i
+  })
+  return m
 }
 
 export function lerpRgb(a: [number, number, number], b: [number, number, number], k: number): [number, number, number] {

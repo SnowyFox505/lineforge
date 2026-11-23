@@ -458,7 +458,19 @@ input[type='range'].hue-slider::-webkit-slider-thumb {
 }
 @keyframes splash-hint-in {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 0.4; transform: none; }
+  to { opacity: 0.6; transform: none; }
+}
+@keyframes splash-msg-big {
+  from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+  to { opacity: 0.95; transform: none; filter: blur(0); }
+}
+/* the status text of the offline splash: bigger and brighter than the one of the city splash, it has to be read */
+.splash-msg-big {
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  animation: splash-msg-big 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .splash-offline-dot {
   display: inline-block;
@@ -476,5 +488,6 @@ input[type='range'].hue-slider::-webkit-slider-thumb {
   .splash-title, .splash-msg, .splash-eyebrow { animation: none; opacity: 1; filter: none; }
   .splash-msg { opacity: 0.62; }
   .splash-offline-dot { animation: none; }
-  .splash-offline-hint { animation: none; opacity: 0.4; }
+  .splash-offline-hint { animation: none; opacity: 0.6; }
+  .splash-msg-big { animation: none; opacity: 0.95; filter: none; }
 }

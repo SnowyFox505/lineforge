@@ -28,6 +28,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.39.1',
+    date: '2026-11-23',
+    headline: 'Texte der Offline-Animation besser lesbar',
+    changes: [
+      {
+        title: 'Größere, ruhigere Texte beim Offline-Öffnen',
+        what: 'Die Texte in der Offline-Ladeanimation („Keine Verbindung“, „Gerätespeicher wird gelesen“ …) sind jetzt größer und kräftiger, und jeder bleibt gut zwei Sekunden stehen, statt schnell weiterzuspringen.',
+        how: 'Du musst nichts tun. Öffne eine Stadt ohne Internet, dann siehst du es.',
+        benefit: 'Du kannst in Ruhe lesen, was gerade passiert. Dafür dauert die Animation etwas länger.',
+      },
+    ],
+  },
+  {
     version: '0.39.0',
     date: '2026-11-23',
     headline: 'Neue Ladeanimation, wenn du offline bist',

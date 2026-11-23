@@ -11,6 +11,7 @@ import {
   litCells,
   loadProgress,
   MEMORY_CELLS,
+  OFFLINE_MESSAGE_AT,
   OFFLINE_MESSAGES,
   OFFLINE_MIN_MS,
   offlineMessage,
@@ -99,12 +100,15 @@ describe('splash scene', () => {
     expect(litCells(0.5)).toBe(MEMORY_CELLS / 2)
     expect(litCells(1)).toBe(MEMORY_CELLS)
     expect(litCells(2)).toBe(MEMORY_CELLS)
-    expect(offlineMessage(0.5, 0, false)).toBe(0)
-    expect(offlineMessage(3, 0.1, false)).toBe(1)
-    expect(offlineMessage(4, 0.5, false)).toBe(2)
-    expect(offlineMessage(5, 0.8, false)).toBe(3)
-    expect(offlineMessage(6, 0.5, true)).toBe(4)
-    expect(OFFLINE_MESSAGES).toHaveLength(5)
+    expect(offlineMessage(0.5, false)).toBe(0)
+    expect(offlineMessage(3, false)).toBe(1)
+    expect(offlineMessage(4.5, false)).toBe(2)
+    expect(offlineMessage(5.8, false)).toBe(3)
+    expect(offlineMessage(1, true)).toBe(3)
+    expect(OFFLINE_MESSAGES).toHaveLength(OFFLINE_MESSAGE_AT.length)
+    // every text stays on screen for at least a second and a half before the loading may close
+    for (let i = 1; i < OFFLINE_MESSAGE_AT.length; i++) expect(OFFLINE_MESSAGE_AT[i] - OFFLINE_MESSAGE_AT[i - 1]).toBeGreaterThanOrEqual(1.5)
+    expect(OFFLINE_MIN_MS / 1000).toBeGreaterThanOrEqual(OFFLINE_MESSAGE_AT[OFFLINE_MESSAGE_AT.length - 1])
     expect(lerpRgb([0, 0, 0], [100, 200, 50], 0.5)).toEqual([50, 100, 25])
   })
 

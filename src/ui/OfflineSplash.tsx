@@ -452,7 +452,7 @@ export default function OfflineSplash({ title, progress, ready, minMs, onDone, z
       const u = finishAt < 0 ? -1 : clamp01((now - finishAt) / 1000 / FINISH_CITY)
       const shown = u >= 0 ? closingProgress(from, u) : disp
       draw(t, u, shown)
-      const m = offlineMessage(t, shown, u >= 0)
+      const m = offlineMessage(el, u >= 0)
       if (m !== shownMsg) {
         shownMsg = m
         setMsg(m)
@@ -488,15 +488,16 @@ export default function OfflineSplash({ title, progress, ready, minMs, onDone, z
     <div ref={rootRef} className="fixed inset-0 overflow-hidden" style={{ zIndex: z, opacity: 0, background: 'var(--splash-bg)', color: 'var(--splash-ink)' }} role="status" aria-live="polite">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       <div ref={textRef} className="pointer-events-none absolute inset-x-0 flex flex-col items-center px-6 text-center">
-        <div className="splash-eyebrow" style={{ color: OFFLINE_AMBER }}>
+        <div className="splash-eyebrow" style={{ color: OFFLINE_AMBER, fontSize: 13 }}>
           <span className="splash-offline-dot" />
           Offline
         </div>
         <h1 className="splash-title mt-2 max-w-full truncate pb-1 text-[2.1rem] font-extrabold leading-tight tracking-tight">{title}</h1>
-        <div key={msg} className="splash-msg mt-3 min-h-5 text-sm">
-          {OFFLINE_MESSAGES[msg]} …
+        <div key={msg} className="splash-msg-big mt-4 min-h-8" style={msg === 0 ? { color: OFFLINE_AMBER } : undefined}>
+          {OFFLINE_MESSAGES[msg]}
+          {msg < OFFLINE_MESSAGES.length - 1 ? ' …' : ''}
         </div>
-        <p className="splash-offline-hint mt-4 max-w-xs text-xs leading-relaxed">Deine Stadt liegt auf diesem Gerät. Sobald du wieder online bist, wird alles abgeglichen.</p>
+        <p className="splash-offline-hint mt-4 max-w-xs text-[13px] leading-relaxed">Deine Stadt liegt auf diesem Gerät. Sobald du wieder online bist, wird alles abgeglichen.</p>
       </div>
       <div className="splash-brand pointer-events-none absolute inset-x-0 bottom-[calc(26px+var(--safe-bottom))] text-center" aria-hidden>
         LINEFORGE
